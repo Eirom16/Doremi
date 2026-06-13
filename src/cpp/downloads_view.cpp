@@ -3,6 +3,7 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <QFile>
+#include "doremi/src/bridge.rs.h"
 #include "downloads_view.h"
 #include "design_tokens.h"
 #include "icon_provider.h"
@@ -145,9 +146,12 @@ QWidget *DownloadsView::make_download_row(const std::string &title,
     play_btn->setStyleSheet(playStyle);
     lay->addWidget(play_btn);
 
-    std::string full = title + " — " + artist;
-    connect(play_btn, &QPushButton::clicked, this, [this, full]() {
-        emit play_requested(full);
+    Track track_data;
+    track_data.id = title + " — " + artist;
+    track_data.title = title;
+    track_data.artist = artist;
+    connect(play_btn, &QPushButton::clicked, this, [this, track_data]() {
+        emit play_requested(track_data);
     });
 
     return row;

@@ -12,6 +12,12 @@
 #include <QVBoxLayout>
 #include "rust/cxx.h"
 
+struct Track;
+struct Album;
+struct Artist;
+struct Playlist;
+struct StatsData;
+
 class TitleBar;
 class NavSidebar;
 class PlayerBar;
@@ -46,21 +52,9 @@ public:
     void set_playback_playing(bool playing);
     void set_dominant_colors(const std::vector<std::string> &colors);
     void set_track_lyrics(const std::string &plain, const std::string &synced);
-    void set_playback_queue(const std::vector<std::string> &titles,
-                            const std::vector<std::string> &artists,
-                            const std::vector<std::string> &thumbnails,
-                            int32_t current_index);
-    void set_history_data(const std::vector<std::string> &titles,
-                         const std::vector<std::string> &artists,
-                         const std::vector<std::string> &durations,
-                         const std::vector<std::string> &thumbnails,
-                         const std::vector<std::string> &played_at,
-                         const std::vector<std::string> &item_ids);
-
-    void set_stats_data(const std::string &total_play_time, int32_t total_plays, int32_t unique_artists,
-                        const std::vector<int32_t> &weekly_activity, const std::vector<std::string> &top_titles,
-                        const std::vector<std::string> &top_artists, const std::vector<int32_t> &top_plays,
-                        const std::vector<std::string> &top_thumbnails);
+    void set_playback_queue(const rust::Vec<Track> &queue, int32_t current_index);
+    void set_history_data(const rust::Vec<Track> &history, const rust::Vec<rust::String> &played_at);
+    void set_stats_data(const StatsData &stats);
 
 
     TitleBar* title_bar() const { return title_bar_; }
@@ -140,13 +134,13 @@ void set_window_title(rust::Str title);
 void set_playing(rust::Str playing);
 void set_player_volume(int32_t volume);
 void run_event_loop();
-void set_search_results(rust::Vec<rust::String> songs, rust::Vec<rust::String> artists, rust::Vec<rust::String> albums);
+void set_search_results(rust::Vec<Track> songs, rust::Vec<Artist> artists, rust::Vec<Album> albums);
 void add_home_section(rust::Str title, rust::Vec<rust::String> items);
 void clear_home_sections();
-void set_library_songs(rust::Vec<rust::String> titles);
-void set_library_playlists(rust::Vec<rust::String> names, rust::Vec<rust::String> counts);
-void set_library_albums(rust::Vec<rust::String> titles, rust::Vec<rust::String> artists);
-void set_library_artists(rust::Vec<rust::String> names);
+void set_library_songs(rust::Vec<Track> songs);
+void set_library_playlists(rust::Vec<Playlist> playlists);
+void set_library_albums(rust::Vec<Album> albums);
+void set_library_artists(rust::Vec<Artist> artists);
 void set_search_history(rust::Vec<rust::String> queries);
 void apply_settings_to_ui();
 void set_settings_theme(rust::Str mode);
@@ -182,33 +176,16 @@ void set_downloads_list(rust::Vec<rust::String> titles,
                         rust::Vec<rust::String> thumbnails);
 
 void set_dominant_colors(rust::Vec<rust::String> colors);
-void set_playback_queue(rust::Vec<rust::String> titles,
-                        rust::Vec<rust::String> artists,
-                        rust::Vec<rust::String> thumbnails,
-                        int32_t current_index);
-void set_stats_data(rust::Str total_play_time, int32_t total_plays, int32_t unique_artists,
-                    rust::Vec<int32_t> weekly_activity, rust::Vec<rust::String> top_titles,
-                    rust::Vec<rust::String> top_artists, rust::Vec<int32_t> top_plays,
-                    rust::Vec<rust::String> top_thumbnails);
+void set_playback_queue(rust::Vec<Track> queue, int32_t current_index);
+void set_stats_data(StatsData stats);
 
-void set_history_data(rust::Vec<rust::String> titles, rust::Vec<rust::String> artists,
-                      rust::Vec<rust::String> durations, rust::Vec<rust::String> thumbnails,
-                      rust::Vec<rust::String> played_at, rust::Vec<rust::String> item_ids);
+void set_history_data(rust::Vec<Track> history, rust::Vec<rust::String> played_at);
 
-void set_album_detail(rust::Str title, rust::Str artist, rust::Str year,
-                      rust::Str thumbnail, int32_t track_count,
-                      rust::Vec<rust::String> track_titles, rust::Vec<rust::String> track_artists,
-                      rust::Vec<rust::String> track_durations, rust::Vec<rust::String> track_ids);
+void set_album_detail(Album album, rust::Vec<Track> tracks);
 
-void set_artist_detail(rust::Str name, rust::Str thumbnail, rust::Str subscriber_count,
-                       rust::Str description,
-                       rust::Vec<rust::String> track_titles, rust::Vec<rust::String> track_albums,
-                       rust::Vec<rust::String> track_durations, rust::Vec<rust::String> track_ids);
+void set_artist_detail(Artist artist, rust::Vec<Track> tracks, rust::Vec<Album> albums);
 
-void set_playlist_detail(rust::Str name, rust::Str description, rust::Str thumbnail,
-                         int32_t track_count,
-                         rust::Vec<rust::String> track_titles, rust::Vec<rust::String> track_artists,
-                         rust::Vec<rust::String> track_durations, rust::Vec<rust::String> track_ids);
+void set_playlist_detail(Playlist playlist, rust::Vec<Track> tracks);
 
 void update_youtube_auth_state(bool authenticated, rust::Str name, rust::Str avatar_url);
 
@@ -219,5 +196,6 @@ void set_update_download_finished(rust::Str package_path);
 void set_update_download_failed(rust::Str error);
 void set_update_install_finished(bool success);
 
+#include "doremi/src/bridge.rs.h"
 #endif
 

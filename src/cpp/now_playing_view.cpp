@@ -384,10 +384,9 @@ void NowPlayingView::setLyrics(const QString &plain, const QString &synced) {
     lyrics_widget_->setLyrics(plain, synced);
 }
 
-void NowPlayingView::setQueue(const QStringList &titles, const QStringList &artists,
-                              const QStringList &thumbnails, int current_index)
+void NowPlayingView::setQueue(const std::vector<Track> &tracks, int current_index)
 {
-    queue_panel_->setQueue(titles, artists, thumbnails, current_index);
+    queue_panel_->setQueue(tracks, current_index);
 }
 
 void NowPlayingView::resizeEvent(QResizeEvent *event) {

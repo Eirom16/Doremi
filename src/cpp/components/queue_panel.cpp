@@ -20,8 +20,8 @@ static QPixmap getRoundedPixmap(const QPixmap &src, int radius) {
     return dest;
 }
 
-QueueRow::QueueRow(int index, const QString &title, const QString &artist,
-                   const QString &thumbnail, bool is_current, QWidget *parent)
+QueueRow::QueueRow(int index, const Track &track,
+                   bool is_current, QWidget *parent)
     : QWidget(parent), index_(index), is_current_(is_current)
 {
     const auto &c = DesignTokens::current();
@@ -32,14 +32,13 @@ QueueRow::QueueRow(int index, const QString &title, const QString &artist,
     row_layout->setContentsMargins(12, 6, 12, 6);
     row_layout->setSpacing(12);
 
-    // 1. Thumbnail
     auto *thumb_label = new QLabel(this);
     thumb_label->setFixedSize(38, 38);
     thumb_label->setStyleSheet(QString("background-color: %1; border-radius: 4px;")
         .arg(c.bg_elevated.name()));
 
     QPixmap pm;
-    if (!thumbnail.isEmpty() && pm.load(thumbnail)) {
+    if (!track.thumbnail.empty() && pm.load(QString::fromStdString(static_cast<std::string>(track.thumbnail)))) {
         thumb_label->setPixmap(getRoundedPixmap(
             pm.scaled(38, 38, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation), 4
         ));
@@ -48,16 +47,15 @@ QueueRow::QueueRow(int index, const QString &title, const QString &artist,
         thumb_label->setPixmap(getRoundedPixmap(default_art, 4));
     }
 
-    // 2. Title & Artist
     auto *text_container = new QWidget(this);
     auto *text_layout = new QVBoxLayout(text_container);
     text_layout->setContentsMargins(0, 0, 0, 0);
     text_layout->setSpacing(2);
 
-    auto *title_lbl = new QLabel(title, this);
+    auto *title_lbl = new QLabel(QString::fromStdString(static_cast<std::string>(track.title)), this);
     title_lbl->setFont(DesignTokens::getFont("body", 13));
-    
-    auto *artist_lbl = new QLabel(artist, this);
+
+    auto *artist_lbl = new QLabel(QString::fromStdString(static_cast<std::string>(track.artist)), this);
     artist_lbl->setFont(DesignTokens::getFont("caption", 11));
 
     if (is_current_) {
@@ -75,7 +73,6 @@ QueueRow::QueueRow(int index, const QString &title, const QString &artist,
     row_layout->addWidget(thumb_label);
     row_layout->addWidget(text_container, 1);
 
-    // 3. Indicator if current
     if (is_current_) {
         auto *playing_icon = IconProvider::createIconLabel("volume_up", 16, c.accent, true, this);
         row_layout->addWidget(playing_icon);
@@ -83,14 +80,13 @@ QueueRow::QueueRow(int index, const QString &title, const QString &artist,
 
     setLayout(row_layout);
 
-    // Initial background styling
-    QString bg_color = is_current_ ? 
-        QString("rgba(%1, %2, %3, 0.12)").arg(c.accent.red()).arg(c.accent.green()).arg(c.accent.blue()) : 
+    QString bg_color = is_current_ ?
+        QString("rgba(%1, %2, %3, 0.12)").arg(c.accent.red()).arg(c.accent.green()).arg(c.accent.blue()) :
         "transparent";
-    
+
     setStyleSheet(QString("QWidget#QueueRow { background-color: %1; border-radius: 6px; }")
         .arg(bg_color));
-    
+
     setObjectName("QueueRow");
 }
 
@@ -105,14 +101,14 @@ void QueueRow::enterEvent(QEnterEvent *event) {
     QWidget::enterEvent(event);
     is_hovered_ = true;
     const auto &c = DesignTokens::current();
-    
+
     QString bg_color;
     if (is_current_) {
         bg_color = QString("rgba(%1, %2, %3, 0.20)").arg(c.accent.red()).arg(c.accent.green()).arg(c.accent.blue());
     } else {
         bg_color = QString("rgba(%1, %2, %3, 0.08)").arg(c.text_primary.red()).arg(c.text_primary.green()).arg(c.text_primary.blue());
     }
-    
+
     setStyleSheet(QString("QWidget#QueueRow { background-color: %1; border-radius: 6px; }").arg(bg_color));
 }
 
@@ -120,15 +116,13 @@ void QueueRow::leaveEvent(QEvent *event) {
     QWidget::leaveEvent(event);
     is_hovered_ = false;
     const auto &c = DesignTokens::current();
-    
-    QString bg_color = is_current_ ? 
-        QString("rgba(%1, %2, %3, 0.12)").arg(c.accent.red()).arg(c.accent.green()).arg(c.accent.blue()) : 
+
+    QString bg_color = is_current_ ?
+        QString("rgba(%1, %2, %3, 0.12)").arg(c.accent.red()).arg(c.accent.green()).arg(c.accent.blue()) :
         "transparent";
-    
+
     setStyleSheet(QString("QWidget#QueueRow { background-color: %1; border-radius: 6px; }").arg(bg_color));
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
 
 QueuePanel::QueuePanel(QWidget *parent)
     : QScrollArea(parent)
@@ -160,15 +154,13 @@ void QueuePanel::clearLayout() {
     }
 }
 
-void QueuePanel::setQueue(const QStringList &titles, const QStringList &artists,
-                          const QStringList &thumbnails, int current_index)
-{
+void QueuePanel::setQueue(const std::vector<Track> &tracks, int current_index) {
     current_index_ = current_index;
     clearLayout();
 
     const auto &c = DesignTokens::current();
 
-    if (titles.isEmpty()) {
+    if (tracks.empty()) {
         auto *empty_lbl = new QLabel("Cola de reproducción vacía", container_);
         empty_lbl->setAlignment(Qt::AlignCenter);
         empty_lbl->setFont(DesignTokens::getFont("heading_sm", 14));
@@ -177,21 +169,19 @@ void QueuePanel::setQueue(const QStringList &titles, const QStringList &artists,
         return;
     }
 
-    // Header label
-    auto *header = new QLabel(QString("Cola de reproducción (%1 canciones)").arg(titles.size()), container_);
+    auto *header = new QLabel(QString("Cola de reproducción (%1 canciones)").arg(tracks.size()), container_);
     header->setFont(DesignTokens::getFont("heading_sm", 13));
     header->setStyleSheet(QString("color: %1; font-weight: bold; margin-bottom: 8px;").arg(c.text_secondary.name()));
     layout_->addWidget(header);
 
-    for (int i = 0; i < titles.size(); ++i) {
+    for (int i = 0; i < static_cast<int>(tracks.size()); ++i) {
         bool is_curr = (i == current_index_);
-        auto *row = new QueueRow(i, titles[i], artists[i], thumbnails[i], is_curr, container_);
-        
+        auto *row = new QueueRow(i, tracks[i], is_curr, container_);
+
         connect(row, &QueueRow::clicked, this, &QueuePanel::item_clicked);
-        
+
         layout_->addWidget(row);
     }
 
-    // Pushes all elements to top
     layout_->addStretch(1);
 }

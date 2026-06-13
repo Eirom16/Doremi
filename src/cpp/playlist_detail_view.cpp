@@ -12,9 +12,9 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 PlaylistTrackRow::PlaylistTrackRow(int num, const QString &title, const QString &artist,
-                                   const QString &duration, const std::string &item_id,
+                                   const QString &duration, Track track,
                                    QWidget *parent)
-    : QWidget(parent), item_id_(item_id)
+    : QWidget(parent), track_(std::move(track))
 {
     const auto &c = DesignTokens::current();
     setFixedHeight(48);
@@ -65,7 +65,7 @@ PlaylistTrackRow::PlaylistTrackRow(int num, const QString &title, const QString 
 
 void PlaylistTrackRow::mousePressEvent(QMouseEvent *event) {
     QWidget::mousePressEvent(event);
-    if (event->button() == Qt::LeftButton) emit play_requested(item_id_);
+    if (event->button() == Qt::LeftButton) emit play_requested(track_);
 }
 
 void PlaylistTrackRow::enterEvent(QEnterEvent *event) {
@@ -244,23 +244,21 @@ void PlaylistDetailView::setupLayout() {
     setLayout(main_vbox);
 }
 
-void PlaylistDetailView::set_playlist_info(const std::string &name, const std::string &description,
-                                           const std::string &thumbnail, int32_t track_count)
-{
+void PlaylistDetailView::set_playlist_info(const Playlist &playlist) {
     const auto &c = DesignTokens::current();
-    title_label_->setText(QString::fromStdString(name));
+    title_label_->setText(QString::fromStdString(static_cast<std::string>(playlist.name)));
 
-    if (!description.empty()) {
-        desc_label_->setText(QString::fromStdString(description));
+    if (!playlist.description.empty()) {
+        desc_label_->setText(QString::fromStdString(static_cast<std::string>(playlist.description)));
         desc_label_->show();
     } else {
         desc_label_->hide();
     }
 
-    meta_label_->setText(track_count > 0 ? QString("%1 canciones").arg(track_count) : "");
+    meta_label_->setText(playlist.track_count > 0 ? QString("%1 canciones").arg(playlist.track_count) : "");
 
     QPixmap pm;
-    if (!thumbnail.empty() && pm.load(QString::fromStdString(thumbnail))) {
+    if (!playlist.thumbnail.empty() && pm.load(QString::fromStdString(static_cast<std::string>(playlist.thumbnail)))) {
         QPixmap dest(pm.size());
         dest.fill(Qt::transparent);
         QPainter painter(&dest);
@@ -276,42 +274,34 @@ void PlaylistDetailView::set_playlist_info(const std::string &name, const std::s
     }
 }
 
-void PlaylistDetailView::set_playlist_tracks(const std::vector<std::string> &titles,
-                                             const std::vector<std::string> &artists,
-                                             const std::vector<std::string> &durations,
-                                             const std::vector<std::string> &item_ids)
-{
+void PlaylistDetailView::set_playlist_tracks(const std::vector<Track> &tracks) {
     QLayoutItem *item;
     while ((item = tracks_layout_->takeAt(0)) != nullptr) {
         if (item->widget()) item->widget()->deleteLater();
         delete item;
     }
 
-    size_t n = std::min({titles.size(), artists.size(), durations.size(), item_ids.size()});
-    for (size_t i = 0; i < n; ++i) {
+    for (size_t i = 0; i < tracks.size(); ++i) {
+        const auto &t = tracks[i];
         QString dur;
-        int dur_ms = 0;
-        try { dur_ms = std::stoi(durations[i]); } catch (...) {}
-        if (dur_ms > 0) {
-            int secs = dur_ms / 1000;
+        if (t.duration_ms > 0) {
+            int secs = static_cast<int>(t.duration_ms / 1000);
             dur = QString("%1:%2").arg(secs / 60).arg(secs % 60, 2, 10, QChar('0'));
-        } else if (!durations[i].empty()) {
-            dur = QString::fromStdString(durations[i]);
         }
 
         auto *row = new PlaylistTrackRow(
             static_cast<int>(i) + 1,
-            QString::fromStdString(titles[i]),
-            QString::fromStdString(artists[i]),
+            QString::fromStdString(static_cast<std::string>(t.title)),
+            QString::fromStdString(static_cast<std::string>(t.artist)),
             dur,
-            item_ids[i],
+            t,
             tracks_widget_
         );
         connect(row, &PlaylistTrackRow::play_requested, this, &PlaylistDetailView::play_requested);
         tracks_layout_->addWidget(row);
     }
 
-    if (n == 0) {
+    if (tracks.empty()) {
         const auto &c = DesignTokens::current();
         auto *empty = new QLabel("Esta playlist está vacía.", tracks_widget_);
         empty->setAlignment(Qt::AlignCenter);

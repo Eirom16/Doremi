@@ -6,13 +6,14 @@
 #include <QVBoxLayout>
 #include <QLabel>
 #include <QPushButton>
+#include "doremi/src/bridge.rs.h"
 
 // Interactive queue row widget
 class QueueRow : public QWidget {
     Q_OBJECT
 public:
-    explicit QueueRow(int index, const QString &title, const QString &artist,
-                      const QString &thumbnail, bool is_current, QWidget *parent = nullptr);
+    explicit QueueRow(int index, const Track &track,
+                      bool is_current, QWidget *parent = nullptr);
     int index() const { return index_; }
 
 signals:
@@ -34,8 +35,7 @@ class QueuePanel : public QScrollArea {
     Q_OBJECT
 public:
     explicit QueuePanel(QWidget *parent = nullptr);
-    void setQueue(const QStringList &titles, const QStringList &artists,
-                  const QStringList &thumbnails, int current_index);
+    void setQueue(const std::vector<Track> &tracks, int current_index);
 
 signals:
     void item_clicked(int index);

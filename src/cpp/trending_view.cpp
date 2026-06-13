@@ -7,6 +7,7 @@
 #include "design_tokens.h"
 #include "icon_provider.h"
 #include <QFile>
+#include "doremi/src/bridge.rs.h"
 
 static QPixmap getRoundedPixmap(const QPixmap &src, int radius) {
     if (src.isNull()) return src;
@@ -148,9 +149,13 @@ QWidget *TrendingView::make_trending_card(const std::string &title,
     play_btn->setStyleSheet(playStyle);
     lay->addWidget(play_btn);
 
-    std::string full = title + " — " + subtitle;
-    connect(play_btn, &QPushButton::clicked, this, [this, full]() {
-        emit play_requested(full);
+    std::string id = title + " — " + subtitle;
+    Track track_data;
+    track_data.id = id;
+    track_data.title = title;
+    track_data.artist = subtitle;
+    connect(play_btn, &QPushButton::clicked, this, [this, track_data]() {
+        emit play_requested(track_data);
     });
 
     return card;

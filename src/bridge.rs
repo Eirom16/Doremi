@@ -24,6 +24,48 @@ where
 
 #[cxx::bridge]
 pub mod bridge {
+    struct Track {
+        id: String,
+        title: String,
+        artist: String,
+        album: String,
+        duration_ms: i64,
+        thumbnail: String,
+    }
+
+    struct Playlist {
+        id: String,
+        name: String,
+        description: String,
+        thumbnail: String,
+        track_count: i32,
+    }
+
+    struct Album {
+        id: String,
+        title: String,
+        artist: String,
+        year: String,
+        thumbnail: String,
+        track_count: i32,
+    }
+
+    struct Artist {
+        id: String,
+        name: String,
+        thumbnail: String,
+        description: String,
+        subscribers: String,
+    }
+
+    struct StatsData {
+        total_play_time: String,
+        total_plays: i32,
+        unique_artists: i32,
+        weekly_activity: Vec<i32>,
+        top_tracks: Vec<Track>,
+    }
+
     // Rust callbacks invoked from C++
     extern "Rust" {
         fn on_play_pause_triggered();
@@ -39,12 +81,12 @@ pub mod bridge {
         fn on_window_close_requested();
         fn on_setting_changed(key: &str, value: &str);
         fn on_timer_tick();
-        fn on_search_item_clicked(info: &str);
+        fn on_search_item_clicked(track: Track);
         fn on_app_quit();
         fn on_library_tab_changed(tab: &str);
-        fn on_add_favorite(info: &str);
-        fn on_remove_favorite(info: &str);
-        fn on_download_requested(info: &str);
+        fn on_add_favorite(track: Track);
+        fn on_remove_favorite(track_id: &str);
+        fn on_download_requested(track: Track);
         fn on_lastfm_auth_requested(api_key: &str, api_secret: &str, username: &str, password: &str);
         fn on_lastfm_disconnect_requested();
         fn on_queue_item_clicked(index: i32);
@@ -83,10 +125,10 @@ pub mod bridge {
         fn set_playing(playing: &str);
         fn run_event_loop();
         fn set_player_volume(volume: i32);
-        fn set_library_songs(titles: Vec<String>);
-        fn set_library_playlists(names: Vec<String>, counts: Vec<String>);
-        fn set_library_albums(titles: Vec<String>, artists: Vec<String>);
-        fn set_library_artists(names: Vec<String>);
+        fn set_library_songs(songs: Vec<Track>);
+        fn set_library_playlists(playlists: Vec<Playlist>);
+        fn set_library_albums(albums: Vec<Album>);
+        fn set_library_artists(artists: Vec<Artist>);
         fn set_search_history(queries: Vec<String>);
         fn apply_settings_to_ui();
         fn set_settings_theme(mode: &str);
@@ -109,7 +151,7 @@ pub mod bridge {
         fn set_settings_subtitle_glow_effect(on: bool);
 
         // Data service functions
-        fn set_search_results(songs: Vec<String>, artists: Vec<String>, albums: Vec<String>);
+        fn set_search_results(songs: Vec<Track>, artists: Vec<Artist>, albums: Vec<Album>);
         fn add_home_section(title: &str, items: Vec<String>);
         fn clear_home_sections();
         fn set_trending_items(titles: Vec<String>, subtitles: Vec<String>, thumbnails: Vec<String>);
@@ -118,29 +160,16 @@ pub mod bridge {
         fn set_player_repeat(mode: i32);
         fn get_or_create_thumbnail(title: &str, variant: i32) -> String;
         fn set_dominant_colors(colors: Vec<String>);
-        fn set_playback_queue(titles: Vec<String>, artists: Vec<String>, thumbnails: Vec<String>, current_index: i32);
-        fn set_stats_data(total_play_time: &str, total_plays: i32, unique_artists: i32,
-                           weekly_activity: Vec<i32>, top_titles: Vec<String>,
-                           top_artists: Vec<String>, top_plays: Vec<i32>, top_thumbnails: Vec<String>);
+        fn set_playback_queue(queue: Vec<Track>, current_index: i32);
+        fn set_stats_data(stats: StatsData);
 
-        fn set_history_data(titles: Vec<String>, artists: Vec<String>,
-                            durations: Vec<String>, thumbnails: Vec<String>,
-                            played_at: Vec<String>, item_ids: Vec<String>);
+        fn set_history_data(history: Vec<Track>, played_at: Vec<String>);
 
-        fn set_album_detail(title: &str, artist: &str, year: &str,
-                            thumbnail: &str, track_count: i32,
-                            track_titles: Vec<String>, track_artists: Vec<String>,
-                            track_durations: Vec<String>, track_ids: Vec<String>);
+        fn set_album_detail(album: Album, tracks: Vec<Track>);
 
-        fn set_artist_detail(name: &str, thumbnail: &str, subscriber_count: &str,
-                             description: &str,
-                             track_titles: Vec<String>, track_albums: Vec<String>,
-                             track_durations: Vec<String>, track_ids: Vec<String>);
+        fn set_artist_detail(artist: Artist, tracks: Vec<Track>, albums: Vec<Album>);
 
-        fn set_playlist_detail(name: &str, description: &str, thumbnail: &str,
-                               track_count: i32,
-                               track_titles: Vec<String>, track_artists: Vec<String>,
-                               track_durations: Vec<String>, track_ids: Vec<String>);
+        fn set_playlist_detail(playlist: Playlist, tracks: Vec<Track>);
         fn update_youtube_auth_state(authenticated: bool, name: &str, avatar_url: &str);
         fn set_update_available(version: &str, notes: &str, url: &str, asset_url: &str, asset_name: &str, asset_size: i64);
         fn set_no_update_available();
@@ -232,118 +261,109 @@ pub fn on_library_tab_changed(tab: &str) {
     match tab {
         "Canciones" => {
             if let Ok(tracks) = FavoritesRepo::all_tracks() {
-                let titles: Vec<String> = tracks.iter()
-                    .map(|t| format!("{} — {}", t.title, t.artist)).collect();
-                crate::bridge::bridge::set_library_songs(titles);
+                let songs: Vec<crate::bridge::bridge::Track> = tracks.iter()
+                    .map(|t| crate::bridge::bridge::Track {
+                        id: t.id.clone(),
+                        title: t.title.clone(),
+                        artist: t.artist.clone(),
+                        album: t.album.clone(),
+                        duration_ms: t.duration_ms,
+                        thumbnail: t.thumbnail.clone(),
+                    }).collect();
+                crate::bridge::bridge::set_library_songs(songs);
             }
         }
         "Álbumes" => {
             if let Ok(albums) = FavoritesRepo::all_albums() {
-                let titles: Vec<String> = albums.iter().map(|a| a.title.clone()).collect();
-                let artists: Vec<String> = albums.iter().map(|a| a.artist.clone()).collect();
-                crate::bridge::bridge::set_library_albums(titles, artists);
+                let a_list: Vec<crate::bridge::bridge::Album> = albums.iter()
+                    .map(|a| crate::bridge::bridge::Album {
+                        id: a.id.clone(),
+                        title: a.title.clone(),
+                        artist: a.artist.clone(),
+                        year: a.year.map(|y| y.to_string()).unwrap_or_default(),
+                        thumbnail: a.thumbnail.clone(),
+                        track_count: 0,
+                    }).collect();
+                crate::bridge::bridge::set_library_albums(a_list);
             }
         }
         "Artistas" => {
             if let Ok(artists) = FavoritesRepo::all_artists() {
-                let names: Vec<String> = artists.iter().map(|a| a.name.clone()).collect();
-                crate::bridge::bridge::set_library_artists(names);
+                let art_list: Vec<crate::bridge::bridge::Artist> = artists.iter()
+                    .map(|a| crate::bridge::bridge::Artist {
+                        id: a.id.clone(),
+                        name: a.name.clone(),
+                        thumbnail: a.thumbnail.clone(),
+                        description: String::new(),
+                        subscribers: String::new(),
+                    }).collect();
+                crate::bridge::bridge::set_library_artists(art_list);
             }
         }
         "Playlists" => {
             if let Ok(playlists) = PlaylistRepo::all() {
-                let count_ok = |id: &str| -> String {
-                    PlaylistRepo::tracks(id).ok()
-                        .map(|t| format!("{}", t.len()))
-                        .unwrap_or_default()
-                };
-                let names: Vec<String> = playlists.iter().map(|p| p.name.clone()).collect();
-                let counts: Vec<String> = playlists.iter()
-                    .map(|p| count_ok(&p.id)).collect();
-                crate::bridge::bridge::set_library_playlists(names, counts);
+                let p_list: Vec<crate::bridge::bridge::Playlist> = playlists.iter()
+                    .map(|p| {
+                        let count = PlaylistRepo::tracks(&p.id).ok().map(|t| t.len() as i32).unwrap_or(0);
+                        crate::bridge::bridge::Playlist {
+                            id: p.id.clone(),
+                            name: p.name.clone(),
+                            description: p.description.clone(),
+                            thumbnail: p.artwork.clone(),
+                            track_count: count,
+                        }
+                    }).collect();
+                crate::bridge::bridge::set_library_playlists(p_list);
             }
         }
         _ => {}
     }
 }
 
-pub fn on_remove_favorite(info: &str) {
-    log::info!("Remove favorite: {info}");
-    let id = format!("fav_{}", info);
-    if let Err(e) = crate::db::repo::FavoritesRepo::remove_track(&id) {
+pub fn on_remove_favorite(track_id: &str) {
+    log::info!("Remove favorite: {track_id}");
+    if let Err(e) = crate::db::repo::FavoritesRepo::remove_track(track_id) {
         log::error!("Failed to remove favorite: {e}");
     }
 }
 
-pub fn on_add_favorite(info: &str) {
-    log::info!("Add favorite: {info}");
+pub fn on_add_favorite(track: bridge::Track) {
+    log::info!("Add favorite: {} — {}", track.title, track.artist);
     use crate::db::repo::FavoriteTrack;
-    // Parse "Title — Artist" to get title and artist
-    let (title, artist) = if let Some(dash) = info.rfind(" — ") {
-        (info[..dash].trim().to_string(), info[dash + 3..].trim().to_string())
-    } else {
-        (info.to_string(), String::new())
-    };
-    let track = FavoriteTrack {
-        id: format!("fav_{}", title),
-        title: title.clone(),
-        artist: artist.clone(),
-        album: String::new(),
+    let fav_track = FavoriteTrack {
+        id: track.id.clone(),
+        title: track.title,
+        artist: track.artist,
+        album: track.album,
         album_id: String::new(),
-        duration_ms: 0,
-        thumbnail: String::new(),
+        duration_ms: track.duration_ms,
+        thumbnail: track.thumbnail,
         added_at: String::new(),
     };
-    if let Err(e) = crate::db::repo::FavoritesRepo::add_track(&track) {
+    if let Err(e) = crate::db::repo::FavoritesRepo::add_track(&fav_track) {
         log::error!("Failed to add favorite: {e}");
     } else {
-        log::info!("Added favorite: {title} — {artist}");
+        log::info!("Added favorite: {} — {}", fav_track.title, fav_track.artist);
     }
 }
 
-pub fn on_download_requested(info: &str) {
-    log::info!("Download requested: {info}");
-    
-    // Parse "Title — Artist\x1fvideo_id" format
-    let (display, video_id) = if let Some(sep) = info.find('\x1f') {
-        (&info[..sep], Some(&info[sep + 1..]))
-    } else {
-        (info, None)
-    };
-    
-    let (title, artist) = if let Some(dash) = display.rfind(" — ") {
-        (display[..dash].trim().to_string(), display[dash + 3..].trim().to_string())
-    } else {
-        (display.to_string(), String::new())
-    };
-
-    if let Some(vid) = video_id {
+pub fn on_download_requested(track: bridge::Track) {
+    log::info!("Download requested: {} — {}", track.title, track.artist);
+    if !track.id.is_empty() {
         crate::services::download::DownloadManager::get_instance().add_download(
-            vid,
-            &title,
-            &artist,
+            &track.id,
+            &track.title,
+            &track.artist,
             ""
         );
     } else {
-        log::warn!("Cannot download: no video_id provided in {info}");
+        log::warn!("Cannot download: no track id provided for {} — {}", track.title, track.artist);
     }
 }
 
-pub fn on_search_item_clicked(info: &str) {
-    log::info!("Search item clicked: {info}");
-    // Parse "Title — Artist\x1fvideo_id" format from search service
-    let (display, video_id) = if let Some(sep) = info.find('\x1f') {
-        (&info[..sep], Some(&info[sep + 1..]))
-    } else {
-        (info, None)
-    };
-    if let Some(dash) = display.rfind(" — ") {
-        let title = display[..dash].trim();
-        let artist = display[dash + 3..].trim();
-        with_player(|p| p.play_search_result(title, artist, video_id));
-    } else {
-        with_player(|p| p.play_search_result(display, "", video_id));
-    }
+pub fn on_search_item_clicked(track: bridge::Track) {
+    log::info!("Search item clicked: {} — {} (id: {})", track.title, track.artist, track.id);
+    with_player(|p| p.play_track_dto(track));
 }
 
 pub fn on_timer_tick() {
@@ -680,41 +700,40 @@ pub fn on_stats_requested() {
     }
 
     // Top 5 Tracks
-    let mut top_titles = Vec::new();
-    let mut top_artists = Vec::new();
-    let mut top_plays = Vec::new();
-    let mut top_thumbnails = Vec::new();
+    let mut top_tracks = Vec::new();
 
     if let Ok(results) = crate::db::with_db(|conn| {
         let mut stmt = conn.prepare(
-            "SELECT title, artist, COUNT(*) as cnt, thumbnail
+            "SELECT track_id, title, artist, duration_ms, thumbnail, COUNT(*) as cnt
              FROM recently_played
-             GROUP BY title, artist
+             GROUP BY track_id, title, artist
              ORDER BY cnt DESC
              LIMIT 5"
         )?;
         let rows = stmt.query_map([], |r| {
-            let title: String = r.get(0)?;
-            let artist: String = r.get(1)?;
-            let count: i32 = r.get(2)?;
-            let thumb: String = r.get(3)?;
-            Ok((title, artist, count, thumb))
+            let id: String = r.get(0)?;
+            let title: String = r.get(1)?;
+            let artist: String = r.get(2)?;
+            let duration_ms: i64 = r.get(3)?;
+            let thumb: String = r.get(4)?;
+            Ok((id, title, artist, duration_ms, thumb))
         })?;
-        let list: Result<Vec<(String, String, i32, String)>, rusqlite::Error> = rows.collect();
+        let list: Result<Vec<_>, rusqlite::Error> = rows.collect();
         list
     }) {
         for row in results {
-            let title = row.0;
-            let artist = row.1;
-            let count = row.2;
-            let mut thumb = row.3;
+            let (id, title, artist, duration_ms, mut thumb) = row;
             if thumb.is_empty() {
                 thumb = crate::bridge::bridge::get_or_create_thumbnail(&title, 0);
             }
-            top_titles.push(title);
-            top_artists.push(artist);
-            top_plays.push(count);
-            top_thumbnails.push(thumb);
+            top_tracks.push(crate::bridge::bridge::Track {
+                id,
+                title,
+                artist,
+                album: String::new(),
+                duration_ms,
+                thumbnail: thumb,
+            });
         }
     }
 
@@ -727,27 +746,22 @@ pub fn on_stats_requested() {
         format!("{}m", total_mins)
     };
 
-    crate::bridge::bridge::set_stats_data(
-        &time_str,
+    let stats = crate::bridge::bridge::StatsData {
+        total_play_time: time_str,
         total_plays,
         unique_artists,
         weekly_activity,
-        top_titles,
-        top_artists,
-        top_plays,
-        top_thumbnails,
-    );
+        top_tracks,
+    };
+
+    crate::bridge::bridge::set_stats_data(stats);
 }
 
 pub fn on_history_requested() {
     log::info!("History requested");
 
-    let mut titles = Vec::new();
-    let mut artists = Vec::new();
-    let mut durations = Vec::new();
-    let mut thumbnails = Vec::new();
+    let mut history = Vec::new();
     let mut played_at = Vec::new();
-    let mut item_ids = Vec::new();
 
     if let Ok(results) = crate::db::with_db(|conn| {
         let mut stmt = conn.prepare(
@@ -773,23 +787,19 @@ pub fn on_history_requested() {
             if thumbnail.is_empty() {
                 thumbnail = crate::bridge::bridge::get_or_create_thumbnail(&title, 0);
             }
-            item_ids.push(format!("{} \u{2014} {}\x1f{}", title, artist, track_id));
-            titles.push(title);
-            artists.push(artist);
-            durations.push(duration_ms.to_string());
-            thumbnails.push(thumbnail);
+            history.push(crate::bridge::bridge::Track {
+                id: track_id,
+                title,
+                artist,
+                album: String::new(),
+                duration_ms,
+                thumbnail,
+            });
             played_at.push(played_at_str);
         }
     }
 
-    crate::bridge::bridge::set_history_data(
-        titles,
-        artists,
-        durations,
-        thumbnails,
-        played_at,
-        item_ids,
-    );
+    crate::bridge::bridge::set_history_data(history, played_at);
 }
 
 pub fn on_youtube_login_success(headers_json: &str, name: &str, avatar_url: &str) {

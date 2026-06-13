@@ -15,14 +15,34 @@ impl SearchService {
     }
 
     pub fn push_to_ui(&self, results: &SearchResults) {
-        let songs: Vec<String> = results.songs.iter()
-            .map(|t| format!("{} — {}\x1f{}", t.title, t.artists.join(", "), t.id))
+        let songs: Vec<crate::bridge::bridge::Track> = results.songs.iter()
+            .map(|t| crate::bridge::bridge::Track {
+                id: t.id.clone(),
+                title: t.title.clone(),
+                artist: t.artists.join(", "),
+                album: t.album.clone().unwrap_or_default(),
+                duration_ms: t.duration_ms,
+                thumbnail: t.thumbnail.clone(),
+            })
             .collect();
-        let artists: Vec<String> = results.artists.iter()
-            .map(|a| a.name.clone())
+        let artists: Vec<crate::bridge::bridge::Artist> = results.artists.iter()
+            .map(|a| crate::bridge::bridge::Artist {
+                id: a.id.clone(),
+                name: a.name.clone(),
+                thumbnail: a.thumbnail.clone(),
+                description: String::new(),
+                subscribers: a.subscriber_count.clone().unwrap_or_default(),
+            })
             .collect();
-        let albums: Vec<String> = results.albums.iter()
-            .map(|a| a.title.clone())
+        let albums: Vec<crate::bridge::bridge::Album> = results.albums.iter()
+            .map(|a| crate::bridge::bridge::Album {
+                id: a.id.clone(),
+                title: a.title.clone(),
+                artist: a.artists.join(", "),
+                year: a.year.map(|y| y.to_string()).unwrap_or_default(),
+                thumbnail: a.thumbnail.clone(),
+                track_count: a.track_count.unwrap_or(0),
+            })
             .collect();
 
         crate::bridge::bridge::set_search_results(songs, artists, albums);

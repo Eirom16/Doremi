@@ -12,9 +12,9 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 AlbumTrackRow::AlbumTrackRow(int num, const QString &title, const QString &artist,
-                             const QString &duration, const std::string &item_id,
+                             const QString &duration, Track track,
                              QWidget *parent)
-    : QWidget(parent), item_id_(item_id)
+    : QWidget(parent), track_(std::move(track))
 {
     const auto &c = DesignTokens::current();
     setFixedHeight(48);
@@ -66,7 +66,7 @@ AlbumTrackRow::AlbumTrackRow(int num, const QString &title, const QString &artis
 void AlbumTrackRow::mousePressEvent(QMouseEvent *event) {
     QWidget::mousePressEvent(event);
     if (event->button() == Qt::LeftButton)
-        emit play_requested(item_id_);
+        emit play_requested(track_);
 }
 
 void AlbumTrackRow::enterEvent(QEnterEvent *event) {
@@ -211,25 +211,22 @@ void AlbumDetailView::setupLayout() {
     setLayout(main_vbox);
 }
 
-void AlbumDetailView::set_album_info(const std::string &title, const std::string &artist,
-                                     const std::string &year, const std::string &thumbnail,
-                                     int32_t track_count)
-{
+void AlbumDetailView::set_album_info(const Album &album) {
     const auto &c = DesignTokens::current();
-    title_label_->setText(QString::fromStdString(title));
-    artist_label_->setText(QString::fromStdString(artist));
+    title_label_->setText(QString::fromStdString(static_cast<std::string>(album.title)));
+    artist_label_->setText(QString::fromStdString(static_cast<std::string>(album.artist)));
 
     QString meta;
-    if (!year.empty()) meta += QString::fromStdString(year);
-    if (track_count > 0) {
+    if (!album.year.empty()) meta += QString::fromStdString(static_cast<std::string>(album.year));
+    if (album.track_count > 0) {
         if (!meta.isEmpty()) meta += " · ";
-        meta += QString("%1 canciones").arg(track_count);
+        meta += QString("%1 canciones").arg(album.track_count);
     }
     meta_label_->setText(meta);
 
     // Load cover
     QPixmap pm;
-    if (!thumbnail.empty() && pm.load(QString::fromStdString(thumbnail))) {
+    if (!album.thumbnail.empty() && pm.load(QString::fromStdString(static_cast<std::string>(album.thumbnail)))) {
         QPixmap dest(pm.size());
         dest.fill(Qt::transparent);
         QPainter painter(&dest);
@@ -245,44 +242,33 @@ void AlbumDetailView::set_album_info(const std::string &title, const std::string
     }
 }
 
-void AlbumDetailView::set_album_tracks(const std::vector<std::string> &titles,
-                                       const std::vector<std::string> &artists,
-                                       const std::vector<std::string> &durations,
-                                       const std::vector<std::string> &item_ids)
-{
-    // Clear existing tracks
+void AlbumDetailView::set_album_tracks(const std::vector<Track> &tracks) {
     QLayoutItem *item;
     while ((item = tracks_layout_->takeAt(0)) != nullptr) {
         if (item->widget()) item->widget()->deleteLater();
         delete item;
     }
 
-    size_t n = std::min({titles.size(), artists.size(), durations.size(), item_ids.size()});
-    for (size_t i = 0; i < n; ++i) {
-        // Format duration
+    for (size_t i = 0; i < tracks.size(); ++i) {
+        const auto &t = tracks[i];
         QString dur;
-        int dur_ms = 0;
-        try { dur_ms = std::stoi(durations[i]); } catch (...) {}
-        if (dur_ms > 0) {
-            int secs = dur_ms / 1000;
+        if (t.duration_ms > 0) {
+            int secs = static_cast<int>(t.duration_ms / 1000);
             dur = QString("%1:%2").arg(secs / 60).arg(secs % 60, 2, 10, QChar('0'));
-        } else if (!durations[i].empty()) {
-            dur = QString::fromStdString(durations[i]);
         }
-
         auto *row = new AlbumTrackRow(
             static_cast<int>(i) + 1,
-            QString::fromStdString(titles[i]),
-            QString::fromStdString(artists[i]),
+            QString::fromStdString(static_cast<std::string>(t.title)),
+            QString::fromStdString(static_cast<std::string>(t.artist)),
             dur,
-            item_ids[i],
+            t,
             tracks_widget_
         );
         connect(row, &AlbumTrackRow::play_requested, this, &AlbumDetailView::play_requested);
         tracks_layout_->addWidget(row);
     }
 
-    if (n == 0) {
+    if (tracks.empty()) {
         const auto &c = DesignTokens::current();
         auto *empty = new QLabel("No se encontraron canciones en este álbum.", tracks_widget_);
         empty->setAlignment(Qt::AlignCenter);

@@ -13,6 +13,7 @@
 #include "components/queue_panel.h"
 #include "components/waveform_bars.h"
 #include "components/animated_progress.h"
+#include "doremi/src/bridge.rs.h"
 
 class NowPlayingView : public QWidget {
     Q_OBJECT
@@ -29,7 +30,7 @@ public:
     void setRepeatMode(int mode);
     void setDominantColors(const QStringList &colors);
     void setLyrics(const QString &plain, const QString &synced);
-    void setQueue(const QStringList &titles, const QStringList &artists, const QStringList &thumbnails, int current_index);
+    void setQueue(const std::vector<Track> &tracks, int current_index);
     
     void setSubtitleAlignment(const std::string &alignment);
     void setSubtitleFontSize(int32_t size);

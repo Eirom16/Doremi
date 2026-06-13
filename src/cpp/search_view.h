@@ -11,22 +11,23 @@
 #include <string>
 
 #include "widgets.h"
+#include "doremi/src/bridge.rs.h"
 
 class SearchView : public QWidget {
     Q_OBJECT
 public:
     explicit SearchView(QWidget *parent = nullptr);
     void set_query(const std::string &query);
-    void set_results(const std::vector<std::string> &songs,
-                     const std::vector<std::string> &artists,
-                     const std::vector<std::string> &albums);
+    void set_results(const std::vector<Track> &songs,
+                     const std::vector<Artist> &artists,
+                     const std::vector<Album> &albums);
     void set_recent_searches(const std::vector<std::string> &queries);
 signals:
     void filter_changed(const std::string &filter);
-    void play_requested(const std::string &title_artist);
+    void play_requested(Track track);
     void search_requested(const std::string &query);
-    void add_favorite_requested(const std::string &title_artist);
-    void download_requested(const std::string &title_artist);
+    void add_favorite_requested(Track track);
+    void download_requested(Track track);
 private:
     QLabel *header_;
     QVBoxLayout *results_;
@@ -34,9 +35,9 @@ private:
     std::vector<QPushButton *> filter_btns_;
     void set_active_filter(const std::string &filter);
     void show_recent_searches(const std::vector<std::string> &queries);
-    void show_results(const std::vector<std::string> &songs,
-                      const std::vector<std::string> &artists,
-                      const std::vector<std::string> &albums);
+    void show_results(const std::vector<Track> &songs,
+                      const std::vector<Artist> &artists,
+                      const std::vector<Album> &albums);
     bool showing_recent_ = false;
 };
 

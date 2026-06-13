@@ -9,17 +9,18 @@
 #include <QMouseEvent>
 #include <vector>
 #include <string>
+#include "doremi/src/bridge.rs.h"
 
 // Internal track row widget for album tracks
 class AlbumTrackRow : public QWidget {
     Q_OBJECT
 public:
     AlbumTrackRow(int num, const QString &title, const QString &artist,
-                  const QString &duration, const std::string &item_id,
+                  const QString &duration, Track track,
                   QWidget *parent = nullptr);
 
 signals:
-    void play_requested(const std::string &info);
+    void play_requested(Track track);
 
 protected:
     void mousePressEvent(QMouseEvent *event) override;
@@ -27,7 +28,7 @@ protected:
     void leaveEvent(QEvent *event) override;
 
 private:
-    std::string item_id_;
+    Track track_;
 };
 
 class AlbumDetailView : public QWidget {
@@ -35,19 +36,12 @@ class AlbumDetailView : public QWidget {
 public:
     explicit AlbumDetailView(QWidget *parent = nullptr);
 
-    void set_album_info(const std::string &title, const std::string &artist,
-                        const std::string &year, const std::string &thumbnail,
-                        int32_t track_count);
-
-    void set_album_tracks(const std::vector<std::string> &titles,
-                          const std::vector<std::string> &artists,
-                          const std::vector<std::string> &durations,
-                          const std::vector<std::string> &item_ids);
-
+    void set_album_info(const Album &album);
+    void set_album_tracks(const std::vector<Track> &tracks);
     void clear();
 
 signals:
-    void play_requested(const std::string &info);
+    void play_requested(Track track);
     void play_all_requested();
     void back_requested();
 

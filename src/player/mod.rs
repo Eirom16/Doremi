@@ -93,6 +93,25 @@ impl PlayerService {
         self.play_index(0);
     }
 
+    pub fn play_track_dto(&self, track: crate::bridge::bridge::Track) {
+        log::info!("Play track DTO: {} — {}", track.title, track.artist);
+        let track_info = crate::player::queue::TrackInfo {
+            id: track.id,
+            title: track.title,
+            artist: track.artist,
+            album: track.album,
+            thumbnail: track.thumbnail,
+            duration_ms: track.duration_ms,
+            stream_url: String::new(),
+        };
+        {
+            let mut queue = self.queue.lock().unwrap();
+            queue.clear();
+            queue.enqueue_front(track_info);
+        }
+        self.play_index(0);
+    }
+
     pub fn stop(&self) {
         self.audio.stop();
     }
@@ -349,19 +368,22 @@ impl PlayerService {
         // Sync queue to C++
         {
             if let Ok(q) = self.queue.lock() {
-                let mut t_list = Vec::new();
-                let mut a_list = Vec::new();
-                let mut th_list = Vec::new();
+                let mut queue_list = Vec::new();
                 for track in q.all_tracks() {
-                    t_list.push(track.title.clone());
-                    a_list.push(track.artist.clone());
                     let mut thumb = track.thumbnail.clone();
                     if thumb.is_empty() {
                         thumb = crate::bridge::bridge::get_or_create_thumbnail(&track.title, 0);
                     }
-                    th_list.push(thumb);
+                    queue_list.push(crate::bridge::bridge::Track {
+                        id: track.id.clone(),
+                        title: track.title.clone(),
+                        artist: track.artist.clone(),
+                        album: track.album.clone(),
+                        duration_ms: track.duration_ms,
+                        thumbnail: thumb,
+                    });
                 }
-                crate::bridge::bridge::set_playback_queue(t_list, a_list, th_list, q.current_index() as i32);
+                crate::bridge::bridge::set_playback_queue(queue_list, q.current_index() as i32);
             }
         }
 

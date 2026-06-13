@@ -249,20 +249,20 @@ void DoremiMainWindow::connect_signals() {
         });
 
     QObject::connect(search_view_, &SearchView::play_requested, this,
-        [](const std::string &info) {
-            on_search_item_clicked(info);
+        [](Track track) {
+            on_search_item_clicked(track);
         });
     QObject::connect(search_view_, &SearchView::search_requested, this,
         [](const std::string &query) {
             on_search_submitted(query);
         });
     QObject::connect(search_view_, &SearchView::add_favorite_requested, this,
-        [](const std::string &info) {
-            on_add_favorite(info);
+        [](Track track) {
+            on_add_favorite(track);
         });
     QObject::connect(search_view_, &SearchView::download_requested, this,
-        [](const std::string &info) {
-            on_download_requested(info);
+        [](Track track) {
+            on_download_requested(track);
         });
 
     QObject::connect(library_view_, &LibraryView::tab_changed, this,
@@ -270,43 +270,43 @@ void DoremiMainWindow::connect_signals() {
             on_library_tab_changed(tab);
         });
     QObject::connect(library_view_, &LibraryView::play_requested, this,
-        [](const std::string &info) {
-            on_search_item_clicked(info);
+        [](Track track) {
+            on_search_item_clicked(track);
         });
     QObject::connect(library_view_, &LibraryView::remove_favorite_requested, this,
         [](const std::string &info) {
             on_remove_favorite(info);
         });
     QObject::connect(library_view_, &LibraryView::download_requested, this,
-        [](const std::string &info) {
-            on_download_requested(info);
+        [](Track track) {
+            on_download_requested(track);
         });
 
     QObject::connect(trending_view_, &TrendingView::play_requested, this,
-        [](const std::string &info) {
-            on_search_item_clicked(info);
+        [](Track track) {
+            on_search_item_clicked(track);
         });
 
     QObject::connect(downloads_view_, &DownloadsView::play_requested, this,
-        [](const std::string &info) {
-            on_search_item_clicked(info);
+        [](Track track) {
+            on_search_item_clicked(track);
         });
 
     QObject::connect(stats_view_, &StatsView::play_requested, this,
-        [](const std::string &info) {
-            on_search_item_clicked(info);
+        [](Track track) {
+            on_search_item_clicked(track);
         });
 
     // History view
     QObject::connect(history_view_, &HistoryView::play_requested, this,
-        [](const std::string &info) {
-            on_search_item_clicked(info);
+        [](Track track) {
+            on_search_item_clicked(track);
         });
 
     // Album detail view
     QObject::connect(album_detail_view_, &AlbumDetailView::play_requested, this,
-        [](const std::string &info) {
-            on_search_item_clicked(info);
+        [](Track track) {
+            on_search_item_clicked(track);
         });
     QObject::connect(album_detail_view_, &AlbumDetailView::back_requested, this,
         [this]() {
@@ -315,8 +315,8 @@ void DoremiMainWindow::connect_signals() {
 
     // Artist detail view
     QObject::connect(artist_detail_view_, &ArtistDetailView::play_requested, this,
-        [](const std::string &info) {
-            on_search_item_clicked(info);
+        [](Track track) {
+            on_search_item_clicked(track);
         });
     QObject::connect(artist_detail_view_, &ArtistDetailView::back_requested, this,
         [this]() {
@@ -325,8 +325,8 @@ void DoremiMainWindow::connect_signals() {
 
     // Playlist detail view
     QObject::connect(playlist_detail_view_, &PlaylistDetailView::play_requested, this,
-        [](const std::string &info) {
-            on_search_item_clicked(info);
+        [](Track track) {
+            on_search_item_clicked(track);
         });
     QObject::connect(playlist_detail_view_, &PlaylistDetailView::back_requested, this,
         [this]() {
@@ -468,53 +468,30 @@ void DoremiMainWindow::set_track_lyrics(const std::string &plain, const std::str
     }
 }
 
-void DoremiMainWindow::set_playback_queue(const std::vector<std::string> &titles,
-                                          const std::vector<std::string> &artists,
-                                          const std::vector<std::string> &thumbnails,
-                                          int32_t current_index) {
+void DoremiMainWindow::set_playback_queue(const rust::Vec<Track> &queue, int32_t current_index) {
     if (now_playing_view_) {
-        QStringList t_list, a_list, th_list;
-        for (const auto &t : titles) t_list << QString::fromStdString(t);
-        for (const auto &a : artists) a_list << QString::fromStdString(a);
-        for (const auto &th : thumbnails) th_list << QString::fromStdString(th);
-        now_playing_view_->setQueue(t_list, a_list, th_list, current_index);
+        std::vector<Track> q;
+        for (const auto &t : queue) q.push_back(t);
+        now_playing_view_->setQueue(q, current_index);
+    }
+    if (player_bar_) {
+        // Update player bar with current track info
     }
 }
 
-void DoremiMainWindow::set_stats_data(const std::string &total_play_time, int32_t total_plays, int32_t unique_artists,
-                                      const std::vector<int32_t> &weekly_activity, const std::vector<std::string> &top_titles,
-                                      const std::vector<std::string> &top_artists, const std::vector<int32_t> &top_plays,
-                                      const std::vector<std::string> &top_thumbnails) {
+void DoremiMainWindow::set_stats_data(const StatsData &stats) {
     if (stats_view_) {
-        QString time_str = QString::fromStdString(total_play_time);
-        
-        QList<int> weekly_activity_list;
-        for (int v : weekly_activity) weekly_activity_list.append(v);
-        
-        QStringList t_list, a_list, th_list;
-        for (const auto &t : top_titles) t_list << QString::fromStdString(t);
-        for (const auto &a : top_artists) a_list << QString::fromStdString(a);
-        for (const auto &th : top_thumbnails) th_list << QString::fromStdString(th);
-        
-        QList<int> plays_list;
-        for (int v : top_plays) plays_list.append(v);
-
-        stats_view_->setStatsData(time_str, total_plays, unique_artists,
-                                  weekly_activity_list, t_list, a_list,
-                                  plays_list, th_list);
+        stats_view_->setStatsData(stats);
     }
 }
 
-
-void DoremiMainWindow::set_history_data(const std::vector<std::string> &titles,
-                                        const std::vector<std::string> &artists,
-                                        const std::vector<std::string> &durations,
-                                        const std::vector<std::string> &thumbnails,
-                                        const std::vector<std::string> &played_at,
-                                        const std::vector<std::string> &item_ids)
-{
+void DoremiMainWindow::set_history_data(const rust::Vec<Track> &history, const rust::Vec<rust::String> &played_at) {
     if (history_view_) {
-        history_view_->set_history(titles, artists, durations, thumbnails, played_at, item_ids);
+        std::vector<Track> h;
+        for (const auto &t : history) h.push_back(t);
+        std::vector<std::string> pa;
+        for (const auto &x : played_at) pa.push_back(std::string(x));
+        history_view_->set_history(h, pa);
     }
 }
 
@@ -711,12 +688,14 @@ void set_search_history(rust::Vec<rust::String> queries) {
     g_main_window->search_view()->set_recent_searches(q);
 }
 
-void set_search_results(rust::Vec<rust::String> songs, rust::Vec<rust::String> artists, rust::Vec<rust::String> albums) {
+void set_search_results(rust::Vec<Track> songs, rust::Vec<Artist> artists, rust::Vec<Album> albums) {
     if (!g_main_window || !g_main_window->search_view()) return;
-    std::vector<std::string> s, a, al;
-    for (auto &x : songs) s.push_back(std::string(x));
-    for (auto &x : artists) a.push_back(std::string(x));
-    for (auto &x : albums) al.push_back(std::string(x));
+    std::vector<Track> s;
+    for (const auto &x : songs) s.push_back(x);
+    std::vector<Artist> a;
+    for (const auto &x : artists) a.push_back(x);
+    std::vector<Album> al;
+    for (const auto &x : albums) al.push_back(x);
     g_main_window->search_view()->set_results(s, a, al);
 }
 
@@ -732,35 +711,32 @@ void clear_home_sections() {
     g_main_window->home_view()->clear_sections();
 }
 
-void set_library_albums(rust::Vec<rust::String> titles,
-                         rust::Vec<rust::String> artists) {
+void set_library_albums(rust::Vec<Album> albums) {
     if (!g_main_window || !g_main_window->library_view()) return;
-    std::vector<std::string> t, a;
-    for (auto &x : titles) t.push_back(std::string(x));
-    for (auto &x : artists) a.push_back(std::string(x));
-    g_main_window->library_view()->set_albums(t, a);
+    std::vector<Album> a;
+    for (const auto &x : albums) a.push_back(x);
+    g_main_window->library_view()->set_albums(a);
 }
 
-void set_library_artists(rust::Vec<rust::String> names) {
+void set_library_artists(rust::Vec<Artist> artists) {
     if (!g_main_window || !g_main_window->library_view()) return;
-    std::vector<std::string> n;
-    for (auto &x : names) n.push_back(std::string(x));
-    g_main_window->library_view()->set_artists(n);
+    std::vector<Artist> a;
+    for (const auto &x : artists) a.push_back(x);
+    g_main_window->library_view()->set_artists(a);
 }
 
-void set_library_songs(rust::Vec<rust::String> titles) {
+void set_library_songs(rust::Vec<Track> songs) {
     if (!g_main_window || !g_main_window->library_view()) return;
-    std::vector<std::string> v;
-    for (auto &x : titles) v.push_back(std::string(x));
+    std::vector<Track> v;
+    for (const auto &x : songs) v.push_back(x);
     g_main_window->library_view()->set_songs(v);
 }
 
-void set_library_playlists(rust::Vec<rust::String> names, rust::Vec<rust::String> counts) {
+void set_library_playlists(rust::Vec<Playlist> playlists) {
     if (!g_main_window || !g_main_window->library_view()) return;
-    std::vector<std::string> n, c;
-    for (auto &x : names) n.push_back(std::string(x));
-    for (auto &x : counts) c.push_back(std::string(x));
-    g_main_window->library_view()->set_playlists(n, c);
+    std::vector<Playlist> p;
+    for (const auto &x : playlists) p.push_back(x);
+    g_main_window->library_view()->set_playlists(p);
 }
 
 void apply_settings_to_ui() {
@@ -916,43 +892,22 @@ void set_dominant_colors(rust::Vec<rust::String> colors) {
     }
 }
 
-void set_playback_queue(rust::Vec<rust::String> titles,
-                        rust::Vec<rust::String> artists,
-                        rust::Vec<rust::String> thumbnails,
-                        int32_t current_index) {
+void set_playback_queue(rust::Vec<Track> queue, int32_t current_index) {
     if (g_main_window) {
-        std::vector<std::string> t_vec;
-        std::vector<std::string> a_vec;
-        std::vector<std::string> th_vec;
-        for (const auto &t : titles) t_vec.push_back(std::string(t));
-        for (const auto &a : artists) a_vec.push_back(std::string(a));
-        for (const auto &th : thumbnails) th_vec.push_back(std::string(th));
+        std::vector<Track> q;
+        for (const auto &t : queue) q.push_back(t);
         QMetaObject::invokeMethod(g_main_window, [=]() {
-            g_main_window->set_playback_queue(t_vec, a_vec, th_vec, current_index);
+            rust::Vec<Track> r_queue;
+            for (const auto &t : q) r_queue.push_back(t);
+            g_main_window->set_playback_queue(r_queue, current_index);
         }, Qt::QueuedConnection);
     }
 }
 
-void set_stats_data(rust::Str total_play_time, int32_t total_plays, int32_t unique_artists,
-                    rust::Vec<int32_t> weekly_activity, rust::Vec<rust::String> top_titles,
-                    rust::Vec<rust::String> top_artists, rust::Vec<int32_t> top_plays,
-                    rust::Vec<rust::String> top_thumbnails) {
+void set_stats_data(StatsData stats) {
     if (g_main_window) {
-        std::string t_time = std::string(total_play_time);
-        std::vector<int32_t> w_act;
-        for (int32_t v : weekly_activity) w_act.push_back(v);
-        
-        std::vector<std::string> t_titles, t_artists, t_thumbs;
-        for (const auto &t : top_titles) t_titles.push_back(std::string(t));
-        for (const auto &a : top_artists) t_artists.push_back(std::string(a));
-        for (const auto &th : top_thumbnails) t_thumbs.push_back(std::string(th));
-        
-        std::vector<int32_t> t_plays;
-        for (int32_t p : top_plays) t_plays.push_back(p);
-        
         QMetaObject::invokeMethod(g_main_window, [=]() {
-            g_main_window->set_stats_data(t_time, total_plays, unique_artists,
-                                          w_act, t_titles, t_artists, t_plays, t_thumbs);
+            g_main_window->set_stats_data(stats);
         }, Qt::QueuedConnection);
     }
 }
@@ -1007,75 +962,68 @@ void set_downloads_list(rust::Vec<rust::String> titles,
 
 // ── History ──
 
-void set_history_data(rust::Vec<rust::String> titles, rust::Vec<rust::String> artists,
-                      rust::Vec<rust::String> durations, rust::Vec<rust::String> thumbnails,
-                      rust::Vec<rust::String> played_at, rust::Vec<rust::String> item_ids) {
+void set_history_data(rust::Vec<Track> history, rust::Vec<rust::String> played_at) {
     if (!g_main_window || !g_main_window->history_view()) return;
-    std::vector<std::string> t, a, d, th, pa, ids;
-    for (auto &x : titles) t.push_back(std::string(x));
-    for (auto &x : artists) a.push_back(std::string(x));
-    for (auto &x : durations) d.push_back(std::string(x));
-    for (auto &x : thumbnails) th.push_back(std::string(x));
-    for (auto &x : played_at) pa.push_back(std::string(x));
-    for (auto &x : item_ids) ids.push_back(std::string(x));
-    g_main_window->set_history_data(t, a, d, th, pa, ids);
+    std::vector<Track> h;
+    for (const auto &t : history) h.push_back(t);
+    std::vector<std::string> pa;
+    for (const auto &x : played_at) pa.push_back(std::string(x));
+    QMetaObject::invokeMethod(g_main_window, [=]() {
+        rust::Vec<Track> r_history;
+        for (const auto &t : h) r_history.push_back(t);
+        rust::Vec<rust::String> r_played_at;
+        for (const auto &x : pa) r_played_at.push_back(x);
+        g_main_window->set_history_data(r_history, r_played_at);
+    }, Qt::QueuedConnection);
 }
 
 // ── Album Detail ──
 
-void set_album_detail(rust::Str title, rust::Str artist, rust::Str year,
-                      rust::Str thumbnail, int32_t track_count,
-                      rust::Vec<rust::String> track_titles, rust::Vec<rust::String> track_artists,
-                      rust::Vec<rust::String> track_durations, rust::Vec<rust::String> track_ids) {
+void set_album_detail(Album album, rust::Vec<Track> tracks) {
     if (!g_main_window || !g_main_window->album_detail_view()) return;
-    std::vector<std::string> tt, ta, td, ti;
-    for (auto &x : track_titles) tt.push_back(std::string(x));
-    for (auto &x : track_artists) ta.push_back(std::string(x));
-    for (auto &x : track_durations) td.push_back(std::string(x));
-    for (auto &x : track_ids) ti.push_back(std::string(x));
-    g_main_window->album_detail_view()->set_album_info(
-        std::string(title), std::string(artist), std::string(year),
-        std::string(thumbnail), track_count);
-    g_main_window->album_detail_view()->set_album_tracks(tt, ta, td, ti);
-    g_main_window->navigate_to("album_detail");
+    std::vector<Track> tt;
+    for (const auto &x : tracks) tt.push_back(x);
+    QMetaObject::invokeMethod(g_main_window, [=]() {
+        std::vector<Track> r_tracks;
+        for (const auto &t : tt) r_tracks.push_back(t);
+        g_main_window->album_detail_view()->set_album_info(album);
+        g_main_window->album_detail_view()->set_album_tracks(r_tracks);
+        g_main_window->navigate_to("album_detail");
+    }, Qt::QueuedConnection);
 }
 
 // ── Artist Detail ──
 
-void set_artist_detail(rust::Str name, rust::Str thumbnail, rust::Str subscriber_count,
-                       rust::Str description,
-                       rust::Vec<rust::String> track_titles, rust::Vec<rust::String> track_albums,
-                       rust::Vec<rust::String> track_durations, rust::Vec<rust::String> track_ids) {
+void set_artist_detail(Artist artist, rust::Vec<Track> tracks, rust::Vec<Album> albums) {
     if (!g_main_window || !g_main_window->artist_detail_view()) return;
-    std::vector<std::string> tt, ta, td, ti;
-    for (auto &x : track_titles) tt.push_back(std::string(x));
-    for (auto &x : track_albums) ta.push_back(std::string(x));
-    for (auto &x : track_durations) td.push_back(std::string(x));
-    for (auto &x : track_ids) ti.push_back(std::string(x));
-    g_main_window->artist_detail_view()->set_artist_info(
-        std::string(name), std::string(thumbnail),
-        std::string(subscriber_count), std::string(description));
-    g_main_window->artist_detail_view()->set_artist_tracks(tt, ta, td, ti);
-    g_main_window->navigate_to("artist_detail");
+    std::vector<Track> tt;
+    for (const auto &x : tracks) tt.push_back(x);
+    std::vector<Album> al;
+    for (const auto &x : albums) al.push_back(x);
+    QMetaObject::invokeMethod(g_main_window, [=]() {
+        std::vector<Track> r_tracks;
+        for (const auto &t : tt) r_tracks.push_back(t);
+        std::vector<Album> r_albums;
+        for (const auto &a : al) r_albums.push_back(a);
+        g_main_window->artist_detail_view()->set_artist_info(artist);
+        g_main_window->artist_detail_view()->set_artist_tracks(r_tracks, r_albums);
+        g_main_window->navigate_to("artist_detail");
+    }, Qt::QueuedConnection);
 }
 
 // ── Playlist Detail ──
 
-void set_playlist_detail(rust::Str name, rust::Str description, rust::Str thumbnail,
-                         int32_t track_count,
-                         rust::Vec<rust::String> track_titles, rust::Vec<rust::String> track_artists,
-                         rust::Vec<rust::String> track_durations, rust::Vec<rust::String> track_ids) {
+void set_playlist_detail(Playlist playlist, rust::Vec<Track> tracks) {
     if (!g_main_window || !g_main_window->playlist_detail_view()) return;
-    std::vector<std::string> tt, ta, td, ti;
-    for (auto &x : track_titles) tt.push_back(std::string(x));
-    for (auto &x : track_artists) ta.push_back(std::string(x));
-    for (auto &x : track_durations) td.push_back(std::string(x));
-    for (auto &x : track_ids) ti.push_back(std::string(x));
-    g_main_window->playlist_detail_view()->set_playlist_info(
-        std::string(name), std::string(description),
-        std::string(thumbnail), track_count);
-    g_main_window->playlist_detail_view()->set_playlist_tracks(tt, ta, td, ti);
-    g_main_window->navigate_to("playlist_detail");
+    std::vector<Track> tt;
+    for (const auto &x : tracks) tt.push_back(x);
+    QMetaObject::invokeMethod(g_main_window, [=]() {
+        std::vector<Track> r_tracks;
+        for (const auto &t : tt) r_tracks.push_back(t);
+        g_main_window->playlist_detail_view()->set_playlist_info(playlist);
+        g_main_window->playlist_detail_view()->set_playlist_tracks(r_tracks);
+        g_main_window->navigate_to("playlist_detail");
+    }, Qt::QueuedConnection);
 }
 
 void update_youtube_auth_state(bool authenticated, rust::Str name, rust::Str avatar_url) {

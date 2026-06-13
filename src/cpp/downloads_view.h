@@ -9,6 +9,7 @@
 #include <QScrollArea>
 #include <vector>
 #include <string>
+#include "doremi/src/bridge.rs.h"
 
 class DownloadsView : public QWidget {
     Q_OBJECT
@@ -19,7 +20,7 @@ public:
                        const std::vector<std::string> &thumbnails);
     void clear_downloads();
 signals:
-    void play_requested(const std::string &title_artist);
+    void play_requested(Track track);
 private:
     QWidget *make_download_row(const std::string &title, const std::string &artist,
                                const std::string &thumbnail_path);

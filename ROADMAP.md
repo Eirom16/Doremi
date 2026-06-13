@@ -69,11 +69,11 @@ El port se considera terminado cuando Doremi cubra los flujos reales de Pyrolist
 
 ### P0.1 Inventario y contrato de paridad
 
-- [ ] Crear una matriz versionada de todos los flujos de Pyrolist y su equivalente en Doremi.
-- [ ] Clasificar cada flujo como `ausente`, `UI solamente`, `parcial`, `funcional` o `verificado`.
-- [ ] Definir casos manuales de referencia para login, busqueda, play, cola, letras, descarga, biblioteca y cierre.
-- [ ] Capturar screenshots y comportamiento de Pyrolist como referencia visual.
-- [ ] Definir una politica clara para funciones de Pyrolist que se eliminaran deliberadamente.
+- [x] Crear una matriz versionada de todos los flujos de Pyrolist y su equivalente en Doremi.
+- [x] Clasificar cada flujo como `ausente`, `UI solamente`, `parcial`, `funcional` o `verificado`.
+- [x] Definir casos manuales de referencia para login, busqueda, play, cola, letras, descarga, biblioteca y cierre.
+- [x] Capturar screenshots y comportamiento de Pyrolist como referencia visual.
+- [x] Definir una politica clara para funciones de Pyrolist que se eliminaran deliberadamente.
 
 **Criterio de salida:** ningun modulo puede considerarse porteado solo porque existe un archivo o widget con el mismo nombre.
 
@@ -112,11 +112,11 @@ El port se considera terminado cuando Doremi cubra los flujos reales de Pyrolist
 
 ### P0.4 Contratos Rust/C++
 
-- [ ] Sustituir payloads concatenados como `title - artist` o strings delimitados por structs compartidos.
-- [ ] Definir IDs estables para track, album, artist, playlist y descarga.
+- [x] Sustituir payloads concatenados como `title - artist` o strings delimitados por structs compartidos.
+- [x] Definir IDs estables para track, album, artist, playlist y descarga.
 - [ ] Separar IDs de presentacion y texto traducido.
-- [ ] Introducir DTOs tipados para resultados, detalles, cola, historial, stats y progreso.
-- [ ] No resolver acciones buscando por titulo; usar IDs.
+- [x] Introducir DTOs tipados para resultados, detalles, cola, historial, stats y progreso.
+- [~] No resolver acciones buscando por titulo; usar IDs.
 - [ ] Añadir version o compatibilidad al contrato si el bridge crece.
 - [ ] Centralizar conversiones QString/string y manejo de errores FFI.
 - [ ] Documentar ownership, thread affinity de Qt y callbacks permitidos.
@@ -461,7 +461,7 @@ El port se considera terminado cuando Doremi cubra los flujos reales de Pyrolist
 ## P7 - Distribucion, operaciones y lanzamiento
 
 ### P7.1 Empaquetado Linux
-
+- [ ] Crear un workflow en Githib actions para compilar y lanzar los relases.
 - [ ] Crear icono y metadata finales de Doremi.
 - [ ] Archivo `.desktop`, AppStream y MIME/scheme si aplica.
 - [ ] Paquete Debian/Ubuntu.

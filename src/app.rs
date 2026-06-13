@@ -125,28 +125,57 @@ impl DoremiApp {
         // Load library data from DB
         // Songs (favorites)
         if let Ok(tracks) = FavoritesRepo::all_tracks() {
-            let song_titles: Vec<String> = tracks.iter()
-                .map(|t| format!("{} — {}", t.title, t.artist)).collect();
-            set_library_songs(song_titles);
+            let songs: Vec<crate::bridge::bridge::Track> = tracks.iter()
+                .map(|t| crate::bridge::bridge::Track {
+                    id: t.id.clone(),
+                    title: t.title.clone(),
+                    artist: t.artist.clone(),
+                    album: t.album.clone(),
+                    duration_ms: t.duration_ms,
+                    thumbnail: t.thumbnail.clone(),
+                }).collect();
+            set_library_songs(songs);
         }
         // Playlists
         if let Ok(playlists) = PlaylistRepo::all() {
-            let names: Vec<String> = playlists.iter().map(|p| p.name.clone()).collect();
-            let counts: Vec<String> = playlists.iter()
-                .map(|p| PlaylistRepo::tracks(&p.id).ok().map(|t| t.len().to_string()).unwrap_or("0".into()))
+            let p_list: Vec<crate::bridge::bridge::Playlist> = playlists.iter()
+                .map(|p| {
+                    let count = PlaylistRepo::tracks(&p.id).ok().map(|t| t.len() as i32).unwrap_or(0);
+                    crate::bridge::bridge::Playlist {
+                        id: p.id.clone(),
+                        name: p.name.clone(),
+                        description: p.description.clone(),
+                        thumbnail: p.artwork.clone(),
+                        track_count: count,
+                    }
+                })
                 .collect();
-            set_library_playlists(names, counts);
+            set_library_playlists(p_list);
         }
         // Albums
         if let Ok(albums) = FavoritesRepo::all_albums() {
-            let album_titles: Vec<String> = albums.iter().map(|a| a.title.clone()).collect();
-            let album_artists: Vec<String> = albums.iter().map(|a| a.artist.clone()).collect();
-            set_library_albums(album_titles, album_artists);
+            let a_list: Vec<crate::bridge::bridge::Album> = albums.iter()
+                .map(|a| crate::bridge::bridge::Album {
+                    id: a.id.clone(),
+                    title: a.title.clone(),
+                    artist: a.artist.clone(),
+                    year: a.year.map(|y| y.to_string()).unwrap_or_default(),
+                    thumbnail: a.thumbnail.clone(),
+                    track_count: 0,
+                }).collect();
+            set_library_albums(a_list);
         }
         // Artists
         if let Ok(artists) = FavoritesRepo::all_artists() {
-            let artist_names: Vec<String> = artists.iter().map(|a| a.name.clone()).collect();
-            set_library_artists(artist_names);
+            let art_list: Vec<crate::bridge::bridge::Artist> = artists.iter()
+                .map(|a| crate::bridge::bridge::Artist {
+                    id: a.id.clone(),
+                    name: a.name.clone(),
+                    thumbnail: a.thumbnail.clone(),
+                    description: String::new(),
+                    subscribers: String::new(),
+                }).collect();
+            set_library_artists(art_list);
         }
 
         // Load search history

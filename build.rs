@@ -31,10 +31,15 @@ fn qt_moc_headers(build: &mut cc::Build, header: &str, out_dir: &std::path::Path
     let header_path = std::path::Path::new("src/cpp").join(header);
     let stem = std::path::Path::new(header).file_stem().unwrap().to_str().unwrap();
     let moc_out = out_dir.join(format!("moc_{stem}.cpp"));
+    let cxx_include = out_dir.join("cxxbridge").join("include");
     let status = std::process::Command::new(moc_path)
         .arg(&header_path)
         .arg("-o")
         .arg(&moc_out)
+        .arg("-I")
+        .arg("src/cpp")
+        .arg("-I")
+        .arg(&cxx_include)
         .status()
         .unwrap_or_else(|e| panic!("moc failed for {}: {}", header, e));
     assert!(status.success(), "moc returned non-zero for {}", header);

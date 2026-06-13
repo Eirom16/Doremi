@@ -84,9 +84,9 @@ LibraryView::LibraryView(QWidget *parent)
     setStyleSheet("background: transparent;");
 }
 
-QWidget *LibraryView::make_list_item(const std::string &text, const std::string &sub) {
+QWidget *LibraryView::make_list_item(const std::string &text, const std::string &sub, const std::string &id) {
     auto *ci = new ClickableItem(text, sub, this);
-    ci->set_item_id(text);
+    ci->set_item_id(id);
     
     // Find icon label and set special icon based on active tab
     auto labels = ci->findChildren<QLabel*>();
@@ -102,16 +102,41 @@ QWidget *LibraryView::make_list_item(const std::string &text, const std::string 
         }
     }
     
-    connect(ci, &ClickableItem::clicked, this, [this, text, sub]() {
-        std::string info = sub.empty() ? text : text + " — " + sub;
-        emit play_requested(info);
+    connect(ci, &ClickableItem::clicked, this, [this, text, sub, id]() {
+        Track track;
+        track.id = id;
+        track.title = text;
+        track.artist = sub;
+        emit play_requested(track);
     });
-    connect(ci, &ClickableItem::context_action, this, [this, text, sub](const std::string &action, const std::string &) {
+    connect(ci, &ClickableItem::context_action, this, [this, id](const std::string &action, const std::string &) {
         if (action == "add_favorite") {
-            emit remove_favorite_requested(text);
+            emit remove_favorite_requested(id);
+        }
+    });
+    return ci;
+}
+
+QWidget *LibraryView::make_song_item(const Track &track) {
+    auto *ci = new ClickableItem(static_cast<std::string>(track.title), static_cast<std::string>(track.artist), this);
+    ci->set_item_id(static_cast<std::string>(track.id));
+    
+    auto labels = ci->findChildren<QLabel*>();
+    for (auto *label : labels) {
+        if (label->font().family() == "Material Symbols Rounded") {
+            const auto &c = DesignTokens::current();
+            label->setPixmap(IconProvider::getIcon("music_note", c.text_secondary, 18).pixmap(36, 36));
+        }
+    }
+    
+    connect(ci, &ClickableItem::clicked, this, [this, track]() {
+        emit play_requested(track);
+    });
+    connect(ci, &ClickableItem::context_action, this, [this, track](const std::string &action, const std::string &) {
+        if (action == "add_favorite") {
+            emit remove_favorite_requested(static_cast<std::string>(track.id));
         } else if (action == "download") {
-            std::string info = sub.empty() ? text : text + " — " + sub;
-            emit download_requested(info);
+            emit download_requested(track);
         }
     });
     return ci;
@@ -127,51 +152,41 @@ void LibraryView::clear_list() {
     }
 }
 
-void LibraryView::set_playlists(const std::vector<std::string> &names,
-                                 const std::vector<std::string> &counts) {
+void LibraryView::set_playlists(const std::vector<Playlist> &playlists) {
     active_tab_ = "Playlists";
     clear_list();
-    for (size_t i = 0; i < names.size() && i < counts.size(); ++i) {
-        list_->addWidget(make_list_item(names[i], counts[i] + " canciones"));
+    for (const auto &p : playlists) {
+        list_->addWidget(make_list_item(static_cast<std::string>(p.name), std::to_string(p.track_count) + " canciones", static_cast<std::string>(p.id)));
     }
     list_->addStretch(1);
     set_active_tab(active_tab_);
 }
 
-void LibraryView::set_songs(const std::vector<std::string> &titles) {
+void LibraryView::set_songs(const std::vector<Track> &songs) {
     active_tab_ = "Canciones";
     clear_list();
-    for (const auto &t : titles) {
-        // Split "Title — Artist" to extract details
-        std::string title = t;
-        std::string sub;
-        auto pos = t.rfind(" — ");
-        if (pos != std::string::npos) {
-            title = t.substr(0, pos);
-            sub = t.substr(pos + 3);
-        }
-        list_->addWidget(make_list_item(title, sub));
+    for (const auto &t : songs) {
+        list_->addWidget(make_song_item(t));
     }
     list_->addStretch(1);
     set_active_tab(active_tab_);
 }
 
-void LibraryView::set_albums(const std::vector<std::string> &titles,
-                              const std::vector<std::string> &artists) {
+void LibraryView::set_albums(const std::vector<Album> &albums) {
     active_tab_ = "Álbumes";
     clear_list();
-    for (size_t i = 0; i < titles.size() && i < artists.size(); ++i) {
-        list_->addWidget(make_list_item(titles[i], artists[i]));
+    for (const auto &a : albums) {
+        list_->addWidget(make_list_item(static_cast<std::string>(a.title), static_cast<std::string>(a.artist), static_cast<std::string>(a.id)));
     }
     list_->addStretch(1);
     set_active_tab(active_tab_);
 }
 
-void LibraryView::set_artists(const std::vector<std::string> &names) {
+void LibraryView::set_artists(const std::vector<Artist> &artists) {
     active_tab_ = "Artistas";
     clear_list();
-    for (const auto &n : names) {
-        list_->addWidget(make_list_item(n, ""));
+    for (const auto &a : artists) {
+        list_->addWidget(make_list_item(static_cast<std::string>(a.name), "", static_cast<std::string>(a.id)));
     }
     list_->addStretch(1);
     set_active_tab(active_tab_);

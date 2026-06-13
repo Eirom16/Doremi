@@ -9,6 +9,7 @@
 #include <QPushButton>
 #include <vector>
 #include <string>
+#include "doremi/src/bridge.rs.h"
 
 class TrendingView : public QWidget {
     Q_OBJECT
@@ -18,7 +19,7 @@ public:
     void add_item(const std::string &title, const std::string &subtitle,
                   const std::string &thumbnail_path);
 signals:
-    void play_requested(const std::string &title_artist);
+    void play_requested(Track track);
 private:
     QWidget *make_trending_card(const std::string &title, const std::string &subtitle,
                                 const std::string &thumbnail_path);

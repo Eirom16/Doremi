@@ -97,9 +97,9 @@ static void clear_layout(QVBoxLayout *lay) {
     }
 }
 
-void SearchView::show_results(const std::vector<std::string> &songs,
-                               const std::vector<std::string> &artists,
-                               const std::vector<std::string> &albums) {
+void SearchView::show_results(const std::vector<Track> &songs,
+                              const std::vector<Artist> &artists,
+                              const std::vector<Album> &albums) {
     showing_recent_ = false;
     clear_layout(results_);
 
@@ -116,43 +116,55 @@ void SearchView::show_results(const std::vector<std::string> &songs,
         return;
     }
 
-    auto add_section = [&](const std::string &label, const std::vector<std::string> &items) {
-        if (items.empty()) return;
-        
-        auto *sec_header = new QLabel(QString::fromStdString(label), this);
+    if (!songs.empty()) {
+        auto *sec_header = new QLabel("Canciones", this);
         sec_header->setFont(DesignTokens::getFont("micro", 11));
         sec_header->setStyleSheet(QString("color: %1; text-transform: uppercase; padding: 12px 12px 6px;")
             .arg(c.accent.name()));
-            
         results_->addWidget(sec_header);
-        for (const auto &item : items) {
-            std::string title = item;
-            std::string sub;
-            auto pos = item.rfind(" — ");
-            if (pos != std::string::npos) {
-                title = item.substr(0, pos);
-                sub = item.substr(pos + 3);
-            }
-            auto *ci = new ClickableItem(title, sub, this);
-            ci->set_item_id(item);
+        for (const auto &track : songs) {
+            auto *ci = new ClickableItem(static_cast<std::string>(track.title), static_cast<std::string>(track.artist), this);
+            ci->set_item_id(static_cast<std::string>(track.id));
             results_->addWidget(ci);
             
-            connect(ci, &ClickableItem::clicked, this, [this, item]() {
-                emit play_requested(item);
+            connect(ci, &ClickableItem::clicked, this, [this, track]() {
+                emit play_requested(track);
             });
-            connect(ci, &ClickableItem::context_action, this, [this, item](const std::string &action, const std::string &) {
+            connect(ci, &ClickableItem::context_action, this, [this, track](const std::string &action, const std::string &) {
                 if (action == "add_favorite") {
-                    emit add_favorite_requested(item);
+                    emit add_favorite_requested(track);
                 } else if (action == "download") {
-                    emit download_requested(item);
+                    emit download_requested(track);
                 }
             });
         }
-    };
+    }
 
-    add_section("Canciones", songs);
-    add_section("Artistas", artists);
-    add_section("Álbumes", albums);
+    if (!artists.empty()) {
+        auto *sec_header = new QLabel("Artistas", this);
+        sec_header->setFont(DesignTokens::getFont("micro", 11));
+        sec_header->setStyleSheet(QString("color: %1; text-transform: uppercase; padding: 12px 12px 6px;")
+            .arg(c.accent.name()));
+        results_->addWidget(sec_header);
+        for (const auto &artist : artists) {
+            auto *ci = new ClickableItem(static_cast<std::string>(artist.name), "", this);
+            ci->set_item_id(static_cast<std::string>(artist.id));
+            results_->addWidget(ci);
+        }
+    }
+
+    if (!albums.empty()) {
+        auto *sec_header = new QLabel("Álbumes", this);
+        sec_header->setFont(DesignTokens::getFont("micro", 11));
+        sec_header->setStyleSheet(QString("color: %1; text-transform: uppercase; padding: 12px 12px 6px;")
+            .arg(c.accent.name()));
+        results_->addWidget(sec_header);
+        for (const auto &album : albums) {
+            auto *ci = new ClickableItem(static_cast<std::string>(album.title), static_cast<std::string>(album.artist), this);
+            ci->set_item_id(static_cast<std::string>(album.id));
+            results_->addWidget(ci);
+        }
+    }
 
     results_->addStretch(1);
 }
@@ -197,7 +209,7 @@ void SearchView::show_recent_searches(const std::vector<std::string> &queries) {
         btn_layout->addWidget(text_label);
         btn_layout->addStretch();
         btn->setLayout(btn_layout);
-
+ 
         QString btnStyle = QString(
             "QPushButton {\n"
             "    background: transparent;\n"
@@ -223,9 +235,9 @@ void SearchView::show_recent_searches(const std::vector<std::string> &queries) {
     results_->addStretch(1);
 }
 
-void SearchView::set_results(const std::vector<std::string> &songs,
-                              const std::vector<std::string> &artists,
-                              const std::vector<std::string> &albums) {
+void SearchView::set_results(const std::vector<Track> &songs,
+                             const std::vector<Artist> &artists,
+                             const std::vector<Album> &albums) {
     show_results(songs, artists, albums);
 }
 

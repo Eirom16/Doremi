@@ -7,19 +7,17 @@
 #include <QLabel>
 #include <vector>
 #include <string>
+#include "doremi/src/bridge.rs.h"
 
-// Row widget for a single history entry
 class HistoryRow : public QWidget {
     Q_OBJECT
 public:
-    HistoryRow(const QString &title, const QString &artist,
-               const QString &duration, const QString &thumbnail,
-               const QString &played_at, const std::string &item_id,
+    HistoryRow(const Track &track,
+               const std::string &played_at,
                QWidget *parent = nullptr);
 
 signals:
-    void play_requested(const std::string &info);
-    void download_requested(const std::string &info);
+    void play_requested(Track track);
 
 protected:
     void mousePressEvent(QMouseEvent *event) override;
@@ -27,29 +25,22 @@ protected:
     void leaveEvent(QEvent *event) override;
 
 private:
+    Track track_;
     QString title_;
     QString artist_;
-    std::string item_id_;
 };
 
-// Main History View
 class HistoryView : public QWidget {
     Q_OBJECT
 public:
     explicit HistoryView(QWidget *parent = nullptr);
 
-    void set_history(const std::vector<std::string> &titles,
-                     const std::vector<std::string> &artists,
-                     const std::vector<std::string> &durations,
-                     const std::vector<std::string> &thumbnails,
-                     const std::vector<std::string> &played_at,
-                     const std::vector<std::string> &item_ids);
-
+    void set_history(const std::vector<Track> &tracks,
+                     const std::vector<std::string> &played_at);
     void clear_history();
 
 signals:
-    void play_requested(const std::string &info);
-    void download_requested(const std::string &info);
+    void play_requested(Track track);
 
 protected:
     void showEvent(QShowEvent *event) override;
