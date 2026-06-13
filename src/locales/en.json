@@ -148,5 +148,13 @@
     "minutes_60": "60 minutes",
     "theme": "Theme",
     "username": "Username",
-    "password": "Password"
+    "password": "Password",
+    "welcome_subtitle": "YouTube Music client for Linux",
+    "welcome_title": "Welcome to Doremi",
+    "welcome_desc": "To listen to your favorite music, you need\nto sign in with your Google account.",
+    "welcome_btn_login": "Sign in with Google",
+    "welcome_btn_logging_in": "Signing in...",
+    "welcome_status_opening": "Opening sign-in window...",
+    "welcome_status_success": "Authorization successful",
+    "welcome_status_loading": "Loading Doremi..."
 }
