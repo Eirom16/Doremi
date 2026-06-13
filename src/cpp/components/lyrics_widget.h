@@ -43,6 +43,13 @@ public:
     void setLyrics(const QString &plain, const QString &synced);
     void updatePosition(int position_ms);
 
+    void setSubtitleAlignment(const std::string &alignment);
+    void setSubtitleFontSize(int size);
+    void setSubtitleLineSpacing(double spacing);
+    void setSubtitleAutoScroll(bool enabled);
+    void setSubtitleGlowEffect(bool enabled);
+
+
 signals:
     void seek_requested(int position_ms);
 
@@ -80,6 +87,12 @@ private:
     QWidget *bottom_spacer_;
     
     bool has_synced_lyrics_ = false;
+
+    std::string alignment_ = "center";
+    int base_font_size_ = 15;
+    double line_spacing_multiplier_ = 1.5;
+    bool auto_scroll_enabled_ = true;
+    bool glow_effect_enabled_ = true;
 };
 
 #endif

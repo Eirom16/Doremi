@@ -59,6 +59,11 @@ pub mod bridge {
         fn on_install_update_requested(package_path: &str, password: &str);
         fn get_app_version() -> String;
         fn doremi_tr(key: &str) -> String;
+        fn get_storage_sizes() -> Vec<f64>;
+        fn clear_cache();
+        fn clear_downloads();
+        fn export_backup(zip_path: &str) -> bool;
+        fn import_backup(zip_path: &str) -> bool;
     }
 
     // C++ functions called from Rust
@@ -97,6 +102,11 @@ pub mod bridge {
         fn set_settings_lastfm_enabled(on: bool);
         fn set_settings_lastfm_session(authenticated: bool, username: &str, api_key: &str, api_secret: &str);
         fn set_track_lyrics(plain: &str, synced: &str);
+        fn set_settings_subtitle_alignment(align: &str);
+        fn set_settings_subtitle_font_size(size: i32);
+        fn set_settings_subtitle_line_spacing(spacing: f64);
+        fn set_settings_subtitle_auto_scroll(on: bool);
+        fn set_settings_subtitle_glow_effect(on: bool);
 
         // Data service functions
         fn set_search_results(songs: Vec<String>, artists: Vec<String>, albums: Vec<String>);
@@ -375,6 +385,13 @@ pub fn apply_settings_impl() {
     bridge::set_settings_equalizer_preset(&settings.equalizer.preset_name);
     bridge::set_settings_sleep_timer(settings.player.sleep_timer_minutes);
 
+    // Apply subtitles settings
+    bridge::set_settings_subtitle_alignment(&settings.subtitles.alignment);
+    bridge::set_settings_subtitle_font_size(settings.subtitles.font_size);
+    bridge::set_settings_subtitle_line_spacing(settings.subtitles.line_spacing);
+    bridge::set_settings_subtitle_auto_scroll(settings.subtitles.auto_scroll);
+    bridge::set_settings_subtitle_glow_effect(settings.subtitles.glow_effect);
+
     // Apply integrations settings
     crate::services::discord::set_enabled(settings.integrations.discord_rpc_enabled);
     crate::services::lastfm::set_enabled(settings.integrations.lastfm_enabled);
@@ -487,6 +504,30 @@ pub fn on_setting_changed(key: &str, value: &str) {
         "lastfm_enabled" => {
             settings.integrations.lastfm_enabled = value == "true";
             crate::services::lastfm::set_enabled(settings.integrations.lastfm_enabled);
+        }
+        "subtitle_alignment" => {
+            settings.subtitles.alignment = value.to_string();
+            bridge::set_settings_subtitle_alignment(value);
+        }
+        "subtitle_font_size" => {
+            if let Ok(v) = value.parse::<i32>() {
+                settings.subtitles.font_size = v;
+                bridge::set_settings_subtitle_font_size(v);
+            }
+        }
+        "subtitle_line_spacing" => {
+            if let Ok(v) = value.parse::<f64>() {
+                settings.subtitles.line_spacing = v;
+                bridge::set_settings_subtitle_line_spacing(v);
+            }
+        }
+        "subtitle_auto_scroll" => {
+            settings.subtitles.auto_scroll = value == "true";
+            bridge::set_settings_subtitle_auto_scroll(value == "true");
+        }
+        "subtitle_glow_effect" => {
+            settings.subtitles.glow_effect = value == "true";
+            bridge::set_settings_subtitle_glow_effect(value == "true");
         }
         _ => log::warn!("Unknown setting key: {key}"),
     }
@@ -835,6 +876,28 @@ pub fn get_app_version() -> String {
 
 pub fn doremi_tr(key: &str) -> String {
     crate::utils::i18n::tr(key)
+}
+
+pub fn get_storage_sizes() -> Vec<f64> {
+    crate::utils::storage::get_storage_sizes()
+}
+
+pub fn clear_cache() {
+    crate::utils::storage::clear_cache();
+}
+
+pub fn clear_downloads() {
+    crate::utils::storage::clear_downloads();
+}
+
+pub fn export_backup(zip_path: &str) -> bool {
+    let path = std::path::Path::new(zip_path);
+    crate::utils::backup::export_backup(path)
+}
+
+pub fn import_backup(zip_path: &str) -> bool {
+    let path = std::path::Path::new(zip_path);
+    crate::utils::backup::import_backup(path)
 }
 
 

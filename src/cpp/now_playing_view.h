@@ -30,6 +30,13 @@ public:
     void setDominantColors(const QStringList &colors);
     void setLyrics(const QString &plain, const QString &synced);
     void setQueue(const QStringList &titles, const QStringList &artists, const QStringList &thumbnails, int current_index);
+    
+    void setSubtitleAlignment(const std::string &alignment);
+    void setSubtitleFontSize(int32_t size);
+    void setSubtitleLineSpacing(double spacing);
+    void setSubtitleAutoScroll(bool enabled);
+    void setSubtitleGlowEffect(bool enabled);
+
 
 signals:
     void close_clicked();

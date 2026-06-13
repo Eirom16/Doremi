@@ -463,6 +463,13 @@ impl DownloadsRepo {
         })
     }
 
+    pub fn clear_all() -> SqlResult<()> {
+        with_db(|conn| {
+            conn.execute("DELETE FROM downloads", []).map(|_| ())
+        })
+    }
+
+
     pub fn all() -> SqlResult<Vec<DownloadTrack>> {
         with_db(|conn| {
             let mut stmt = conn.prepare(

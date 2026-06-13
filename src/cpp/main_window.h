@@ -162,6 +162,12 @@ void set_settings_discord_rpc(bool on);
 void set_settings_lastfm_enabled(bool on);
 void set_settings_lastfm_session(bool authenticated, rust::Str username, rust::Str apiKey, rust::Str apiSecret);
 void set_track_lyrics(rust::Str plain, rust::Str synced);
+void set_settings_subtitle_alignment(rust::Str align);
+void set_settings_subtitle_font_size(int32_t size);
+void set_settings_subtitle_line_spacing(double spacing);
+void set_settings_subtitle_auto_scroll(bool on);
+void set_settings_subtitle_glow_effect(bool on);
+
 
 rust::String get_or_create_thumbnail(rust::Str title, int32_t variant);
 

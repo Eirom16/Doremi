@@ -394,3 +394,34 @@ void NowPlayingView::resizeEvent(QResizeEvent *event) {
     QWidget::resizeEvent(event);
     nebula_bg_->setGeometry(rect());
 }
+
+void NowPlayingView::setSubtitleAlignment(const std::string &alignment) {
+    if (lyrics_widget_) {
+        lyrics_widget_->setSubtitleAlignment(alignment);
+    }
+}
+
+void NowPlayingView::setSubtitleFontSize(int32_t size) {
+    if (lyrics_widget_) {
+        lyrics_widget_->setSubtitleFontSize(size);
+    }
+}
+
+void NowPlayingView::setSubtitleLineSpacing(double spacing) {
+    if (lyrics_widget_) {
+        lyrics_widget_->setSubtitleLineSpacing(spacing);
+    }
+}
+
+void NowPlayingView::setSubtitleAutoScroll(bool enabled) {
+    if (lyrics_widget_) {
+        lyrics_widget_->setSubtitleAutoScroll(enabled);
+    }
+}
+
+void NowPlayingView::setSubtitleGlowEffect(bool enabled) {
+    if (lyrics_widget_) {
+        lyrics_widget_->setSubtitleGlowEffect(enabled);
+    }
+}
+

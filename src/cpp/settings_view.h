@@ -30,6 +30,13 @@ public:
     void set_settings_lastfm_enabled(bool on);
     void set_settings_lastfm_session(bool authenticated, const std::string &username, const std::string &apiKey, const std::string &apiSecret);
 
+    void set_subtitle_alignment(const std::string &alignment);
+    void set_subtitle_font_size(int32_t size);
+    void set_subtitle_line_spacing(double spacing);
+    void set_subtitle_auto_scroll(bool on);
+    void set_subtitle_glow_effect(bool on);
+    void refresh_storage_sizes();
+
     std::string theme() const;
     std::string accent() const;
     int32_t font_size() const;
@@ -69,10 +76,27 @@ private:
     RippleButton *lastfm_auth_btn_;
     QLabel *lastfm_status_lbl_;
 
+    // Subtitles
+    QComboBox *sub_alignment_cmb_;
+    QComboBox *sub_font_size_cmb_;
+    QComboBox *sub_line_spacing_cmb_;
+    AnimatedToggle *sub_auto_scroll_cb_;
+    AnimatedToggle *sub_glow_cb_;
+
+    // Storage
+    QLabel *db_size_lbl_;
+    QLabel *cache_size_lbl_;
+    QLabel *downloads_size_lbl_;
+    RippleButton *clean_cache_btn_;
+    RippleButton *clear_downloads_btn_;
+    RippleButton *export_backup_btn_;
+    RippleButton *import_backup_btn_;
+
     QWidget *section_header(const std::string &title);
     QWidget *combo_row(const std::string &label, QComboBox *cmb);
     QWidget *check_row(const std::string &label, AnimatedToggle *cb);
     QWidget *input_row(const std::string &label, QLineEdit *input);
+    QWidget *storage_row(const std::string &label, QLabel *val_lbl, RippleButton *btn);
 };
 
 #endif

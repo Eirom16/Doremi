@@ -4,6 +4,9 @@
 #include <QHBoxLayout>
 #include <QFrame>
 #include <QTimer>
+#include <QFileDialog>
+#include <QMessageBox>
+#include <QDir>
 #include "doremi/src/bridge.rs.h"
 
 SettingsView::SettingsView(QWidget *parent)
@@ -215,6 +218,101 @@ SettingsView::SettingsView(QWidget *parent)
     sep_lf->setStyleSheet(QString("color: %1;").arg(c.border.name()));
     content->addWidget(sep_lf);
 
+    // Subtitles section
+    content->addWidget(section_header(std::string(doremi_tr("settings_subtitles"))));
+    content->addSpacing(4);
+
+    sub_alignment_cmb_ = new QComboBox(inner);
+    sub_alignment_cmb_->addItems({
+        QString::fromStdString(std::string(doremi_tr("align_left"))),
+        QString::fromStdString(std::string(doremi_tr("align_center"))),
+        QString::fromStdString(std::string(doremi_tr("align_right")))
+    });
+    sub_alignment_cmb_->setStyleSheet(comboStyle);
+    content->addWidget(combo_row(std::string(doremi_tr("subtitle_alignment")), sub_alignment_cmb_));
+
+    sub_font_size_cmb_ = new QComboBox(inner);
+    for (int size = 10; size <= 36; size += 2) {
+        sub_font_size_cmb_->addItem(QString::number(size) + " px", size);
+    }
+    sub_font_size_cmb_->setStyleSheet(comboStyle);
+    content->addWidget(combo_row(std::string(doremi_tr("subtitle_font_size")), sub_font_size_cmb_));
+
+    sub_line_spacing_cmb_ = new QComboBox(inner);
+    sub_line_spacing_cmb_->addItems({"1.0", "1.2", "1.5", "1.8", "2.0"});
+    sub_line_spacing_cmb_->setStyleSheet(comboStyle);
+    content->addWidget(combo_row(std::string(doremi_tr("subtitle_line_spacing")), sub_line_spacing_cmb_));
+
+    sub_auto_scroll_cb_ = new AnimatedToggle(inner);
+    content->addWidget(check_row(std::string(doremi_tr("subtitle_auto_scroll")), sub_auto_scroll_cb_));
+
+    sub_glow_cb_ = new AnimatedToggle(inner);
+    content->addWidget(check_row(std::string(doremi_tr("subtitle_glow_effect")), sub_glow_cb_));
+
+    content->addSpacing(12);
+    auto *sep_sub = new QFrame(inner);
+    sep_sub->setFrameShape(QFrame::HLine);
+    sep_sub->setStyleSheet(QString("color: %1;").arg(c.border.name()));
+    content->addWidget(sep_sub);
+
+    // Storage section
+    content->addWidget(section_header(std::string(doremi_tr("settings_storage"))));
+    content->addSpacing(4);
+
+    db_size_lbl_ = new QLabel("0.00 MB", inner);
+    db_size_lbl_->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
+    db_size_lbl_->setFont(DesignTokens::getFont("body", 13));
+    auto *db_widget = new QWidget(inner);
+    db_widget->setFixedHeight(36);
+    auto *db_lay = new QHBoxLayout(db_widget);
+    db_lay->setContentsMargins(0, 0, 0, 0);
+    auto *db_title_lbl = new QLabel(QString::fromStdString(std::string(doremi_tr("db_size"))), db_widget);
+    db_title_lbl->setFont(DesignTokens::getFont("body", 13));
+    db_title_lbl->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
+    db_lay->addWidget(db_title_lbl);
+    db_lay->addStretch(1);
+    db_lay->addWidget(db_size_lbl_);
+    content->addWidget(db_widget);
+
+    cache_size_lbl_ = new QLabel("0.00 MB", inner);
+    cache_size_lbl_->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
+    cache_size_lbl_->setFont(DesignTokens::getFont("body", 13));
+    clean_cache_btn_ = new RippleButton(QString::fromStdString(std::string(doremi_tr("clean_cache"))), inner, RippleButton::Variant::Secondary);
+    clean_cache_btn_->setFixedWidth(140);
+    clean_cache_btn_->setFixedHeight(28);
+    content->addWidget(storage_row(std::string(doremi_tr("cache_size")), cache_size_lbl_, clean_cache_btn_));
+
+    downloads_size_lbl_ = new QLabel("0.00 MB", inner);
+    downloads_size_lbl_->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
+    downloads_size_lbl_->setFont(DesignTokens::getFont("body", 13));
+    clear_downloads_btn_ = new RippleButton(QString::fromStdString(std::string(doremi_tr("clear_downloads"))), inner, RippleButton::Variant::Danger);
+    clear_downloads_btn_->setFixedWidth(140);
+    clear_downloads_btn_->setFixedHeight(28);
+    content->addWidget(storage_row(std::string(doremi_tr("downloads_size")), downloads_size_lbl_, clear_downloads_btn_));
+
+    // Backup actions row
+    auto *backup_widget = new QWidget(inner);
+    auto *backup_lay = new QHBoxLayout(backup_widget);
+    backup_lay->setContentsMargins(0, 8, 0, 0);
+    backup_lay->setSpacing(12);
+
+    export_backup_btn_ = new RippleButton(QString::fromStdString(std::string(doremi_tr("export_backup"))), backup_widget, RippleButton::Variant::Primary);
+    export_backup_btn_->setIcon(IconProvider::getIcon("save", QColor("#FFFFFF"), 16));
+    export_backup_btn_->setFixedHeight(36);
+    backup_lay->addWidget(export_backup_btn_, 1);
+
+    import_backup_btn_ = new RippleButton(QString::fromStdString(std::string(doremi_tr("import_backup"))), backup_widget, RippleButton::Variant::Secondary);
+    import_backup_btn_->setIcon(IconProvider::getIcon("open_in_new", c.accent, 16));
+    import_backup_btn_->setFixedHeight(36);
+    backup_lay->addWidget(import_backup_btn_, 1);
+    content->addWidget(backup_widget);
+
+    content->addSpacing(12);
+    auto *sep_stor = new QFrame(inner);
+    sep_stor->setFrameShape(QFrame::HLine);
+    sep_stor->setStyleSheet(QString("color: %1;").arg(c.border.name()));
+    content->addWidget(sep_stor);
+
     // Language section
     content->addWidget(section_header(std::string(doremi_tr("language"))));
     content->addSpacing(4);
@@ -404,6 +502,93 @@ SettingsView::SettingsView(QWidget *parent)
             emit lastfm_disconnect_requested();
         }
     });
+
+    // Subtitles connections
+    QObject::connect(sub_alignment_cmb_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx) {
+        std::string align = "center";
+        if (idx == 0) align = "left";
+        else if (idx == 2) align = "right";
+        emit setting_changed("subtitle_alignment", align);
+    });
+    QObject::connect(sub_font_size_cmb_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx) {
+        int size = sub_font_size_cmb_->itemData(idx).toInt();
+        emit setting_changed("subtitle_font_size", std::to_string(size));
+    });
+    QObject::connect(sub_line_spacing_cmb_, &QComboBox::currentTextChanged, this, [this](const QString &v) {
+        emit setting_changed("subtitle_line_spacing", v.toStdString());
+    });
+    QObject::connect(sub_auto_scroll_cb_, &AnimatedToggle::toggled, this, [this](bool v) {
+        emit setting_changed("subtitle_auto_scroll", v ? "true" : "false");
+    });
+    QObject::connect(sub_glow_cb_, &AnimatedToggle::toggled, this, [this](bool v) {
+        emit setting_changed("subtitle_glow_effect", v ? "true" : "false");
+    });
+
+    // Storage connections
+    QObject::connect(clean_cache_btn_, &QPushButton::clicked, this, [this]() {
+        QMessageBox::StandardButton reply = QMessageBox::question(
+            this,
+            QString::fromStdString(std::string(doremi_tr("warning"))),
+            QString::fromStdString(std::string(doremi_tr("confirm_clear_cache"))),
+            QMessageBox::Yes | QMessageBox::No
+        );
+        if (reply == QMessageBox::Yes) {
+            clear_cache();
+            refresh_storage_sizes();
+            show_notification(std::string(doremi_tr("success")), "success");
+        }
+    });
+
+    QObject::connect(clear_downloads_btn_, &QPushButton::clicked, this, [this]() {
+        QMessageBox::StandardButton reply = QMessageBox::question(
+            this,
+            QString::fromStdString(std::string(doremi_tr("warning"))),
+            QString::fromStdString(std::string(doremi_tr("confirm_clear_downloads"))),
+            QMessageBox::Yes | QMessageBox::No
+        );
+        if (reply == QMessageBox::Yes) {
+            clear_downloads();
+            refresh_storage_sizes();
+            show_notification(std::string(doremi_tr("success")), "success");
+        }
+    });
+
+    QObject::connect(export_backup_btn_, &QPushButton::clicked, this, [this]() {
+        QString path = QFileDialog::getSaveFileName(
+            this,
+            QString::fromStdString(std::string(doremi_tr("export_backup"))),
+            QDir::homePath() + "/doremi_backup.zip",
+            "Zip Files (*.zip)"
+        );
+        if (!path.isEmpty()) {
+            bool ok = export_backup(path.toStdString());
+            if (ok) {
+                show_notification(std::string(doremi_tr("backup_export_success")), "success");
+            } else {
+                show_notification(std::string(doremi_tr("backup_export_error")), "error");
+            }
+        }
+    });
+
+    QObject::connect(import_backup_btn_, &QPushButton::clicked, this, [this]() {
+        QString path = QFileDialog::getOpenFileName(
+            this,
+            QString::fromStdString(std::string(doremi_tr("import_backup"))),
+            QDir::homePath(),
+            "Zip Files (*.zip)"
+        );
+        if (!path.isEmpty()) {
+            bool ok = import_backup(path.toStdString());
+            if (ok) {
+                refresh_storage_sizes();
+                show_notification(std::string(doremi_tr("backup_import_success")), "success");
+            } else {
+                show_notification(std::string(doremi_tr("backup_import_error")), "error");
+            }
+        }
+    });
+
+    refresh_storage_sizes();
 }
 
 QWidget *SettingsView::section_header(const std::string &title) {
@@ -596,3 +781,68 @@ void SettingsView::set_settings_lastfm_session(bool authenticated, const std::st
 
 bool SettingsView::discord_rpc_enabled() const { return discord_rpc_cb_->isChecked(); }
 bool SettingsView::lastfm_enabled() const { return lastfm_cb_->isChecked(); }
+
+void SettingsView::set_subtitle_alignment(const std::string &alignment) {
+    sub_alignment_cmb_->blockSignals(true);
+    int idx = 1; // Center default
+    if (alignment == "left") idx = 0;
+    else if (alignment == "right") idx = 2;
+    sub_alignment_cmb_->setCurrentIndex(idx);
+    sub_alignment_cmb_->blockSignals(false);
+}
+
+void SettingsView::set_subtitle_font_size(int32_t size) {
+    sub_font_size_cmb_->blockSignals(true);
+    int idx = sub_font_size_cmb_->findData(size);
+    if (idx >= 0) sub_font_size_cmb_->setCurrentIndex(idx);
+    sub_font_size_cmb_->blockSignals(false);
+}
+
+void SettingsView::set_subtitle_line_spacing(double spacing) {
+    sub_line_spacing_cmb_->blockSignals(true);
+    QString spacing_str = QString::number(spacing, 'f', 1);
+    int idx = sub_line_spacing_cmb_->findText(spacing_str);
+    if (idx >= 0) sub_line_spacing_cmb_->setCurrentIndex(idx);
+    sub_line_spacing_cmb_->blockSignals(false);
+}
+
+void SettingsView::set_subtitle_auto_scroll(bool on) {
+    sub_auto_scroll_cb_->blockSignals(true);
+    sub_auto_scroll_cb_->setChecked(on);
+    sub_auto_scroll_cb_->blockSignals(false);
+}
+
+void SettingsView::set_subtitle_glow_effect(bool on) {
+    sub_glow_cb_->blockSignals(true);
+    sub_glow_cb_->setChecked(on);
+    sub_glow_cb_->blockSignals(false);
+}
+
+void SettingsView::refresh_storage_sizes() {
+    auto sizes = get_storage_sizes();
+    if (sizes.size() >= 3) {
+        db_size_lbl_->setText(QString::number(sizes[0], 'f', 2) + " MB");
+        cache_size_lbl_->setText(QString::number(sizes[1], 'f', 2) + " MB");
+        downloads_size_lbl_->setText(QString::number(sizes[2], 'f', 2) + " MB");
+    }
+}
+
+QWidget *SettingsView::storage_row(const std::string &label, QLabel *val_lbl, RippleButton *btn) {
+    const auto &c = DesignTokens::current();
+    auto *w = new QWidget(this);
+    w->setFixedHeight(36);
+    w->setStyleSheet("background: transparent;");
+    auto *l = new QHBoxLayout(w);
+    l->setContentsMargins(0, 0, 0, 0);
+    
+    auto *lb = new QLabel(QString::fromStdString(label), w);
+    lb->setFont(DesignTokens::getFont("body", 13));
+    lb->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
+    l->addWidget(lb);
+    
+    l->addStretch(1);
+    l->addWidget(val_lbl);
+    l->addSpacing(16);
+    l->addWidget(btn);
+    return w;
+}

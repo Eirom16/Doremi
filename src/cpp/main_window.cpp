@@ -843,6 +843,69 @@ void set_track_lyrics(rust::Str plain, rust::Str synced) {
     }
 }
 
+void set_settings_subtitle_alignment(rust::Str align) {
+    if (g_main_window) {
+        std::string a_str = std::string(align);
+        if (g_main_window->settings_view())
+            g_main_window->settings_view()->set_subtitle_alignment(a_str);
+        if (g_main_window->now_playing_view()) {
+            QMetaObject::invokeMethod(g_main_window->now_playing_view(), [=]() {
+                g_main_window->now_playing_view()->setSubtitleAlignment(a_str);
+            }, Qt::QueuedConnection);
+        }
+    }
+}
+
+void set_settings_subtitle_font_size(int32_t size) {
+    if (g_main_window) {
+        if (g_main_window->settings_view())
+            g_main_window->settings_view()->set_subtitle_font_size(size);
+        if (g_main_window->now_playing_view()) {
+            QMetaObject::invokeMethod(g_main_window->now_playing_view(), [=]() {
+                g_main_window->now_playing_view()->setSubtitleFontSize(size);
+            }, Qt::QueuedConnection);
+        }
+    }
+}
+
+void set_settings_subtitle_line_spacing(double spacing) {
+    if (g_main_window) {
+        if (g_main_window->settings_view())
+            g_main_window->settings_view()->set_subtitle_line_spacing(spacing);
+        if (g_main_window->now_playing_view()) {
+            QMetaObject::invokeMethod(g_main_window->now_playing_view(), [=]() {
+                g_main_window->now_playing_view()->setSubtitleLineSpacing(spacing);
+            }, Qt::QueuedConnection);
+        }
+    }
+}
+
+void set_settings_subtitle_auto_scroll(bool on) {
+    if (g_main_window) {
+        if (g_main_window->settings_view())
+            g_main_window->settings_view()->set_subtitle_auto_scroll(on);
+        if (g_main_window->now_playing_view()) {
+            QMetaObject::invokeMethod(g_main_window->now_playing_view(), [=]() {
+                g_main_window->now_playing_view()->setSubtitleAutoScroll(on);
+            }, Qt::QueuedConnection);
+        }
+    }
+}
+
+void set_settings_subtitle_glow_effect(bool on) {
+    if (g_main_window) {
+        if (g_main_window->settings_view())
+            g_main_window->settings_view()->set_subtitle_glow_effect(on);
+        if (g_main_window->now_playing_view()) {
+            QMetaObject::invokeMethod(g_main_window->now_playing_view(), [=]() {
+                g_main_window->now_playing_view()->setSubtitleGlowEffect(on);
+            }, Qt::QueuedConnection);
+        }
+    }
+}
+
+
+
 void set_dominant_colors(rust::Vec<rust::String> colors) {
     if (g_main_window) {
         std::vector<std::string> c_vec;

@@ -184,10 +184,16 @@ void LyricsWidget::buildLyricsLayout() {
     top_spacer_->setStyleSheet("background: transparent;");
     layout_->addWidget(top_spacer_);
 
+    Qt::Alignment flag = Qt::AlignCenter;
+    if (alignment_ == "left") flag = Qt::AlignLeft | Qt::AlignVCenter;
+    else if (alignment_ == "right") flag = Qt::AlignRight | Qt::AlignVCenter;
+    layout_->setAlignment(flag);
+    layout_->setSpacing(static_cast<int>(16 * line_spacing_multiplier_));
+
     if (lines_.isEmpty()) {
         auto *lbl = new QLabel("Instrumental / No se encontraron letras", container_);
         lbl->setAlignment(Qt::AlignCenter);
-        lbl->setFont(DesignTokens::getFont("heading_sm", 15));
+        lbl->setFont(DesignTokens::getFont("heading_sm", base_font_size_));
         lbl->setStyleSheet(QString("color: %1;").arg(c.text_muted.name()));
         layout_->addWidget(lbl);
     } else {
@@ -196,7 +202,8 @@ void LyricsWidget::buildLyricsLayout() {
             
             // Clickable label
             line.label = new LyricLabel(line.text, line.time_ms, container_);
-            line.label->setFontSize(15);
+            line.label->setFontSize(base_font_size_);
+            line.label->setAlignment(flag);
             line.label->setStyleSheet(QString("color: %1;").arg(c.text_secondary.name()));
             
             if (has_synced_lyrics_) {
@@ -237,7 +244,7 @@ void LyricsWidget::highlightLine(int index) {
             auto *f_anim = new QPropertyAnimation(old_line.label, "fontSize", this);
             f_anim->setDuration(200);
             f_anim->setStartValue(old_line.label->fontSize());
-            f_anim->setEndValue(15);
+            f_anim->setEndValue(base_font_size_);
             f_anim->start(QAbstractAnimation::DeleteWhenStopped);
 
             if (old_line.opacity_effect) {
@@ -261,7 +268,7 @@ void LyricsWidget::highlightLine(int index) {
         f_anim->setDuration(250);
         f_anim->setEasingCurve(QEasingCurve::OutBack);
         f_anim->setStartValue(new_line.label->fontSize());
-        f_anim->setEndValue(20);
+        f_anim->setEndValue(base_font_size_ + 4);
         f_anim->start(QAbstractAnimation::DeleteWhenStopped);
 
         if (new_line.opacity_effect) {
@@ -273,11 +280,17 @@ void LyricsWidget::highlightLine(int index) {
         }
         
         // Highlight active lyric line using accent color or vibrant white
-        new_line.label->setStyleSheet(QString("color: %1; font-weight: bold;").arg(c.text_primary.name()));
+        if (glow_effect_enabled_) {
+            new_line.label->setStyleSheet(QString("color: %1; font-weight: bold;").arg(c.accent.name()));
+        } else {
+            new_line.label->setStyleSheet(QString("color: %1; font-weight: bold;").arg(c.text_primary.name()));
+        }
 
         // 4. Center scroll view on new active label
-        int target_y = new_line.label->geometry().center().y() - viewport()->height() / 2;
-        smoothScrollTo(target_y);
+        if (auto_scroll_enabled_) {
+            int target_y = new_line.label->geometry().center().y() - viewport()->height() / 2;
+            smoothScrollTo(target_y);
+        }
     }
 }
 
@@ -300,3 +313,63 @@ void LyricsWidget::resizeEvent(QResizeEvent *event) {
     if (top_spacer_) top_spacer_->setFixedHeight(mid_h);
     if (bottom_spacer_) bottom_spacer_->setFixedHeight(mid_h);
 }
+
+void LyricsWidget::setSubtitleAlignment(const std::string &alignment) {
+    alignment_ = alignment;
+    Qt::Alignment flag = Qt::AlignCenter;
+    if (alignment == "left") flag = Qt::AlignLeft | Qt::AlignVCenter;
+    else if (alignment == "right") flag = Qt::AlignRight | Qt::AlignVCenter;
+    
+    layout_->blockSignals(true);
+    layout_->setAlignment(flag);
+    layout_->blockSignals(false);
+    
+    for (auto &line : lines_) {
+        if (line.label) {
+            line.label->setAlignment(flag);
+        }
+    }
+}
+
+void LyricsWidget::setSubtitleFontSize(int size) {
+    base_font_size_ = size;
+    for (int i = 0; i < lines_.size(); ++i) {
+        auto &line = lines_[i];
+        if (line.label) {
+            int target_size = (i == active_index_) ? (base_font_size_ + 4) : base_font_size_;
+            line.label->setFontSize(target_size);
+        }
+    }
+}
+
+void LyricsWidget::setSubtitleLineSpacing(double spacing) {
+    line_spacing_multiplier_ = spacing;
+    layout_->setSpacing(static_cast<int>(16 * line_spacing_multiplier_));
+}
+
+void LyricsWidget::setSubtitleAutoScroll(bool enabled) {
+    auto_scroll_enabled_ = enabled;
+    if (enabled && active_index_ >= 0 && active_index_ < lines_.size()) {
+        auto &line = lines_[active_index_];
+        if (line.label) {
+            int target_y = line.label->geometry().center().y() - viewport()->height() / 2;
+            smoothScrollTo(target_y);
+        }
+    }
+}
+
+void LyricsWidget::setSubtitleGlowEffect(bool enabled) {
+    glow_effect_enabled_ = enabled;
+    if (active_index_ >= 0 && active_index_ < lines_.size()) {
+        const auto &c = DesignTokens::current();
+        auto &line = lines_[active_index_];
+        if (line.label) {
+            if (glow_effect_enabled_) {
+                line.label->setStyleSheet(QString("color: %1; font-weight: bold;").arg(c.accent.name()));
+            } else {
+                line.label->setStyleSheet(QString("color: %1; font-weight: bold;").arg(c.text_primary.name()));
+            }
+        }
+    }
+}
+
