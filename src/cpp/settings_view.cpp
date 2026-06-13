@@ -22,7 +22,7 @@ SettingsView::SettingsView(QWidget *parent)
     content->setContentsMargins(32, 24, 32, 24);
     content->setSpacing(10);
 
-    auto *title = new QLabel("Configuración", inner);
+    auto *title = new QLabel(QString::fromStdString(std::string(doremi_tr("settings_title"))), inner);
     title->setFont(DesignTokens::getFont("display", 24));
     title->setStyleSheet(QString("font-weight: bold; color: %1; background: transparent;").arg(c.text_primary.name()));
     content->addWidget(title);
@@ -61,23 +61,23 @@ SettingsView::SettingsView(QWidget *parent)
     .arg(c.accent_dim.name());
 
     // Appearance section
-    content->addWidget(section_header("Apariencia"));
+    content->addWidget(section_header(std::string(doremi_tr("settings_appearance"))));
     content->addSpacing(4);
 
     theme_cmb_ = new QComboBox(inner);
     theme_cmb_->addItems({"dark", "light"});
     theme_cmb_->setStyleSheet(comboStyle);
-    content->addWidget(combo_row("Tema", theme_cmb_));
+    content->addWidget(combo_row(std::string(doremi_tr("theme")), theme_cmb_));
 
     accent_cmb_ = new QComboBox(inner);
     accent_cmb_->addItems({"#7C4DFF", "#A78BFA", "#22D3EE", "#F472B6", "#34D399"});
     accent_cmb_->setStyleSheet(comboStyle);
-    content->addWidget(combo_row("Color de acento", accent_cmb_));
+    content->addWidget(combo_row(std::string(doremi_tr("accent_color")), accent_cmb_));
 
     font_cmb_ = new QComboBox(inner);
     font_cmb_->addItems({"12", "13", "14", "15", "16"});
     font_cmb_->setStyleSheet(comboStyle);
-    content->addWidget(combo_row("Tamaño de fuente", font_cmb_));
+    content->addWidget(combo_row(std::string(doremi_tr("font_size")), font_cmb_));
 
     content->addSpacing(12);
     auto *sep = new QFrame(inner);
@@ -86,19 +86,27 @@ SettingsView::SettingsView(QWidget *parent)
     content->addWidget(sep);
 
     // Playback section
-    content->addWidget(section_header("Reproducción"));
+    content->addWidget(section_header(std::string(doremi_tr("settings_playback"))));
     content->addSpacing(4);
 
     normalize_cb_ = new AnimatedToggle(inner);
-    content->addWidget(check_row("Normalizar audio", normalize_cb_));
+    content->addWidget(check_row(std::string(doremi_tr("normalize_audio")), normalize_cb_));
 
     crossfade_cb_ = new AnimatedToggle(inner);
-    content->addWidget(check_row("Crossfade entre canciones", crossfade_cb_));
+    content->addWidget(check_row(std::string(doremi_tr("crossfade_songs")), crossfade_cb_));
 
     sleep_timer_cmb_ = new QComboBox(inner);
-    sleep_timer_cmb_->addItems({"Desactivado", "5 minutos", "10 minutos", "15 minutos", "30 minutos", "45 minutos", "60 minutos"});
+    sleep_timer_cmb_->addItems({
+        QString::fromStdString(std::string(doremi_tr("sleep_disabled"))),
+        QString::fromStdString(std::string(doremi_tr("minutes_5"))),
+        QString::fromStdString(std::string(doremi_tr("minutes_10"))),
+        QString::fromStdString(std::string(doremi_tr("minutes_15"))),
+        QString::fromStdString(std::string(doremi_tr("minutes_30"))),
+        QString::fromStdString(std::string(doremi_tr("minutes_45"))),
+        QString::fromStdString(std::string(doremi_tr("minutes_60")))
+    });
     sleep_timer_cmb_->setStyleSheet(comboStyle);
-    content->addWidget(combo_row("Temporizador de apagado", sleep_timer_cmb_));
+    content->addWidget(combo_row(std::string(doremi_tr("sleep_timer")), sleep_timer_cmb_));
 
     content->addSpacing(12);
     auto *sep2 = new QFrame(inner);
@@ -107,16 +115,16 @@ SettingsView::SettingsView(QWidget *parent)
     content->addWidget(sep2);
 
     // Equalizer section
-    content->addWidget(section_header("Ecualizador"));
+    content->addWidget(section_header(std::string(doremi_tr("settings_equalizer"))));
     content->addSpacing(4);
 
     equalizer_cb_ = new AnimatedToggle(inner);
-    content->addWidget(check_row("Activar ecualizador", equalizer_cb_));
+    content->addWidget(check_row(std::string(doremi_tr("enable_equalizer")), equalizer_cb_));
 
     eq_preset_cmb_ = new QComboBox(inner);
     eq_preset_cmb_->addItems({"Flat", "Bass Boost", "Treble Boost", "Vocal", "Classical", "Electronic", "Hip-Hop", "Rock", "Jazz", "Pop"});
     eq_preset_cmb_->setStyleSheet(comboStyle);
-    content->addWidget(combo_row("Preset", eq_preset_cmb_));
+    content->addWidget(combo_row(std::string(doremi_tr("preset")), eq_preset_cmb_));
 
     content->addSpacing(12);
     auto *sep3 = new QFrame(inner);
@@ -125,14 +133,14 @@ SettingsView::SettingsView(QWidget *parent)
     content->addWidget(sep3);
 
     // Integrations section
-    content->addWidget(section_header("Integraciones"));
+    content->addWidget(section_header(std::string(doremi_tr("settings_integrations"))));
     content->addSpacing(4);
 
     discord_rpc_cb_ = new AnimatedToggle(inner);
-    content->addWidget(check_row("Activar Discord Rich Presence", discord_rpc_cb_));
+    content->addWidget(check_row(std::string(doremi_tr("activate_discord_rpc")), discord_rpc_cb_));
 
     lastfm_cb_ = new AnimatedToggle(inner);
-    content->addWidget(check_row("Activar Last.fm Scrobbler", lastfm_cb_));
+    content->addWidget(check_row(std::string(doremi_tr("activate_lastfm")), lastfm_cb_));
 
     // Last.fm Auth container (styled as a premium card)
     lastfm_auth_widget_ = new QWidget(inner);
@@ -150,7 +158,7 @@ SettingsView::SettingsView(QWidget *parent)
     .arg(c.bg_surface.name())
     .arg(c.border.name()));
 
-    lastfm_status_lbl_ = new QLabel("Estado: Desconectado", lastfm_auth_widget_);
+    lastfm_status_lbl_ = new QLabel(QString::fromStdString(std::string(doremi_tr("lastfm_status_disconnected"))), lastfm_auth_widget_);
     lastfm_status_lbl_->setFont(DesignTokens::getFont("body", 12));
     lastfm_status_lbl_->setStyleSheet(QString("color: %1; font-weight: bold; background: transparent;").arg(c.text_secondary.name()));
     lf_layout->addWidget(lastfm_status_lbl_);
@@ -184,18 +192,18 @@ SettingsView::SettingsView(QWidget *parent)
     lf_layout->addWidget(input_row("API Secret", lastfm_api_secret_input_));
 
     lastfm_username_input_ = new QLineEdit(lastfm_auth_widget_);
-    lastfm_username_input_->setPlaceholderText("Usuario");
+    lastfm_username_input_->setPlaceholderText(QString::fromStdString(std::string(doremi_tr("username"))));
     lastfm_username_input_->setStyleSheet(input_style);
-    lf_layout->addWidget(input_row("Usuario", lastfm_username_input_));
+    lf_layout->addWidget(input_row(std::string(doremi_tr("username")), lastfm_username_input_));
 
     lastfm_password_input_ = new QLineEdit(lastfm_auth_widget_);
-    lastfm_password_input_->setPlaceholderText("Contraseña");
+    lastfm_password_input_->setPlaceholderText(QString::fromStdString(std::string(doremi_tr("password"))));
     lastfm_password_input_->setEchoMode(QLineEdit::Password);
     lastfm_password_input_->setStyleSheet(input_style);
-    lf_layout->addWidget(input_row("Contraseña", lastfm_password_input_));
+    lf_layout->addWidget(input_row(std::string(doremi_tr("password")), lastfm_password_input_));
 
     // Connect button with dynamic variants
-    lastfm_auth_btn_ = new RippleButton("Conectar Cuenta", lastfm_auth_widget_, RippleButton::Variant::Primary);
+    lastfm_auth_btn_ = new RippleButton(QString::fromStdString(std::string(doremi_tr("lastfm_btn_connect"))), lastfm_auth_widget_, RippleButton::Variant::Primary);
     lf_layout->addWidget(lastfm_auth_btn_);
 
     content->addWidget(lastfm_auth_widget_);
@@ -208,13 +216,13 @@ SettingsView::SettingsView(QWidget *parent)
     content->addWidget(sep_lf);
 
     // Language section
-    content->addWidget(section_header("Idioma"));
+    content->addWidget(section_header(std::string(doremi_tr("language"))));
     content->addSpacing(4);
 
     lang_cmb_ = new QComboBox(inner);
     lang_cmb_->addItems({"es", "en"});
     lang_cmb_->setStyleSheet(comboStyle);
-    content->addWidget(combo_row("Idioma", lang_cmb_));
+    content->addWidget(combo_row(std::string(doremi_tr("language")), lang_cmb_));
 
     content->addSpacing(12);
     auto *sep_about = new QFrame(inner);
@@ -223,7 +231,7 @@ SettingsView::SettingsView(QWidget *parent)
     content->addWidget(sep_about);
 
     // Acerca de section
-    content->addWidget(section_header("Acerca de"));
+    content->addWidget(section_header(std::string(doremi_tr("settings_about"))));
     content->addSpacing(8);
 
     auto *about_logo = IconProvider::createIconLabel("album", 64, c.accent, true, inner);
@@ -243,8 +251,7 @@ SettingsView::SettingsView(QWidget *parent)
     content->addWidget(about_ver);
 
     auto *about_desc = new QLabel(
-        "Cliente de escritorio premium para YouTube Music construido con Rust, C++ y Qt6.\n"
-        "Soporta descargas offline, letras sincronizadas, ecualizador e integración con Discord y Last.fm.",
+        QString::fromStdString(std::string(doremi_tr("about_desc"))),
         inner
     );
     about_desc->setFont(DesignTokens::getFont("body", 13));
@@ -317,13 +324,13 @@ SettingsView::SettingsView(QWidget *parent)
     content->addWidget(changelog_card);
 
     // Update Check button
-    auto *check_updates_btn = new RippleButton("Buscar actualizaciones", inner, RippleButton::Variant::Secondary);
+    auto *check_updates_btn = new RippleButton(QString::fromStdString(std::string(doremi_tr("check_updates"))), inner, RippleButton::Variant::Secondary);
     check_updates_btn->setIcon(IconProvider::getIcon("sync", c.accent, 20));
     check_updates_btn->setMinimumHeight(44);
     
     QObject::connect(check_updates_btn, &QPushButton::clicked, this, [check_updates_btn]() {
         check_updates_btn->setEnabled(false);
-        check_updates_btn->setText("Comprobando...");
+        check_updates_btn->setText(QString::fromStdString(std::string(doremi_tr("checking_updates_btn"))));
         
         // Call Rust check function
         on_check_for_updates_requested();
@@ -331,7 +338,7 @@ SettingsView::SettingsView(QWidget *parent)
         // Restore button state after 4 seconds (fallback)
         QTimer::singleShot(4000, check_updates_btn, [check_updates_btn]() {
             check_updates_btn->setEnabled(true);
-            check_updates_btn->setText("Buscar actualizaciones");
+            check_updates_btn->setText(QString::fromStdString(std::string(doremi_tr("check_updates"))));
         });
     });
     content->addWidget(check_updates_btn);
@@ -563,17 +570,17 @@ void SettingsView::set_settings_lastfm_enabled(bool on) {
 
 void SettingsView::set_settings_lastfm_session(bool authenticated, const std::string &username, const std::string &apiKey, const std::string &apiSecret) {
     if (authenticated) {
-        lastfm_status_lbl_->setText(QString::fromStdString("Estado: Conectado como " + username));
+        lastfm_status_lbl_->setText(QString::fromStdString(std::string(doremi_tr("lastfm_status_connected")) + username));
         lastfm_api_key_input_->setText(QString::fromStdString(apiKey));
         lastfm_api_secret_input_->setText(QString::fromStdString(apiSecret));
         lastfm_api_key_input_->setEnabled(false);
         lastfm_api_secret_input_->setEnabled(false);
         lastfm_username_input_->setVisible(false);
         lastfm_password_input_->setVisible(false);
-        lastfm_auth_btn_->setText("Desconectar Cuenta");
+        lastfm_auth_btn_->setText(QString::fromStdString(std::string(doremi_tr("lastfm_btn_disconnect"))));
         lastfm_auth_btn_->setVariant(RippleButton::Variant::Danger);
     } else {
-        lastfm_status_lbl_->setText("Estado: Desconectado");
+        lastfm_status_lbl_->setText(QString::fromStdString(std::string(doremi_tr("lastfm_status_disconnected"))));
         lastfm_api_key_input_->setText("");
         lastfm_api_secret_input_->setText("");
         lastfm_username_input_->setText("");
@@ -582,7 +589,7 @@ void SettingsView::set_settings_lastfm_session(bool authenticated, const std::st
         lastfm_api_secret_input_->setEnabled(true);
         lastfm_username_input_->setVisible(true);
         lastfm_password_input_->setVisible(true);
-        lastfm_auth_btn_->setText("Conectar Cuenta");
+        lastfm_auth_btn_->setText(QString::fromStdString(std::string(doremi_tr("lastfm_btn_connect"))));
         lastfm_auth_btn_->setVariant(RippleButton::Variant::Primary);
     }
 }
