@@ -403,8 +403,8 @@ pub fn apply_settings_impl() {
     bridge::set_settings_lastfm_session(
         lastfm_authenticated,
         &settings.integrations.lastfm_username,
-        &settings.integrations.lastfm_api_key,
-        &settings.integrations.lastfm_api_secret,
+        "",
+        "",
     );
 
     // Apply player settings to the AudioEngine
@@ -549,20 +549,31 @@ pub fn on_lastfm_auth_requested(api_key: &str, api_secret: &str, username: &str,
                 log::info!("Last.fm auth successful");
                 let dirs = crate::config::paths::AppDirs::global();
                 let mut settings = crate::config::settings::AppSettings::load(&dirs.settings_path());
-                
-                settings.integrations.lastfm_api_key = api_key.clone();
-                settings.integrations.lastfm_api_secret = api_secret.clone();
+
+                let credentials = crate::utils::secure_storage::LastFmCredentials {
+                    api_key: api_key.clone(),
+                    api_secret: api_secret.clone(),
+                    session_key,
+                };
+                if let Err(e) = crate::utils::secure_storage::save_lastfm_credentials(&credentials) {
+                    log::error!("Failed to store Last.fm credentials securely: {e}");
+                    bridge::show_notification(
+                        "No se pudo acceder al llavero del sistema; la cuenta no fue guardada",
+                        "error",
+                    );
+                    return;
+                }
+
                 settings.integrations.lastfm_username = username.clone();
-                settings.integrations.lastfm_session_key = session_key;
                 settings.integrations.lastfm_enabled = true;
 
                 if let Err(e) = settings.save(&dirs.settings_path()) {
-                    log::error!("Failed to save Last.fm credentials: {e}");
+                    log::error!("Failed to save Last.fm settings: {e}");
                 }
 
                 crate::services::lastfm::set_enabled(true);
 
-                bridge::set_settings_lastfm_session(true, &username, &api_key, &api_secret);
+                bridge::set_settings_lastfm_session(true, &username, "", "");
                 bridge::set_settings_lastfm_enabled(true);
                 bridge::show_notification("Cuenta de Last.fm conectada con éxito", "success");
             }
@@ -584,6 +595,10 @@ pub fn on_lastfm_disconnect_requested() {
     settings.integrations.lastfm_username.clear();
     settings.integrations.lastfm_session_key.clear();
     settings.integrations.lastfm_enabled = false;
+
+    if let Err(e) = crate::utils::secure_storage::delete_lastfm_credentials() {
+        log::warn!("Failed to delete Last.fm credentials: {e}");
+    }
 
     if let Err(e) = settings.save(&dirs.settings_path()) {
         log::error!("Failed to save settings: {e}");
@@ -770,12 +785,14 @@ pub fn on_history_requested() {
 pub fn on_youtube_login_success(headers_json: &str, name: &str, avatar_url: &str) {
     log::info!("YouTube Music login success. Name: {name}");
     let config_dir = crate::config::paths::AppDirs::global().config_dir();
-    
-    // Save headers
-    let headers_path = config_dir.join("headers_auth.json");
-    if let Ok(mut file) = std::fs::File::create(&headers_path) {
-        use std::io::Write;
-        let _ = file.write_all(headers_json.as_bytes());
+
+    if let Err(e) = crate::utils::secure_storage::save_youtube_headers(headers_json) {
+        log::error!("Failed to store YouTube credentials securely: {e}");
+        crate::bridge::bridge::show_notification(
+            "No se pudo acceder al llavero del sistema; la sesión no fue guardada",
+            "error",
+        );
+        return;
     }
 
     // Save profile
@@ -801,10 +818,11 @@ pub fn on_youtube_logout() {
     log::info!("YouTube Music logout requested");
     let config_dir = crate::config::paths::AppDirs::global().config_dir();
     
-    let headers_path = config_dir.join("headers_auth.json");
     let profile_path = config_dir.join("user_profile.json");
-    
-    let _ = std::fs::remove_file(headers_path);
+
+    if let Err(e) = crate::utils::secure_storage::delete_youtube_headers() {
+        log::warn!("Failed to delete YouTube credentials: {e}");
+    }
     let _ = std::fs::remove_file(profile_path);
 
     crate::bridge::bridge::update_youtube_auth_state(false, "", "");
@@ -816,7 +834,15 @@ pub fn on_youtube_logout() {
 
 pub fn is_youtube_authenticated() -> bool {
     let config_dir = crate::config::paths::AppDirs::global().config_dir();
-    config_dir.join("headers_auth.json").exists()
+    match crate::utils::secure_storage::migrate_legacy_youtube_headers(&config_dir) {
+        Ok(true) => log::info!("Migrated YouTube credentials to Secret Service"),
+        Ok(false) => {}
+        Err(e) => log::warn!("Could not migrate YouTube credentials: {e}"),
+    }
+    crate::utils::secure_storage::load_youtube_headers()
+        .ok()
+        .flatten()
+        .is_some()
 }
 
 pub fn on_check_for_updates_requested() {
@@ -899,6 +925,5 @@ pub fn import_backup(zip_path: &str) -> bool {
     let path = std::path::Path::new(zip_path);
     crate::utils::backup::import_backup(path)
 }
-
 
 

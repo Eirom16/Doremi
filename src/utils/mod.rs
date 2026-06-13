@@ -3,5 +3,5 @@ pub mod i18n;
 pub mod color;
 pub mod storage;
 pub mod backup;
-
+pub mod secure_storage;
 

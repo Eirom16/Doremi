@@ -79,11 +79,11 @@ fn default_stream_quality() -> String { "best".to_string() }
 pub struct IntegrationsSettings {
     #[serde(default)]
     pub lastfm_enabled: bool,
-    #[serde(default)]
+    #[serde(default, skip_serializing)]
     pub lastfm_session_key: String,
-    #[serde(default)]
+    #[serde(default, skip_serializing)]
     pub lastfm_api_key: String,
-    #[serde(default)]
+    #[serde(default, skip_serializing)]
     pub lastfm_api_secret: String,
     #[serde(default)]
     pub lastfm_username: String,
@@ -126,7 +126,7 @@ fn default_text_color_inactive() -> String { "#6E6E77".to_string() }
 pub struct AppSettings {
     #[serde(default)]
     pub google_client_id: String,
-    #[serde(default)]
+    #[serde(default, skip_serializing)]
     pub google_client_secret: String,
     #[serde(default)]
     pub appearance: AppearanceSettings,
@@ -232,26 +232,117 @@ impl Default for SubtitleSettings {
 
 impl AppSettings {
     pub fn load(path: &Path) -> Self {
+        let mut settings = Self::default();
         if path.exists() {
             match std::fs::read_to_string(path) {
                 Ok(content) => {
                     match toml::from_str(&content) {
-                        Ok(settings) => return settings,
+                        Ok(parsed) => settings = parsed,
                         Err(e) => log::warn!("Failed to parse settings: {e}"),
                     }
                 }
                 Err(e) => log::warn!("Failed to read settings file: {e}"),
             }
         }
-        Self::default()
+        let legacy_credentials = crate::utils::secure_storage::LastFmCredentials {
+            api_key: settings.integrations.lastfm_api_key.clone(),
+            api_secret: settings.integrations.lastfm_api_secret.clone(),
+            session_key: settings.integrations.lastfm_session_key.clone(),
+        };
+
+        if !legacy_credentials.api_key.is_empty()
+            || !legacy_credentials.api_secret.is_empty()
+            || !legacy_credentials.session_key.is_empty()
+        {
+            match crate::utils::secure_storage::save_lastfm_credentials(&legacy_credentials) {
+                Ok(()) => {
+                    settings.integrations.lastfm_api_key.clear();
+                    settings.integrations.lastfm_api_secret.clear();
+                    settings.integrations.lastfm_session_key.clear();
+                    if let Err(e) = settings.save(path) {
+                        log::error!("Failed to remove legacy Last.fm secrets from settings: {e}");
+                    } else {
+                        log::info!("Migrated Last.fm credentials to Secret Service");
+                    }
+                }
+                Err(e) => log::warn!("Could not migrate Last.fm credentials: {e}"),
+            }
+        }
+
+        if !settings.google_client_secret.is_empty() {
+            match crate::utils::secure_storage::save_google_client_secret(&settings.google_client_secret) {
+                Ok(()) => {
+                    settings.google_client_secret.clear();
+                    if let Err(e) = settings.save(path) {
+                        log::error!("Failed to remove legacy Google secret from settings: {e}");
+                    } else {
+                        log::info!("Migrated Google client secret to Secret Service");
+                    }
+                }
+                Err(e) => log::warn!("Could not migrate Google client secret: {e}"),
+            }
+        }
+
+        match crate::utils::secure_storage::load_lastfm_credentials() {
+            Ok(credentials) => {
+                settings.integrations.lastfm_api_key = credentials.api_key;
+                settings.integrations.lastfm_api_secret = credentials.api_secret;
+                settings.integrations.lastfm_session_key = credentials.session_key;
+            }
+            Err(e) => log::debug!("Could not load Last.fm credentials: {e}"),
+        }
+
+        match crate::utils::secure_storage::load_google_client_secret() {
+            Ok(Some(secret)) => settings.google_client_secret = secret,
+            Ok(None) => {}
+            Err(e) => log::debug!("Could not load Google client secret: {e}"),
+        }
+
+        settings
     }
 
     pub fn save(&self, path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+        let credentials = crate::utils::secure_storage::LastFmCredentials {
+            api_key: self.integrations.lastfm_api_key.clone(),
+            api_secret: self.integrations.lastfm_api_secret.clone(),
+            session_key: self.integrations.lastfm_session_key.clone(),
+        };
+        if !credentials.api_key.is_empty()
+            || !credentials.api_secret.is_empty()
+            || !credentials.session_key.is_empty()
+        {
+            crate::utils::secure_storage::save_lastfm_credentials(&credentials)
+                .map_err(std::io::Error::other)?;
+        }
+        if !self.google_client_secret.is_empty() {
+            crate::utils::secure_storage::save_google_client_secret(&self.google_client_secret)
+                .map_err(std::io::Error::other)?;
+        }
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
         }
         let data = toml::to_string_pretty(self)?;
         std::fs::write(path, data)?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn serialized_settings_exclude_secrets() {
+        let mut settings = AppSettings::default();
+        settings.google_client_secret = "client-secret".to_string();
+        settings.integrations.lastfm_api_key = "api-key".to_string();
+        settings.integrations.lastfm_api_secret = "api-secret".to_string();
+        settings.integrations.lastfm_session_key = "session-key".to_string();
+
+        let serialized = toml::to_string(&settings).unwrap();
+        assert!(!serialized.contains("api-key"));
+        assert!(!serialized.contains("api-secret"));
+        assert!(!serialized.contains("session-key"));
+        assert!(!serialized.contains("client-secret"));
     }
 }

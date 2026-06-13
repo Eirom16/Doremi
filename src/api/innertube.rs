@@ -17,20 +17,14 @@ fn client_context(hl: &str, gl: &str) -> Value {
 }
 
 fn get_auth_headers() -> Option<serde_json::Map<String, serde_json::Value>> {
-    let config_dir = crate::config::paths::AppDirs::global().config_dir();
-    let path = config_dir.join("headers_auth.json");
-    if path.exists() {
-        if let Ok(mut file) = std::fs::File::open(path) {
-            let mut content = String::new();
-            use std::io::Read;
-            if file.read_to_string(&mut content).is_ok() {
-                if let Ok(val) = serde_json::from_str::<serde_json::Value>(&content) {
-                    return val.as_object().cloned();
-                }
-            }
-        }
-    }
-    None
+    let content = crate::utils::secure_storage::load_youtube_headers()
+        .map_err(|e| log::debug!("Could not load YouTube credentials: {e}"))
+        .ok()
+        .flatten()?;
+    serde_json::from_str::<serde_json::Value>(&content)
+        .ok()?
+        .as_object()
+        .cloned()
 }
 
 fn post(endpoint: &str, body: Value) -> Result<Value, String> {
