@@ -1,0 +1,291 @@
+#include "history_view.h"
+#include "design_tokens.h"
+#include "icon_provider.h"
+#include <QHBoxLayout>
+#include <QScrollBar>
+#include <QMouseEvent>
+#include <QPainter>
+#include <QPainterPath>
+#include <QDateTime>
+#include <QTimeZone>
+#include "doremi/src/bridge.rs.h"
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HistoryRow
+// ─────────────────────────────────────────────────────────────────────────────
+
+HistoryRow::HistoryRow(const QString &title, const QString &artist,
+                       const QString &duration, const QString &thumbnail,
+                       const QString &played_at, const std::string &item_id,
+                       QWidget *parent)
+    : QWidget(parent), title_(title), artist_(artist), item_id_(item_id)
+{
+    const auto &c = DesignTokens::current();
+    setFixedHeight(64);
+    setCursor(Qt::PointingHandCursor);
+
+    auto *layout = new QHBoxLayout(this);
+    layout->setContentsMargins(16, 8, 16, 8);
+    layout->setSpacing(14);
+
+    // Thumbnail
+    auto *thumb_lbl = new QLabel(this);
+    thumb_lbl->setFixedSize(48, 48);
+    thumb_lbl->setStyleSheet(QString("background-color: %1; border-radius: 6px;")
+        .arg(c.bg_elevated.name()));
+
+    QPixmap pm;
+    if (!thumbnail.isEmpty() && pm.load(thumbnail)) {
+        QPixmap dest(pm.size());
+        dest.fill(Qt::transparent);
+        QPainter painter(&dest);
+        painter.setRenderHint(QPainter::Antialiasing);
+        QPainterPath path;
+        path.addRoundedRect(pm.rect(), 6, 6);
+        painter.setClipPath(path);
+        painter.drawPixmap(0, 0, pm);
+        thumb_lbl->setPixmap(dest.scaled(48, 48, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation));
+    } else {
+        QPixmap default_art = IconProvider::getIcon("music_note", c.text_secondary, 24).pixmap(48, 48);
+        thumb_lbl->setPixmap(default_art);
+        thumb_lbl->setAlignment(Qt::AlignCenter);
+    }
+    layout->addWidget(thumb_lbl);
+
+    // Text container (title + artist)
+    auto *text_container = new QWidget(this);
+    auto *text_layout = new QVBoxLayout(text_container);
+    text_layout->setContentsMargins(0, 0, 0, 0);
+    text_layout->setSpacing(2);
+
+    auto *title_lbl = new QLabel(title_, this);
+    title_lbl->setFont(DesignTokens::getFont("body", 13));
+    title_lbl->setStyleSheet(QString("color: %1; font-weight: 600;").arg(c.text_primary.name()));
+    title_lbl->setMaximumWidth(400);
+
+    auto *artist_lbl = new QLabel(artist_, this);
+    artist_lbl->setFont(DesignTokens::getFont("caption", 11));
+    artist_lbl->setStyleSheet(QString("color: %1;").arg(c.text_secondary.name()));
+    artist_lbl->setMaximumWidth(400);
+
+    text_layout->addWidget(title_lbl);
+    text_layout->addWidget(artist_lbl);
+    layout->addWidget(text_container, 2);
+
+    // Duration label
+    if (!duration.isEmpty()) {
+        auto *dur_lbl = new QLabel(duration, this);
+        dur_lbl->setFont(DesignTokens::getFont("caption", 11));
+        dur_lbl->setStyleSheet(QString("color: %1;").arg(c.text_muted.name()));
+        dur_lbl->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        layout->addWidget(dur_lbl);
+    }
+
+    // Time-ago label
+    if (!played_at.isEmpty()) {
+        // Parse and display relative time
+        QDateTime dt = QDateTime::fromString(played_at, Qt::ISODate);
+        if (!dt.isValid()) {
+            dt = QDateTime::fromString(played_at, "yyyy-MM-dd HH:mm:ss");
+        }
+        QString ago;
+        if (dt.isValid()) {
+            qint64 secs_ago = dt.secsTo(QDateTime::currentDateTime());
+            if (secs_ago < 60) ago = "Ahora";
+            else if (secs_ago < 3600) ago = QString("%1 min").arg(secs_ago / 60);
+            else if (secs_ago < 86400) ago = QString("%1 h").arg(secs_ago / 3600);
+            else ago = QString("%1 d").arg(secs_ago / 86400);
+        }
+        if (!ago.isEmpty()) {
+            auto *ago_lbl = new QLabel(ago, this);
+            ago_lbl->setFont(DesignTokens::getFont("caption", 10));
+            ago_lbl->setStyleSheet(QString("color: %1;").arg(c.text_muted.name()));
+            ago_lbl->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+            ago_lbl->setFixedWidth(50);
+            layout->addWidget(ago_lbl);
+        }
+    }
+
+    // Play icon hint
+    auto *play_icon = IconProvider::createIconLabel("play_arrow", 18, c.text_muted, false, this);
+    play_icon->setToolTip("Reproducir");
+    layout->addWidget(play_icon);
+
+    setLayout(layout);
+    setObjectName("HistoryRow");
+    setStyleSheet("QWidget#HistoryRow { background-color: transparent; border-radius: 8px; }");
+}
+
+void HistoryRow::mousePressEvent(QMouseEvent *event) {
+    QWidget::mousePressEvent(event);
+    if (event->button() == Qt::LeftButton) {
+        emit play_requested(item_id_);
+    }
+}
+
+void HistoryRow::enterEvent(QEnterEvent *event) {
+    QWidget::enterEvent(event);
+    const auto &c = DesignTokens::current();
+    setStyleSheet(QString("QWidget#HistoryRow { background-color: rgba(%1, %2, %3, 0.06); border-radius: 8px; }")
+        .arg(c.text_primary.red()).arg(c.text_primary.green()).arg(c.text_primary.blue()));
+}
+
+void HistoryRow::leaveEvent(QEvent *event) {
+    QWidget::leaveEvent(event);
+    setStyleSheet("QWidget#HistoryRow { background-color: transparent; border-radius: 8px; }");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HistoryView
+// ─────────────────────────────────────────────────────────────────────────────
+
+HistoryView::HistoryView(QWidget *parent)
+    : QWidget(parent)
+{
+    setupLayout();
+}
+
+void HistoryView::setupLayout() {
+    const auto &c = DesignTokens::current();
+
+    auto *main_vbox = new QVBoxLayout(this);
+    main_vbox->setContentsMargins(0, 0, 0, 0);
+    main_vbox->setSpacing(0);
+
+    // Scroll Area
+    scroll_area_ = new QScrollArea(this);
+    scroll_area_->setWidgetResizable(true);
+    scroll_area_->setFrameShape(QFrame::NoFrame);
+    scroll_area_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    scroll_area_->setStyleSheet("background: transparent;");
+
+    scroll_content_ = new QWidget(scroll_area_);
+    scroll_content_->setStyleSheet("background: transparent;");
+
+    content_layout_ = new QVBoxLayout(scroll_content_);
+    content_layout_->setContentsMargins(24, 24, 24, 24);
+    content_layout_->setSpacing(4);
+    content_layout_->setAlignment(Qt::AlignTop);
+
+    // Title label
+    auto *title = new QLabel("Historial", scroll_content_);
+    title->setFont(DesignTokens::getFont("display", 22));
+    title->setStyleSheet(QString("color: %1; font-weight: bold;").arg(c.text_primary.name()));
+    content_layout_->addWidget(title);
+
+    // Subtitle
+    auto *subtitle = new QLabel("Reproducido recientemente", scroll_content_);
+    subtitle->setFont(DesignTokens::getFont("caption", 12));
+    subtitle->setStyleSheet(QString("color: %1; margin-bottom: 12px;").arg(c.text_secondary.name()));
+    content_layout_->addWidget(subtitle);
+
+    // Empty state
+    empty_label_ = new QLabel("Tu historial está vacío\n\nLas canciones que reproduzcas aparecerán aquí", scroll_content_);
+    empty_label_->setAlignment(Qt::AlignCenter);
+    empty_label_->setFont(DesignTokens::getFont("body", 13));
+    empty_label_->setStyleSheet(QString("color: %1; padding: 60px 0;").arg(c.text_muted.name()));
+    empty_label_->setWordWrap(true);
+    content_layout_->addWidget(empty_label_);
+
+    scroll_area_->setWidget(scroll_content_);
+    main_vbox->addWidget(scroll_area_);
+    setLayout(main_vbox);
+}
+
+void HistoryView::showEvent(QShowEvent *event) {
+    QWidget::showEvent(event);
+    on_history_requested();
+}
+
+QString HistoryView::getGroupLabel(const QString &played_at) const {
+    QDateTime dt = QDateTime::fromString(played_at, Qt::ISODate);
+    if (!dt.isValid()) {
+        dt = QDateTime::fromString(played_at, "yyyy-MM-dd HH:mm:ss");
+    }
+    if (!dt.isValid()) return "Otros";
+
+    QDate today = QDate::currentDate();
+    QDate play_date = dt.date();
+
+    if (play_date == today) return "Hoy";
+    if (play_date == today.addDays(-1)) return "Ayer";
+    if (play_date >= today.addDays(-7)) return "Esta semana";
+    return "Anteriores";
+}
+
+void HistoryView::clear_history() {
+    // Remove all items except title and subtitle (first 2 widgets)
+    while (content_layout_->count() > 2) {
+        QLayoutItem *item = content_layout_->takeAt(2);
+        if (item->widget()) {
+            item->widget()->deleteLater();
+        }
+        delete item;
+    }
+}
+
+void HistoryView::set_history(const std::vector<std::string> &titles,
+                              const std::vector<std::string> &artists,
+                              const std::vector<std::string> &durations,
+                              const std::vector<std::string> &thumbnails,
+                              const std::vector<std::string> &played_at,
+                              const std::vector<std::string> &item_ids)
+{
+    clear_history();
+
+    const auto &c = DesignTokens::current();
+
+    if (titles.empty()) {
+        empty_label_ = new QLabel("Tu historial está vacío\n\nLas canciones que reproduzcas aparecerán aquí", scroll_content_);
+        empty_label_->setAlignment(Qt::AlignCenter);
+        empty_label_->setFont(DesignTokens::getFont("body", 13));
+        empty_label_->setStyleSheet(QString("color: %1; padding: 60px 0;").arg(c.text_muted.name()));
+        empty_label_->setWordWrap(true);
+        content_layout_->addWidget(empty_label_);
+        return;
+    }
+
+    size_t n = std::min({titles.size(), artists.size(), durations.size(),
+                         thumbnails.size(), played_at.size(), item_ids.size()});
+
+    QString last_group;
+    for (size_t i = 0; i < n; ++i) {
+        // Group header (Hoy, Ayer, etc.)
+        QString group = getGroupLabel(QString::fromStdString(played_at[i]));
+        if (group != last_group) {
+            last_group = group;
+            auto *group_lbl = new QLabel(group, scroll_content_);
+            group_lbl->setFont(DesignTokens::getFont("heading_sm", 13));
+            group_lbl->setStyleSheet(QString("color: %1; font-weight: bold; margin-top: 16px; margin-bottom: 4px;")
+                .arg(c.accent.name()));
+            content_layout_->addWidget(group_lbl);
+        }
+
+        // Format duration
+        QString dur;
+        int dur_ms = 0;
+        try { dur_ms = std::stoi(durations[i]); } catch (...) {}
+        if (dur_ms > 0) {
+            int secs = dur_ms / 1000;
+            dur = QString("%1:%2").arg(secs / 60).arg(secs % 60, 2, 10, QChar('0'));
+        } else if (!durations[i].empty()) {
+            dur = QString::fromStdString(durations[i]);
+        }
+
+        auto *row = new HistoryRow(
+            QString::fromStdString(titles[i]),
+            QString::fromStdString(artists[i]),
+            dur,
+            QString::fromStdString(thumbnails[i]),
+            QString::fromStdString(played_at[i]),
+            item_ids[i],
+            scroll_content_
+        );
+
+        connect(row, &HistoryRow::play_requested, this, &HistoryView::play_requested);
+        content_layout_->addWidget(row);
+    }
+
+    content_layout_->addStretch();
+}
+

@@ -1,0 +1,163 @@
+#include "welcome_view.h"
+#include "design_tokens.h"
+#include "icon_provider.h"
+#include "login_dialog.h"
+#include <QPixmap>
+#include <QDir>
+#include <QCoreApplication>
+#include <QTimer>
+#include <QGraphicsColorizeEffect>
+#include "doremi/src/bridge.rs.h"
+
+WelcomeView::WelcomeView(QWidget *parent)
+    : QWidget(parent)
+{
+    const auto &c = DesignTokens::current();
+
+    auto *layout = new QVBoxLayout(this);
+    layout->setAlignment(Qt::AlignCenter);
+    layout->setContentsMargins(80, 40, 80, 40);
+    layout->setSpacing(20);
+
+    // Try to load logo.png from assets
+    QString app_dir = QCoreApplication::applicationDirPath();
+    QString logo_path = app_dir + "/assets/logo.png";
+    if (!QFile::exists(logo_path)) {
+        // Fallback: check project parent dirs (development mode)
+        logo_path = QDir(app_dir).filePath("../assets/logo.png");
+    }
+
+    if (QFile::exists(logo_path)) {
+        logo_ = new QLabel(this);
+        QPixmap pix(logo_path);
+        logo_->setPixmap(pix.scaledToWidth(180, Qt::SmoothTransformation));
+        logo_->setAlignment(Qt::AlignCenter);
+        
+        // Colorize effect for the logo matching accent color
+        auto *effect = new QGraphicsColorizeEffect(logo_);
+        effect->setColor(c.accent);
+        effect->setStrength(1.0);
+        logo_->setGraphicsEffect(effect);
+        
+        layout->addWidget(logo_);
+    } else {
+        // Fallback logo icon
+        logo_ = IconProvider::createIconLabel("album", 80, c.accent, true, this);
+        logo_->setAlignment(Qt::AlignCenter);
+        layout->addWidget(logo_);
+    }
+
+    title_ = new QLabel("Doremi", this);
+    title_->setFont(DesignTokens::getFont("display", 32));
+    title_->setStyleSheet(QString("color: %1; background: transparent; font-weight: bold;").arg(c.accent.name()));
+    title_->setAlignment(Qt::AlignCenter);
+    layout->addWidget(title_);
+
+    subtitle_ = new QLabel("Cliente de YouTube Music para Linux", this);
+    subtitle_->setFont(DesignTokens::getFont("body", 14));
+    subtitle_->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
+    subtitle_->setAlignment(Qt::AlignCenter);
+    layout->addWidget(subtitle_);
+
+    layout->addSpacing(20);
+
+    // Card Glass Panel container
+    card_ = new GlassPanel(this);
+    auto *card_layout = new QVBoxLayout(card_);
+    card_layout->setSpacing(20);
+    card_layout->setContentsMargins(32, 32, 32, 32);
+    card_layout->setAlignment(Qt::AlignCenter);
+
+    welcome_text_ = new QLabel("Bienvenido a Doremi", card_);
+    welcome_text_->setFont(DesignTokens::getFont("display", 20));
+    welcome_text_->setStyleSheet(QString("color: %1; background: transparent; font-weight: bold;").arg(c.text_primary.name()));
+    welcome_text_->setAlignment(Qt::AlignCenter);
+    card_layout->addWidget(welcome_text_);
+
+    desc_text_ = new QLabel("Para escuchar tu música favorita necesitas\niniciar sesión con tu cuenta de Google.", card_);
+    desc_text_->setFont(DesignTokens::getFont("body", 13));
+    desc_text_->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
+    desc_text_->setAlignment(Qt::AlignCenter);
+    card_layout->addWidget(desc_text_);
+
+    login_btn_ = new RippleButton("Iniciar sesión con Google", card_, RippleButton::Variant::Primary);
+    login_btn_->setMinimumHeight(50);
+    login_btn_->setMinimumWidth(240);
+    connect(login_btn_, &QPushButton::clicked, this, &WelcomeView::on_login_clicked);
+    card_layout->addWidget(login_btn_);
+
+    status_label_ = new QLabel("", card_);
+    status_label_->setFont(DesignTokens::getFont("body", 13));
+    status_label_->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
+    status_label_->setAlignment(Qt::AlignCenter);
+    card_layout->addWidget(status_label_);
+
+    progress_ = new QLabel("", card_);
+    progress_->setFont(DesignTokens::getFont("body", 12));
+    progress_->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_muted.name()));
+    progress_->setAlignment(Qt::AlignCenter);
+    card_layout->addWidget(progress_);
+
+    card_layout->addStretch();
+    layout->addWidget(card_);
+    layout->addStretch();
+
+    setStyleSheet("background: transparent;");
+    update_theme();
+}
+
+void WelcomeView::update_theme() {
+    const auto &c = DesignTokens::current();
+    title_->setStyleSheet(QString("color: %1; background: transparent; font-weight: bold;").arg(c.accent.name()));
+    subtitle_->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
+    
+    if (logo_) {
+        auto *effect = qobject_cast<QGraphicsColorizeEffect*>(logo_->graphicsEffect());
+        if (effect) {
+            effect->setColor(c.accent);
+        } else {
+            // IconProvider label fallback color update
+            logo_->setStyleSheet(QString("color: %1; background: transparent;").arg(c.accent.name()));
+        }
+    }
+
+    card_->setStyleSheet(QString(
+        "background-color: %1;"
+        "border-radius: 16px;"
+        "border: 1px solid %2;"
+    ).arg(c.bg_elevated.name()).arg(c.border.name()));
+
+    welcome_text_->setStyleSheet(QString("color: %1; background: transparent; font-weight: bold;").arg(c.text_primary.name()));
+    desc_text_->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
+    status_label_->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
+    progress_->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_muted.name()));
+}
+
+void WelcomeView::on_login_clicked() {
+    login_btn_->setEnabled(false);
+    login_btn_->setText("Iniciando...");
+    status_label_->setText("Abriendo ventana de inicio de sesión...");
+
+    auto *dialog = new WebLoginDialog(this);
+    connect(dialog, &WebLoginDialog::login_successful, this, &WelcomeView::handle_login_success);
+    
+    int result = dialog->exec();
+    dialog->deleteLater();
+
+    // Check if authentication succeeded, if not reset state
+    if (result != QDialog::Accepted) {
+        login_btn_->setEnabled(true);
+        login_btn_->setText("Iniciar sesión con Google");
+        status_label_->setText("");
+    }
+}
+
+void WelcomeView::handle_login_success(const QString &avatar_url, const QString &user_name) {
+    status_label_->setText("Autorización exitosa");
+    progress_->setText("Cargando Doremi...");
+    
+    QTimer::singleShot(1000, this, []() {
+        // Trigger navigating to home
+        navigate_to("home");
+    });
+}
