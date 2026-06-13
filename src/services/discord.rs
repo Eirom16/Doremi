@@ -83,12 +83,38 @@ pub fn update_presence(title: &str, artist: &str, album: &str, is_playing: bool)
     let artist = artist.to_string();
     let album = album.to_string();
 
-    std::thread::spawn(move || {
-        if let Err(e) = update_presence_internal(&title, &artist, &album, is_playing) {
-            log::warn!("Discord RPC error: {e}");
-            // Reset connection on error so we try reconnecting next time
-            let mut client_guard = DISCORD_CLIENT.lock().unwrap();
-            *client_guard = None;
+    tokio::spawn(async move {
+        // Since connecting to Discord IPC client uses blocking sockets/named pipes,
+        // we wrap it in spawn_blocking and enforce a timeout of 5 seconds.
+        let join_res = tokio::time::timeout(
+            tokio::time::Duration::from_secs(5),
+            tokio::task::spawn_blocking(move || {
+                update_presence_internal(&title, &artist, &album, is_playing)
+                    .map_err(|e| e.to_string())
+            })
+        ).await;
+
+        match join_res {
+            Ok(Ok(Ok(()))) => {
+                // Success
+            }
+            Ok(Ok(Err(e))) => {
+                log::warn!("Discord RPC error: {e}");
+                // Reset connection on error so we try reconnecting next time
+                if let Ok(mut client_guard) = DISCORD_CLIENT.lock() {
+                    *client_guard = None;
+                }
+            }
+            Ok(Err(join_err)) => {
+                log::error!("Discord RPC spawn_blocking panicked: {join_err}");
+            }
+            Err(_timeout_err) => {
+                log::warn!("Discord RPC connection timed out (5s limit reached)");
+                // Reset connection on timeout so we try reconnecting next time
+                if let Ok(mut client_guard) = DISCORD_CLIENT.lock() {
+                    *client_guard = None;
+                }
+            }
         }
     });
 }

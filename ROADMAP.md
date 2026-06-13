@@ -121,49 +121,49 @@ El port se considera terminado cuando Doremi cubra los flujos reales de Pyrolist
 - [x] Centralizar conversiones QString/string y manejo de errores FFI.
 - [x] Documentar ownership, thread affinity de Qt y callbacks permitidos.
 - [x] Garantizar que toda mutacion Qt ocurra en el hilo de GUI.
-- [ ] Probar strings vacios, Unicode, listas grandes e IDs invalidos.
+- [x] Probar strings vacios, Unicode, listas grandes e IDs invalidos.
 
 **Criterio de salida:** las acciones del usuario no dependen de parsear texto visible.
 
 ### P0.5 Modelo de concurrencia y errores
 
-- [ ] Documentar el runtime Tokio y el hilo principal Qt.
-- [ ] Eliminar operaciones HTTP, filesystem o procesos bloqueantes del hilo GUI.
-- [ ] Sustituir `Mutex` globales propensos a bloqueo por ownership/canales donde convenga.
-- [ ] Añadir cancelacion al cerrar la app y al cambiar de pantalla.
-- [ ] Definir timeouts, reintentos con backoff y limites de concurrencia por servicio.
-- [ ] Propagar errores tipados desde Rust hasta mensajes accionables en Qt.
-- [ ] Separar errores recuperables, autenticacion, red, dependencia externa y bug interno.
-- [ ] Añadir panic hook y cierre controlado de VLC, DB, Discord, MPRIS y workers.
-- [ ] Revisar todos los `unwrap`, locks contaminados y tareas `spawn` sin seguimiento.
+- [x] Documentar el runtime Tokio y el hilo principal Qt.
+- [x] Eliminar operaciones HTTP, filesystem o procesos bloqueantes del hilo GUI.
+- [x] Sustituir `Mutex` globales propensos a bloqueo por ownership/canales donde convenga.
+- [x] Añadir cancelacion al cerrar la app y al cambiar de pantalla.
+- [x] Definir timeouts, reintentos con backoff y limites de concurrencia por servicio.
+- [x] Propagar errores tipados desde Rust hasta mensajes accionables en Qt.
+- [x] Separar errores recuperables, autenticacion, red, dependencia externa y bug interno.
+- [x] Añadir panic hook y cierre controlado de VLC, DB, Discord, MPRIS y workers.
+- [x] Revisar todos los `unwrap`, locks contaminados y tareas `spawn` sin seguimiento.
 
 ## P1 - Reproduccion real y confiable
 
 ### P1.1 Extraccion de streams
 
-- [ ] Definir un `StreamResolver` desacoplado del reproductor.
-- [ ] Resolver audio de forma robusta para videos musicales, uploads, age-restricted y contenido regional.
-- [ ] Respetar calidad configurada y seleccionar codec compatible con VLC.
-- [ ] Guardar expiracion de URL y renovar antes de reproducir.
-- [ ] Reintentar resolucion cuando una URL expira o devuelve 403.
-- [ ] Usar autenticacion cuando sea necesaria y modo anonimo cuando no.
-- [ ] Añadir fallback controlado a `yt-dlp`, sin convertirlo en dependencia invisible.
-- [ ] Cachear respuestas brevemente, nunca URLs firmadas mas alla de su expiracion.
-- [ ] Añadir telemetria local: tiempo de resolucion, fallos y fallback usado.
-- [ ] Probar una matriz de formatos y tipos de contenido.
+- [x] Definir un `StreamResolver` desacoplado del reproductor.
+- [x] Resolver audio de forma robusta para videos musicales, uploads, age-restricted y contenido regional.
+- [x] Respetar calidad configurada y seleccionar codec compatible con VLC.
+- [x] Guardar expiracion de URL y renovar antes de reproducir.
+- [x] Reintentar resolucion cuando una URL expira o devuelve 403.
+- [x] Usar autenticacion cuando sea necesaria y modo anonimo cuando no.
+- [x] Añadir fallback controlado a `yt-dlp`, sin convertirlo en dependencia invisible.
+- [x] Cachear respuestas brevemente, nunca URLs firmadas mas alla de su expiracion.
+- [x] Añadir telemetria local: tiempo de resolucion, fallos y fallback usado.
+- [x] Probar una matriz de formatos y tipos de contenido.
 
 ### P1.2 Estado del reproductor
 
-- [ ] Convertir playback en una maquina de estados explicita.
-- [ ] Manejar `idle`, `resolving`, `buffering`, `playing`, `paused`, `ended`, `failed` y `offline`.
-- [ ] Evitar carreras entre doble click, next rapido, seek y resoluciones tardias.
-- [ ] Asociar cada carga a un `play_id` para ignorar callbacks obsoletos.
-- [ ] Distinguir stop solicitado, fin natural y error VLC.
-- [ ] Reintentar errores transitorios sin saltar silenciosamente de pista.
-- [ ] Persistir volumen, pista, posicion y cola de sesion.
-- [ ] Restaurar sesion segun `resume_on_startup`.
-- [ ] Implementar `stop_on_close` de forma consistente con tray.
-- [ ] Sincronizar estado entre player bar, now playing, tray, MPRIS y Discord.
+- [x] Convertir playback en una maquina de estados explicita.
+- [x] Manejar `idle`, `resolving`, `buffering`, `playing`, `paused`, `ended`, `failed` y `offline`.
+- [x] Evitar carreras entre doble click, next rapido, seek y resoluciones tardias.
+- [x] Asociar cada carga a un `play_id` para ignorar callbacks obsoletos.
+- [x] Distinguir stop solicitado, fin natural y error VLC.
+- [x] Reintentar errores transitorios sin saltar silenciosamente de pista.
+- [x] Persistir volumen, pista, posicion y cola de sesion.
+- [x] Restaurar sesion segun `resume_on_startup`.
+- [x] Implementar `stop_on_close` de forma consistente con tray.
+- [x] Sincronizar estado entre player bar, now playing, tray, MPRIS y Discord.
 
 ### P1.3 Cola y autoplay
 

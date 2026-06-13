@@ -20,6 +20,28 @@ fn main() {
     i18n::set_language("es");
     log::info!("Starting Doremi v{}", doremi_core::VERSION);
 
+    // Global Panic Hook for Clean Shutdown
+    std::panic::set_hook(Box::new(|panic_info| {
+        let panic_msg = if let Some(s) = panic_info.payload().downcast_ref::<&str>() {
+            *s
+        } else if let Some(s) = panic_info.payload().downcast_ref::<String>() {
+            s.as_str()
+        } else {
+            "Unknown panic payload"
+        };
+        let redacted_msg = doremi_core::utils::security::redact_secrets(panic_msg);
+        let location = panic_info.location().map(|l| format!("at {}:{}", l.file(), l.line())).unwrap_or_default();
+        log::error!("CRITICAL PANIC: {redacted_msg} {location}");
+
+        log::info!("Executing emergency shutdown...");
+
+        // 1. Disconnect Discord RPC
+        doremi_core::services::discord::disconnect();
+
+        // 2. Stop VLC playback, save volume and release database connection
+        doremi_core::bridge::on_app_quit();
+    }));
+
     let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
     let _guard = rt.enter();
 

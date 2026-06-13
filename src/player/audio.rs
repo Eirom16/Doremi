@@ -69,6 +69,15 @@ impl AudioEngine {
         self.inner.lock().map(|i| i.state).unwrap_or(PlayState::Stopped)
     }
 
+    pub fn has_error(&self) -> bool {
+        if let Ok(inner) = self.inner.lock() {
+            if let Some(player) = &inner.player {
+                return player.state() == State::Error;
+            }
+        }
+        false
+    }
+
     pub fn position_ms(&self) -> i64 {
         self.inner.lock().map(|i| i.position_ms).unwrap_or(0)
     }

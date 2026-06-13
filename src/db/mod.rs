@@ -15,7 +15,10 @@ pub fn with_db<F, R>(f: F) -> SqlResult<R>
 where
     F: FnOnce(&Connection) -> SqlResult<R>,
 {
-    let guard = DB.lock().unwrap();
+    let guard = match DB.lock() {
+        Ok(g) => g,
+        Err(e) => e.into_inner(),
+    };
     match guard.as_ref() {
         Some(conn) => f(conn),
         None => Err(rusqlite::Error::InvalidParameterName(
@@ -25,11 +28,19 @@ where
 }
 
 pub fn init_connection(conn: Connection) {
-    *DB.lock().unwrap() = Some(conn);
+    let mut guard = match DB.lock() {
+        Ok(g) => g,
+        Err(e) => e.into_inner(),
+    };
+    *guard = Some(conn);
 }
 
 pub fn take_connection() -> Option<Connection> {
-    DB.lock().unwrap().take()
+    let mut guard = match DB.lock() {
+        Ok(g) => g,
+        Err(e) => e.into_inner(),
+    };
+    guard.take()
 }
 
 pub struct Database;

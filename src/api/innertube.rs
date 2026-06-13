@@ -111,14 +111,11 @@ pub fn search(query: &str, _filter: &str) -> Result<super::models::SearchResults
                 for section in sections {
                     let shelf = section.get("musicShelfRenderer");
                     let is_card = section.get("musicCardShelfRenderer");
-                    let data = shelf.or(is_card);
-                    if data.is_none() { continue; }
-                    let data = data.unwrap();
+                    let Some(data) = shelf.or(is_card) else { continue; };
 
                     let section_title = extract_runs(&data["title"]).to_lowercase();
 
-                    let items = data["contents"].as_array();
-                    if items.is_none() { continue; }
+                    let Some(items) = data["contents"].as_array() else { continue; };
 
                     let category = if section_title.contains("canción") || section_title.contains("song") {
                         "songs"
@@ -134,7 +131,7 @@ pub fn search(query: &str, _filter: &str) -> Result<super::models::SearchResults
                         "songs"
                     };
 
-                    for item in items.unwrap() {
+                    for item in items {
                         let renderer = &item["musicResponsiveListItemRenderer"];
                         if renderer.is_null() { continue; }
 
@@ -259,9 +256,7 @@ pub fn home_sections() -> Result<Vec<super::models::HomeSection>, String> {
                 for item in items {
                     let carousel = item.get("musicCarouselShelfRenderer");
                     let description = item.get("musicDescriptionShelfRenderer");
-                    let data = carousel.or(description);
-                    if data.is_none() { continue; }
-                    let data = data.unwrap();
+                    let Some(data) = carousel.or(description) else { continue; };
 
                     let title = data["header"]
                         .get("musicCarouselShelfBasicHeaderRenderer")
@@ -274,8 +269,7 @@ pub fn home_sections() -> Result<Vec<super::models::HomeSection>, String> {
                         for c in contents {
                             let renderer = c.get("musicResponsiveListItemRenderer")
                                 .or_else(|| c.get("musicTwoRowItemRenderer"));
-                            if renderer.is_none() { continue; }
-                            let renderer = renderer.unwrap();
+                            let Some(renderer) = renderer else { continue; };
 
                             let item_title = renderer["flexColumns"].as_array()
                                 .and_then(|cols| cols.first())

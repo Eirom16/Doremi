@@ -250,12 +250,23 @@ pub fn on_repeat_cycled() {
 
 pub fn on_search_submitted(query: &str) {
     log::info!("Search: {query}");
-    // Record search history
-    let _ = crate::db::repo::SearchHistoryRepo::record(query, "all");
-    if let Some(search) = SEARCH.get() {
-        let results = search.search(query);
-        search.push_to_ui(&results);
-    }
+    let query = query.to_string();
+    tokio::spawn(async move {
+        let results = tokio::task::spawn_blocking(move || {
+            let _ = crate::db::repo::SearchHistoryRepo::record(&query, "all");
+            if let Some(search) = SEARCH.get() {
+                Some(search.search(&query))
+            } else {
+                None
+            }
+        }).await;
+
+        if let Ok(Some(res)) = results {
+            if let Some(search) = SEARCH.get() {
+                search.push_to_ui(&res);
+            }
+        }
+    });
 }
 
 pub fn on_volume_change(delta: i32) {
@@ -318,71 +329,76 @@ impl LibraryTab {
 
 pub fn on_library_tab_changed(tab_key: &str) {
     log::info!("Library tab changed: {tab_key}");
-    use crate::db::repo::*;
-    let Some(tab) = LibraryTab::from_key(tab_key) else {
-        log::warn!("Ignoring unknown library tab key: {tab_key}");
-        return;
-    };
+    let tab_key = tab_key.to_string();
+    tokio::spawn(async move {
+        tokio::task::spawn_blocking(move || {
+            use crate::db::repo::*;
+            let Some(tab) = LibraryTab::from_key(&tab_key) else {
+                log::warn!("Ignoring unknown library tab key: {tab_key}");
+                return;
+            };
 
-    match tab {
-        LibraryTab::Songs => {
-            if let Ok(tracks) = FavoritesRepo::all_tracks() {
-                let songs: Vec<crate::bridge::bridge::Track> = tracks.iter()
-                    .map(|t| crate::bridge::bridge::Track {
-                        id: t.id.clone(),
-                        title: t.title.clone(),
-                        artist: t.artist.clone(),
-                        album: t.album.clone(),
-                        duration_ms: t.duration_ms,
-                        thumbnail: t.thumbnail.clone(),
-                    }).collect();
-                crate::bridge::bridge::set_library_songs(songs);
+            match tab {
+                LibraryTab::Songs => {
+                    if let Ok(tracks) = FavoritesRepo::all_tracks() {
+                        let songs: Vec<crate::bridge::bridge::Track> = tracks.iter()
+                            .map(|t| crate::bridge::bridge::Track {
+                                id: t.id.clone(),
+                                title: t.title.clone(),
+                                artist: t.artist.clone(),
+                                album: t.album.clone(),
+                                duration_ms: t.duration_ms,
+                                thumbnail: t.thumbnail.clone(),
+                            }).collect();
+                        crate::bridge::bridge::set_library_songs(songs);
+                    }
+                }
+                LibraryTab::Albums => {
+                    if let Ok(albums) = FavoritesRepo::all_albums() {
+                        let a_list: Vec<crate::bridge::bridge::Album> = albums.iter()
+                            .map(|a| crate::bridge::bridge::Album {
+                                id: a.id.clone(),
+                                title: a.title.clone(),
+                                artist: a.artist.clone(),
+                                year: a.year.map(|y| y.to_string()).unwrap_or_default(),
+                                thumbnail: a.thumbnail.clone(),
+                                track_count: 0,
+                            }).collect();
+                        crate::bridge::bridge::set_library_albums(a_list);
+                    }
+                }
+                LibraryTab::Artists => {
+                    if let Ok(artists) = FavoritesRepo::all_artists() {
+                        let art_list: Vec<crate::bridge::bridge::Artist> = artists.iter()
+                            .map(|a| crate::bridge::bridge::Artist {
+                                id: a.id.clone(),
+                                name: a.name.clone(),
+                                thumbnail: a.thumbnail.clone(),
+                                description: String::new(),
+                                subscribers: String::new(),
+                            }).collect();
+                        crate::bridge::bridge::set_library_artists(art_list);
+                    }
+                }
+                LibraryTab::Playlists => {
+                    if let Ok(playlists) = PlaylistRepo::all() {
+                        let p_list: Vec<crate::bridge::bridge::Playlist> = playlists.iter()
+                            .map(|p| {
+                                let count = PlaylistRepo::tracks(&p.id).ok().map(|t| t.len() as i32).unwrap_or(0);
+                                crate::bridge::bridge::Playlist {
+                                    id: p.id.clone(),
+                                    name: p.name.clone(),
+                                    description: p.description.clone(),
+                                    thumbnail: p.artwork.clone(),
+                                    track_count: count,
+                                }
+                            }).collect();
+                        crate::bridge::bridge::set_library_playlists(p_list);
+                    }
+                }
             }
-        }
-        LibraryTab::Albums => {
-            if let Ok(albums) = FavoritesRepo::all_albums() {
-                let a_list: Vec<crate::bridge::bridge::Album> = albums.iter()
-                    .map(|a| crate::bridge::bridge::Album {
-                        id: a.id.clone(),
-                        title: a.title.clone(),
-                        artist: a.artist.clone(),
-                        year: a.year.map(|y| y.to_string()).unwrap_or_default(),
-                        thumbnail: a.thumbnail.clone(),
-                        track_count: 0,
-                    }).collect();
-                crate::bridge::bridge::set_library_albums(a_list);
-            }
-        }
-        LibraryTab::Artists => {
-            if let Ok(artists) = FavoritesRepo::all_artists() {
-                let art_list: Vec<crate::bridge::bridge::Artist> = artists.iter()
-                    .map(|a| crate::bridge::bridge::Artist {
-                        id: a.id.clone(),
-                        name: a.name.clone(),
-                        thumbnail: a.thumbnail.clone(),
-                        description: String::new(),
-                        subscribers: String::new(),
-                    }).collect();
-                crate::bridge::bridge::set_library_artists(art_list);
-            }
-        }
-        LibraryTab::Playlists => {
-            if let Ok(playlists) = PlaylistRepo::all() {
-                let p_list: Vec<crate::bridge::bridge::Playlist> = playlists.iter()
-                    .map(|p| {
-                        let count = PlaylistRepo::tracks(&p.id).ok().map(|t| t.len() as i32).unwrap_or(0);
-                        crate::bridge::bridge::Playlist {
-                            id: p.id.clone(),
-                            name: p.name.clone(),
-                            description: p.description.clone(),
-                            thumbnail: p.artwork.clone(),
-                            track_count: count,
-                        }
-                    }).collect();
-                crate::bridge::bridge::set_library_playlists(p_list);
-            }
-        }
-    }
+        }).await.ok();
+    });
 }
 
 #[cfg(test)]
@@ -410,16 +426,118 @@ mod contract_tests {
         assert_eq!(LibraryTab::from_key("Songs"), None);
         assert_eq!(LibraryTab::from_key(""), None);
     }
+
+    fn run_in_test_db<F, R>(f: F) -> R
+    where
+        F: FnOnce() -> R,
+    {
+        use rusqlite::Connection;
+        use crate::db::{init_connection, take_connection, Database};
+        
+        let conn = Connection::open_in_memory().unwrap();
+        Database::run_migrations(&conn).unwrap();
+        init_connection(conn);
+        
+        let res = f();
+        
+        let _ = take_connection(); // Clean up
+        res
+    }
+
+    #[test]
+    fn test_track_unicode_round_trip() {
+        run_in_test_db(|| {
+            use crate::db::repo::FavoritesRepo;
+            let track = super::bridge::Track {
+                id: "fav_unicode_🚀_日本語".to_string(),
+                title: "Canción con tilde y emoji 🚀".to_string(),
+                artist: "日本語の歌手".to_string(),
+                album: "Álbum Especial".to_string(),
+                duration_ms: 240000,
+                thumbnail: "https://example.com/🚀.png".to_string(),
+            };
+            
+            super::on_add_favorite_impl(track);
+            
+            let saved = FavoritesRepo::all_tracks().unwrap();
+            assert_eq!(saved.len(), 1);
+            assert_eq!(saved[0].id, "fav_unicode_🚀_日本語");
+            assert_eq!(saved[0].title, "Canción con tilde y emoji 🚀");
+            assert_eq!(saved[0].artist, "日本語の歌手");
+        });
+    }
+
+    #[test]
+    fn test_track_invalid_and_empty_id() {
+        run_in_test_db(|| {
+            use crate::db::repo::FavoritesRepo;
+            // 1. Caso de ID vacío
+            let track_empty_id = super::bridge::Track {
+                id: "".to_string(),
+                title: "Song Empty ID".to_string(),
+                artist: "Artist".to_string(),
+                album: "".to_string(),
+                duration_ms: 0,
+                thumbnail: "".to_string(),
+            };
+            super::on_add_favorite_impl(track_empty_id);
+            
+            // 2. Caso de título vacío
+            let track_empty_title = super::bridge::Track {
+                id: "some_valid_id".to_string(),
+                title: "".to_string(),
+                artist: "Artist".to_string(),
+                album: "".to_string(),
+                duration_ms: 0,
+                thumbnail: "".to_string(),
+            };
+            super::on_add_favorite_impl(track_empty_title);
+
+            let saved = FavoritesRepo::all_tracks().unwrap();
+            assert!(saved.is_empty(), "Track con ID o título vacío no debe ser insertado");
+        });
+    }
+
+    #[test]
+    fn test_large_list_allocation() {
+        let mut tracks = Vec::new();
+        for i in 0..10000 {
+            tracks.push(super::bridge::Track {
+                id: format!("id_{i}"),
+                title: format!("Title {i}"),
+                artist: format!("Artist {i}"),
+                album: format!("Album {i}"),
+                duration_ms: 180000,
+                thumbnail: format!("https://example.com/thumb_{i}.png"),
+            });
+        }
+        
+        assert_eq!(tracks.len(), 10000);
+        assert_eq!(tracks[9999].id, "id_9999");
+    }
 }
 
-pub fn on_remove_favorite(track_id: &str) {
+pub fn on_remove_favorite_impl(track_id: &str) {
     log::info!("Remove favorite: {track_id}");
     if let Err(e) = crate::db::repo::FavoritesRepo::remove_track(track_id) {
         log::error!("Failed to remove favorite: {e}");
     }
 }
 
-pub fn on_add_favorite(track: bridge::Track) {
+pub fn on_remove_favorite(track_id: &str) {
+    let track_id = track_id.to_string();
+    tokio::spawn(async move {
+        tokio::task::spawn_blocking(move || {
+            on_remove_favorite_impl(&track_id);
+        }).await.ok();
+    });
+}
+
+pub fn on_add_favorite_impl(track: bridge::Track) {
+    if track.id.trim().is_empty() || track.title.trim().is_empty() {
+        log::warn!("Rejected adding favorite track: empty id or title");
+        return;
+    }
     log::info!("Add favorite: {} — {}", track.title, track.artist);
     use crate::db::repo::FavoriteTrack;
     let fav_track = FavoriteTrack {
@@ -437,6 +555,14 @@ pub fn on_add_favorite(track: bridge::Track) {
     } else {
         log::info!("Added favorite: {} — {}", fav_track.title, fav_track.artist);
     }
+}
+
+pub fn on_add_favorite(track: bridge::Track) {
+    tokio::spawn(async move {
+        tokio::task::spawn_blocking(move || {
+            on_add_favorite_impl(track);
+        }).await.ok();
+    });
 }
 
 pub fn on_download_requested(track: bridge::Track) {
@@ -740,158 +866,169 @@ pub fn on_queue_item_clicked(index: i32) {
 
 pub fn on_stats_requested() {
     log::info!("Stats requested");
+    tokio::spawn(async move {
+        let stats_res = tokio::task::spawn_blocking(move || {
+            let total_time_ms = crate::db::with_db(|conn| {
+                conn.query_row("SELECT SUM(duration_ms) FROM recently_played", [], |r| {
+                    let val: Option<i64> = r.get(0)?;
+                    Ok(val.unwrap_or(0))
+                })
+            }).unwrap_or(0);
 
-    let total_time_ms = crate::db::with_db(|conn| {
-        conn.query_row("SELECT SUM(duration_ms) FROM recently_played", [], |r| {
-            let val: Option<i64> = r.get(0)?;
-            Ok(val.unwrap_or(0))
-        })
-    }).unwrap_or(0);
+            let total_plays = crate::db::with_db(|conn| {
+                conn.query_row("SELECT COUNT(*) FROM recently_played", [], |r| {
+                    let val: i32 = r.get(0)?;
+                    Ok(val)
+                })
+            }).unwrap_or(0);
 
-    let total_plays = crate::db::with_db(|conn| {
-        conn.query_row("SELECT COUNT(*) FROM recently_played", [], |r| {
-            let val: i32 = r.get(0)?;
-            Ok(val)
-        })
-    }).unwrap_or(0);
+            let unique_artists = crate::db::with_db(|conn| {
+                conn.query_row("SELECT COUNT(DISTINCT artist) FROM recently_played", [], |r| {
+                    let val: i32 = r.get(0)?;
+                    Ok(val)
+                })
+            }).unwrap_or(0);
 
-    let unique_artists = crate::db::with_db(|conn| {
-        conn.query_row("SELECT COUNT(DISTINCT artist) FROM recently_played", [], |r| {
-            let val: i32 = r.get(0)?;
-            Ok(val)
-        })
-    }).unwrap_or(0);
-
-    // Weekly activity: last 7 days daily counts
-    let mut weekly_activity = vec![0; 7];
-    if let Ok(results) = crate::db::with_db(|conn| {
-        let mut stmt = conn.prepare(
-            "SELECT strftime('%Y-%m-%d', played_at) as play_day, COUNT(*) as cnt
-             FROM recently_played
-             WHERE played_at >= datetime('now', '-7 days')
-             GROUP BY play_day
-             ORDER BY play_day DESC
-             LIMIT 7"
-        )?;
-        let rows = stmt.query_map([], |r| {
-            let day_str: String = r.get(0)?;
-            let count: i32 = r.get(1)?;
-            Ok((day_str, count))
-        })?;
-        let list: Result<Vec<(String, i32)>, rusqlite::Error> = rows.collect();
-        list
-    }) {
-        let now = chrono::Local::now();
-        for i in 0..7 {
-            let d = now - chrono::Duration::days(6 - i as i64);
-            let d_str = d.format("%Y-%m-%d").to_string();
-            if let Some((_, cnt)) = results.iter().find(|(day, _)| day == &d_str) {
-                weekly_activity[i] = *cnt;
+            // Weekly activity: last 7 days daily counts
+            let mut weekly_activity = vec![0; 7];
+            if let Ok(results) = crate::db::with_db(|conn| {
+                let mut stmt = conn.prepare(
+                    "SELECT strftime('%Y-%m-%d', played_at) as play_day, COUNT(*) as cnt
+                     FROM recently_played
+                     WHERE played_at >= datetime('now', '-7 days')
+                     GROUP BY play_day
+                     ORDER BY play_day DESC
+                     LIMIT 7"
+                )?;
+                let rows = stmt.query_map([], |r| {
+                    let day_str: String = r.get(0)?;
+                    let count: i32 = r.get(1)?;
+                    Ok((day_str, count))
+                })?;
+                let list: Result<Vec<(String, i32)>, rusqlite::Error> = rows.collect();
+                list
+            }) {
+                let now = chrono::Local::now();
+                for i in 0..7 {
+                    let d = now - chrono::Duration::days(6 - i as i64);
+                    let d_str = d.format("%Y-%m-%d").to_string();
+                    if let Some((_, cnt)) = results.iter().find(|(day, _)| day == &d_str) {
+                        weekly_activity[i] = *cnt;
+                    }
+                }
             }
-        }
-    }
 
-    // Top 5 Tracks
-    let mut top_tracks = Vec::new();
+            // Top 5 Tracks
+            let mut top_tracks = Vec::new();
 
-    if let Ok(results) = crate::db::with_db(|conn| {
-        let mut stmt = conn.prepare(
-            "SELECT track_id, title, artist, duration_ms, thumbnail, COUNT(*) as cnt
-             FROM recently_played
-             GROUP BY track_id, title, artist
-             ORDER BY cnt DESC
-             LIMIT 5"
-        )?;
-        let rows = stmt.query_map([], |r| {
-            let id: String = r.get(0)?;
-            let title: String = r.get(1)?;
-            let artist: String = r.get(2)?;
-            let duration_ms: i64 = r.get(3)?;
-            let thumb: String = r.get(4)?;
-            Ok((id, title, artist, duration_ms, thumb))
-        })?;
-        let list: Result<Vec<_>, rusqlite::Error> = rows.collect();
-        list
-    }) {
-        for row in results {
-            let (id, title, artist, duration_ms, mut thumb) = row;
-            if thumb.is_empty() {
-                thumb = crate::bridge::bridge::get_or_create_thumbnail(&title, 0);
+            if let Ok(results) = crate::db::with_db(|conn| {
+                let mut stmt = conn.prepare(
+                    "SELECT track_id, title, artist, duration_ms, thumbnail, COUNT(*) as cnt
+                     FROM recently_played
+                     GROUP BY track_id, title, artist
+                     ORDER BY cnt DESC
+                     LIMIT 5"
+                )?;
+                let rows = stmt.query_map([], |r| {
+                    let id: String = r.get(0)?;
+                    let title: String = r.get(1)?;
+                    let artist: String = r.get(2)?;
+                    let duration_ms: i64 = r.get(3)?;
+                    let thumb: String = r.get(4)?;
+                    Ok((id, title, artist, duration_ms, thumb))
+                })?;
+                let list: Result<Vec<_>, rusqlite::Error> = rows.collect();
+                list
+            }) {
+                for row in results {
+                    let (id, title, artist, duration_ms, mut thumb) = row;
+                    if thumb.is_empty() {
+                        thumb = crate::bridge::bridge::get_or_create_thumbnail(&title, 0);
+                    }
+                    top_tracks.push(crate::bridge::bridge::Track {
+                        id,
+                        title,
+                        artist,
+                        album: String::new(),
+                        duration_ms,
+                        thumbnail: thumb,
+                    });
+                }
             }
-            top_tracks.push(crate::bridge::bridge::Track {
-                id,
-                title,
-                artist,
-                album: String::new(),
-                duration_ms,
-                thumbnail: thumb,
-            });
+
+            let total_secs = total_time_ms / 1000;
+            let total_mins = total_secs / 60;
+            let total_hours = total_mins / 60;
+            let time_str = if total_hours > 0 {
+                format!("{}h {}m", total_hours, total_mins % 60)
+            } else {
+                format!("{}m", total_mins)
+            };
+
+            crate::bridge::bridge::StatsData {
+                total_play_time: time_str,
+                total_plays,
+                unique_artists,
+                weekly_activity,
+                top_tracks,
+            }
+        }).await;
+
+        if let Ok(stats) = stats_res {
+            crate::bridge::bridge::set_stats_data(stats);
         }
-    }
-
-    let total_secs = total_time_ms / 1000;
-    let total_mins = total_secs / 60;
-    let total_hours = total_mins / 60;
-    let time_str = if total_hours > 0 {
-        format!("{}h {}m", total_hours, total_mins % 60)
-    } else {
-        format!("{}m", total_mins)
-    };
-
-    let stats = crate::bridge::bridge::StatsData {
-        total_play_time: time_str,
-        total_plays,
-        unique_artists,
-        weekly_activity,
-        top_tracks,
-    };
-
-    crate::bridge::bridge::set_stats_data(stats);
+    });
 }
 
 pub fn on_history_requested() {
     log::info!("History requested");
+    tokio::spawn(async move {
+        let history_res = tokio::task::spawn_blocking(move || {
+            let mut history = Vec::new();
+            let mut played_at = Vec::new();
 
-    let mut history = Vec::new();
-    let mut played_at = Vec::new();
-
-    if let Ok(results) = crate::db::with_db(|conn| {
-        let mut stmt = conn.prepare(
-            "SELECT track_id, title, artist, duration_ms, thumbnail, played_at
-             FROM recently_played
-             ORDER BY played_at DESC
-             LIMIT 50"
-        )?;
-        let rows = stmt.query_map([], |r| {
-            let track_id: String = r.get(0)?;
-            let title: String = r.get(1)?;
-            let artist: String = r.get(2)?;
-            let duration_ms: i64 = r.get(3)?;
-            let thumbnail: String = r.get(4)?;
-            let played_at_str: String = r.get(5)?;
-            Ok((track_id, title, artist, duration_ms, thumbnail, played_at_str))
-        })?;
-        let list: Result<Vec<_>, rusqlite::Error> = rows.collect();
-        list
-    }) {
-        for row in results {
-            let (track_id, title, artist, duration_ms, mut thumbnail, played_at_str) = row;
-            if thumbnail.is_empty() {
-                thumbnail = crate::bridge::bridge::get_or_create_thumbnail(&title, 0);
+            if let Ok(results) = crate::db::with_db(|conn| {
+                let mut stmt = conn.prepare(
+                    "SELECT track_id, title, artist, duration_ms, thumbnail, played_at
+                     FROM recently_played
+                     ORDER BY played_at DESC
+                     LIMIT 50"
+                )?;
+                let rows = stmt.query_map([], |r| {
+                    let track_id: String = r.get(0)?;
+                    let title: String = r.get(1)?;
+                    let artist: String = r.get(2)?;
+                    let duration_ms: i64 = r.get(3)?;
+                    let thumbnail: String = r.get(4)?;
+                    let played_at_str: String = r.get(5)?;
+                    Ok((track_id, title, artist, duration_ms, thumbnail, played_at_str))
+                })?;
+                let list: Result<Vec<_>, rusqlite::Error> = rows.collect();
+                list
+            }) {
+                for row in results {
+                    let (track_id, title, artist, duration_ms, mut thumbnail, played_at_str) = row;
+                    if thumbnail.is_empty() {
+                        thumbnail = crate::bridge::bridge::get_or_create_thumbnail(&title, 0);
+                    }
+                    history.push(crate::bridge::bridge::Track {
+                        id: track_id,
+                        title,
+                        artist,
+                        album: String::new(),
+                        duration_ms,
+                        thumbnail,
+                    });
+                    played_at.push(played_at_str);
+                }
             }
-            history.push(crate::bridge::bridge::Track {
-                id: track_id,
-                title,
-                artist,
-                album: String::new(),
-                duration_ms,
-                thumbnail,
-            });
-            played_at.push(played_at_str);
-        }
-    }
+            (history, played_at)
+        }).await;
 
-    crate::bridge::bridge::set_history_data(history, played_at);
+        if let Ok((history, played_at)) = history_res {
+            crate::bridge::bridge::set_history_data(history, played_at);
+        }
+    });
 }
 
 pub fn on_youtube_login_success(headers_json: &str, name: &str, avatar_url: &str) {

@@ -2,6 +2,7 @@ pub mod vlc_check;
 pub mod state;
 pub mod queue;
 pub mod audio;
+pub mod resolver;
 
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -20,6 +21,7 @@ pub struct PlayerService {
     lastfm_scrobbled: std::sync::atomic::AtomicBool,
     accumulated_playback_ms: std::sync::atomic::AtomicI64,
     last_playback_poll: Mutex<Instant>,
+    last_retried_track_id: Mutex<Option<String>>,
 }
 
 impl PlayerService {
@@ -41,6 +43,7 @@ impl PlayerService {
             lastfm_scrobbled: std::sync::atomic::AtomicBool::new(false),
             accumulated_playback_ms: std::sync::atomic::AtomicI64::new(0),
             last_playback_poll: Mutex::new(Instant::now()),
+            last_retried_track_id: Mutex::new(None),
         }
     }
 
@@ -155,7 +158,13 @@ impl PlayerService {
             return;
         }
 
-        if t.stream_url.is_empty() {
+        let mut needs_resolution = t.stream_url.is_empty();
+        if !needs_resolution && t.stream_url.starts_with("http") && crate::player::resolver::StreamResolver::is_url_expired(&t.stream_url) {
+            log::info!("Stream URL for {} is expired, forcing re-resolution", t.id);
+            needs_resolution = true;
+        }
+
+        if needs_resolution {
             if t.id.is_empty() {
                 log::warn!("Cannot play track with empty ID and no stream URL");
                 return;
@@ -167,35 +176,42 @@ impl PlayerService {
             self.audio.set_state(PlayState::Loading);
 
             tokio::spawn(async move {
-                log::info!("Resolving stream URL in background for {id}...");
-                let url = crate::api::client::ApiClient::new().get_stream_url_async(&id).await;
-                if let Some(resolved_url) = url {
-                    let still_current = {
-                        if let Ok(mut q) = queue.lock() {
-                            if let Some(current_track) = q.current_mut() {
-                                if current_track.id == id {
-                                    current_track.stream_url = resolved_url.clone();
-                                    true
+                log::info!("Resolving stream URL in background for {id} using StreamResolver...");
+                let resolve_result = crate::player::resolver::StreamResolver::resolve(&id).await;
+                match resolve_result {
+                    Ok(resolved_url) => {
+                        let still_current = {
+                            if let Ok(mut q) = queue.lock() {
+                                if let Some(current_track) = q.current_mut() {
+                                    if current_track.id == id {
+                                        current_track.stream_url = resolved_url.clone();
+                                        true
+                                    } else {
+                                        false
+                                    }
                                 } else {
                                     false
                                 }
                             } else {
                                 false
                             }
-                        } else {
-                            false
-                        }
-                    };
+                        };
 
-                    if still_current {
-                        log::info!("Playing resolved URL for {id}");
-                        audio.play_url(&resolved_url);
-                    } else {
-                        log::info!("Resolved URL for {id}, but user already switched tracks.");
+                        if still_current {
+                            log::info!("Playing resolved URL for {id}");
+                            audio.play_url(&resolved_url);
+                        } else {
+                            log::info!("Resolved URL for {id}, but user already switched tracks.");
+                        }
                     }
-                } else {
-                    log::error!("Failed to resolve stream URL for {id}");
-                    audio.set_state(PlayState::Stopped);
+                    Err(e) => {
+                        log::error!("Failed to resolve stream URL for {id}: {e:?}");
+                        audio.set_state(PlayState::Stopped);
+                        crate::bridge::bridge::show_notification(
+                            &format!("Error al resolver stream: {e}"),
+                            "error",
+                        );
+                    }
                 }
             });
         } else {
@@ -329,6 +345,71 @@ impl PlayerService {
         }
 
         self.audio.poll_position();
+
+        // Check for playback error and handle retry
+        if self.audio.has_error() {
+            if let Some(track) = self.current_track() {
+                let mut retried = false;
+                {
+                    let mut retried_id = self.last_retried_track_id.lock().unwrap();
+                    if *retried_id == Some(track.id.clone()) {
+                        retried = true;
+                    } else {
+                        *retried_id = Some(track.id.clone());
+                    }
+                }
+
+                if !retried {
+                    log::warn!(
+                        "Playback error detected for track {} ({}). Retrying resolution and playback once...",
+                        track.id,
+                        track.title
+                    );
+                    
+                    // Invalidate cache
+                    let cache_key = format!("stream_url:{}", track.id);
+                    let _ = crate::db::cache::ResponseCache::invalidate(&cache_key);
+
+                    // Clear stream url in the queue
+                    {
+                        if let Ok(mut q) = self.queue.lock() {
+                            if let Some(current_track) = q.current_mut() {
+                                if current_track.id == track.id {
+                                    current_track.stream_url.clear();
+                                }
+                            }
+                        }
+                    }
+
+                    // Reset audio player state to stopped to clear error state
+                    self.audio.stop();
+
+                    // Re-trigger playback
+                    let mut retried_track = track.clone();
+                    retried_track.stream_url.clear();
+                    self.play_track_info(retried_track);
+                } else {
+                    log::error!(
+                        "Playback failed again after retry for track {} ({}). Stopping.",
+                        track.id,
+                        track.title
+                    );
+                    
+                    // Clear the retried ID so we can try playing it again manually later
+                    {
+                        let mut retried_id = self.last_retried_track_id.lock().unwrap();
+                        *retried_id = None;
+                    }
+
+                    // Stop player and show notification
+                    self.audio.stop();
+                    crate::bridge::bridge::show_notification(
+                        &format!("Error de reproducción persistente en: {}", track.title),
+                        "error"
+                    );
+                }
+            }
+        }
 
         // Push state to UI via bridge
         self.sync_ui();

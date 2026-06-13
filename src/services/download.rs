@@ -1,5 +1,5 @@
-use std::sync::{Arc, Mutex};
-use tokio::sync::mpsc;
+use std::sync::Arc;
+use tokio::sync::{mpsc, Semaphore};
 use once_cell::sync::Lazy;
 use crate::db::repo::{DownloadsRepo, DownloadTrack};
 
@@ -13,14 +13,14 @@ pub struct DownloadTask {
 
 pub struct DownloadManager {
     sender: mpsc::UnboundedSender<DownloadTask>,
-    active_count: Arc<Mutex<usize>>,
+    semaphore: Arc<Semaphore>,
 }
 
 static INSTANCE: Lazy<DownloadManager> = Lazy::new(|| {
     let (sender, receiver) = mpsc::unbounded_channel();
     let manager = DownloadManager {
         sender,
-        active_count: Arc::new(Mutex::new(0)),
+        semaphore: Arc::new(Semaphore::new(2)),
     };
     manager.start_worker_loop(receiver);
     manager
@@ -47,20 +47,17 @@ impl DownloadManager {
     }
 
     fn start_worker_loop(&self, mut receiver: mpsc::UnboundedReceiver<DownloadTask>) {
-        let active_count = self.active_count.clone();
+        let semaphore = self.semaphore.clone();
         tokio::spawn(async move {
             while let Some(task) = receiver.recv().await {
-                // Limit concurrency to 2 downloads
-                loop {
-                    let count = *active_count.lock().unwrap();
-                    if count < 2 {
-                        break;
+                // Limit concurrency using semaphore permit acquisition
+                let permit = match semaphore.clone().acquire_owned().await {
+                    Ok(p) => p,
+                    Err(e) => {
+                        log::error!("Download semaphore acquisition error: {e}");
+                        continue;
                     }
-                    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-                }
-
-                *active_count.lock().unwrap() += 1;
-                let active_count_clone = active_count.clone();
+                };
 
                 tokio::spawn(async move {
                     log::info!("Starting download for video_id: {}", task.video_id);
@@ -86,7 +83,7 @@ impl DownloadManager {
                             );
                         }
                     }
-                    *active_count_clone.lock().unwrap() -= 1;
+                    drop(permit);
                 });
             }
         });
