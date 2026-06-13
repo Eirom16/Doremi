@@ -151,12 +151,30 @@ pub fn search(query: &str, _filter: &str) -> Result<super::models::SearchResults
 
                         match category {
                             "songs" => {
-                                let (artist, album) = if subtitle.contains("•") {
-                                    let parts: Vec<&str> = subtitle.splitn(2, "•").collect();
-                                    (parts.get(0).map(|s| s.trim()).unwrap_or("").to_string(),
-                                     parts.get(1).map(|s| s.trim()).unwrap_or("").to_string())
-                                } else {
-                                    (subtitle.clone(), String::new())
+                                let parts: Vec<&str> = subtitle.split('•').map(|s| s.trim()).collect();
+                                let mut clean_parts = Vec::new();
+                                for part in parts {
+                                    let lower = part.to_lowercase();
+                                    if lower == "canción" || lower == "song" || lower == "video" || lower == "sencillo" || lower == "single" || lower == "artista" || lower == "artist" {
+                                        continue;
+                                    }
+                                    clean_parts.push(part);
+                                }
+                                let (artist, album) = match clean_parts.len() {
+                                    0 => (String::new(), String::new()),
+                                    1 => (clean_parts[0].to_string(), String::new()),
+                                    _ => {
+                                        let has_duration = clean_parts.last().map(|s| s.contains(':')).unwrap_or(false);
+                                        if has_duration {
+                                            if clean_parts.len() == 2 {
+                                                (clean_parts[0].to_string(), String::new())
+                                            } else {
+                                                (clean_parts[0].to_string(), clean_parts[1].to_string())
+                                            }
+                                        } else {
+                                            (clean_parts[0].to_string(), clean_parts[1].to_string())
+                                        }
+                                    }
                                 };
                                 songs.push(super::models::Track {
                                     id: video_id,

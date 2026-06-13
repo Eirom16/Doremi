@@ -19,8 +19,6 @@ impl DoremiApp {
     pub fn new() -> Self {
         AppDirs::setup();
         let dirs = AppDirs::global();
-        let settings = AppSettings::load(&dirs.settings_path());
-        log::info!("Settings loaded from: {:?}", dirs.settings_path());
 
         vlc_check::setup_vlc_env();
         let vlc_ok = vlc_check::check_vlc_available();
@@ -36,6 +34,22 @@ impl DoremiApp {
         } else {
             log::info!("Database initialized");
         }
+
+        // Run Pyrolist -> Doremi migration
+        match crate::utils::migration::run_migration() {
+            Ok(Some(summary)) => {
+                log::info!("Migration from Pyrolist completed successfully: {:?}", summary);
+            }
+            Ok(None) => {
+                log::info!("No legacy Pyrolist data found for migration");
+            }
+            Err(e) => {
+                log::error!("Migration from Pyrolist failed: {}", e);
+            }
+        }
+
+        let settings = AppSettings::load(&dirs.settings_path());
+        log::info!("Settings loaded from: {:?}", dirs.settings_path());
 
         Self { settings }
     }

@@ -85,28 +85,28 @@ El port se considera terminado cuando Doremi cubra los flujos reales de Pyrolist
 - [x] Hecho - Aplicar permisos `0600` durante cualquier migracion temporal y escritura de ajustes/perfil.
 - [x] Hecho - Eliminar archivos legacy de secretos solo despues de confirmar la migracion.
 - [x] Hecho - Evitar passwords de Last.fm en logs, errores, bridge o memoria mas tiempo del necesario.
-- [ ] Redactar headers, cookies, tokens, URLs firmadas y passwords en logging.
+- [x] Hecho - Redactar headers, cookies, tokens, URLs firmadas y passwords en logging.
 - [x] Hecho - Añadir logout que borre credenciales, estado de sesion y artefactos temporales.
 - [x] Hecho - Definir fallback seguro cuando no exista un keyring disponible: fallar cerrado sin persistir texto plano.
-- [ ] Añadir pruebas de que TOML, DB, backups y logs no contienen secretos.
+- [x] Hecho - Añadir pruebas de que TOML, DB, backups y logs no contienen secretos.
 
 **Criterio de salida:** una busqueda recursiva en datos persistidos no encuentra secretos en texto plano.
 
 ### P0.3 Migracion de Pyrolist a Doremi
 
-- [ ] Detectar las rutas XDG legacy de `pyrolist` y las nuevas de Doremi.
-- [ ] Versionar el formato de migracion y hacerla idempotente.
-- [ ] Migrar `settings.toml`, normalizando campos incompatibles.
-- [ ] Migrar base de datos: canciones, likes, conteos, ultima reproduccion, historial y descargas.
-- [ ] Migrar artwork, letras y archivos descargados sin duplicarlos.
-- [ ] Migrar secretos desde keyring usando el servicio/cuenta legacy.
-- [ ] Conservar timestamps y metadata cuando sea posible.
-- [ ] Verificar espacio disponible antes de copiar archivos.
-- [ ] Usar transaccion y rollback para datos estructurados.
-- [ ] Crear backup automatico previo a la migracion.
-- [ ] Mostrar resumen: importados, omitidos, duplicados y errores.
-- [ ] Permitir reintentar sin corromper el destino.
-- [ ] Probar migracion desde una instalacion vacia, parcial y dañada.
+- [x] Hecho - Detectar las rutas XDG legacy de `pyrolist` y las nuevas de Doremi.
+- [x] Hecho - Versionar el formato de migracion y hacerla idempotente.
+- [x] Hecho - Migrar `settings.toml`, normalizando campos incompatibles.
+- [x] Hecho - Migrar base de datos: canciones, likes, conteos, ultima reproduccion, historial y descargas.
+- [x] Hecho - Migrar artwork, letras y archivos descargados sin duplicarlos.
+- [x] Hecho - Migrar secretos desde keyring usando el servicio/cuenta legacy.
+- [x] Hecho - Conservar timestamps y metadata cuando sea posible.
+- [x] Hecho - Verificar espacio disponible antes de copiar archivos.
+- [x] Hecho - Usar transaccion y rollback para datos estructurados.
+- [x] Hecho - Crear backup automatico previo a la migracion.
+- [x] Hecho - Mostrar resumen: importados, omitidos, duplicados y errores.
+- [x] Hecho - Permitir reintentar sin corromper el destino.
+- [x] Hecho - Probar migracion desde una instalacion vacia, parcial y dañada.
 
 **Criterio de salida:** un usuario existente abre Doremi y conserva biblioteca, historial, ajustes, descargas y sesiones sin intervencion manual.
 
@@ -203,8 +203,8 @@ El port se considera terminado cuando Doremi cubra los flujos reales de Pyrolist
 
 ### P2.1 Cliente y robustez
 
-- [ ] Eliminar resultados mock del flujo de produccion.
-- [ ] Mostrar estados vacio, offline y error reales en UI.
+- [x] Hecho - Eliminar resultados mock del flujo de produccion.
+- [x] Hecho - Mostrar estados vacio, offline y error reales en UI.
 - [ ] Separar transporte HTTP, autenticacion, endpoints y parsing.
 - [ ] Reutilizar `reqwest::Client`; no crear uno por request.
 - [ ] Usar API async en servicios y evitar `reqwest::blocking`.

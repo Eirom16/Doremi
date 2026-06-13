@@ -48,7 +48,7 @@ impl Database {
         Ok(())
     }
 
-    fn run_migrations(conn: &Connection) -> SqlResult<()> {
+    pub(crate) fn run_migrations(conn: &Connection) -> SqlResult<()> {
         conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS schema_version (version INTEGER PRIMARY KEY);"
         )?;

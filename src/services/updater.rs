@@ -139,7 +139,10 @@ where
     F: FnMut(f64, &str),
 {
     let dest = std::env::temp_dir().join(name);
-    log::info!("Downloading update package from {url} to {dest:?}");
+    log::info!(
+        "Downloading update package from {} to {dest:?}",
+        crate::utils::security::redact_url(url)
+    );
 
     let client = reqwest::Client::new();
     let res = client.get(url)
