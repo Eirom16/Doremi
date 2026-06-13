@@ -226,6 +226,15 @@ void NowPlayingView::setupLayout() {
     connect(queue_panel_, &QueuePanel::item_clicked, this, [](int idx) {
         on_queue_item_clicked(idx);
     });
+    connect(queue_panel_, &QueuePanel::item_removed, this, [](int idx) {
+        on_queue_item_removed(idx);
+    });
+    connect(queue_panel_, &QueuePanel::item_moved, this, [](int from, int to) {
+        on_queue_item_moved(from, to);
+    });
+    connect(queue_panel_, &QueuePanel::clear_requested, this, []() {
+        on_queue_clear_requested();
+    });
 
     // Tab buttons functionality
     connect(lyrics_tab_btn_, &QPushButton::clicked, this, [this]() {
@@ -423,4 +432,3 @@ void NowPlayingView::setSubtitleGlowEffect(bool enabled) {
         lyrics_widget_->setSubtitleGlowEffect(enabled);
     }
 }
-

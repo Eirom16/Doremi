@@ -143,10 +143,15 @@ void ClickableItem::show_context_menu(const QPoint &global_pos) {
     QMenu menu(this);
 
     QAction *play = new QAction(IconProvider::getIcon("play_arrow", c.text_primary, 16), "Reproducir", &menu);
+    QAction *play_next = new QAction(IconProvider::getIcon("playlist_play", c.text_primary, 16), "Reproducir después", &menu);
+    QAction *add_to_queue = new QAction(IconProvider::getIcon("queue_music", c.text_primary, 16), "Añadir al final de la cola", &menu);
     QAction *fav = new QAction(IconProvider::getIcon("favorite", c.accent, 16), "Añadir a favoritos", &menu);
     QAction *download = new QAction(IconProvider::getIcon("download", c.text_primary, 16), "Descargar canción", &menu);
 
     menu.addAction(play);
+    menu.addAction(play_next);
+    menu.addAction(add_to_queue);
+    menu.addSeparator();
     menu.addAction(fav);
     menu.addAction(download);
     menu.addSeparator();
@@ -159,6 +164,10 @@ void ClickableItem::show_context_menu(const QPoint &global_pos) {
     if (chosen == play) {
         emit context_action("play", item_id_);
         emit clicked();
+    } else if (chosen == play_next) {
+        emit context_action("queue_next", item_id_);
+    } else if (chosen == add_to_queue) {
+        emit context_action("queue_end", item_id_);
     } else if (chosen == fav) {
         emit context_action("add_favorite", item_id_);
     } else if (chosen == download) {

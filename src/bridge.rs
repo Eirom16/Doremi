@@ -7,7 +7,7 @@ static PLAYER: OnceCell<Arc<PlayerService>> = OnceCell::new();
 static SEARCH: OnceCell<SearchService> = OnceCell::new();
 
 pub const CONTRACT_MAJOR: u16 = 1;
-pub const CONTRACT_MINOR: u16 = 0;
+pub const CONTRACT_MINOR: u16 = 1;
 
 fn versions_are_compatible(
     required_major: u16,
@@ -126,9 +126,14 @@ pub mod bridge {
         fn on_add_favorite(track: Track);
         fn on_remove_favorite(track_id: &str);
         fn on_download_requested(track: Track);
+        fn on_add_to_queue_next(track: Track);
+        fn on_add_to_queue_end(track: Track);
         fn on_lastfm_auth_requested(api_key: &str, api_secret: &str, username: &str, password: &str);
         fn on_lastfm_disconnect_requested();
         fn on_queue_item_clicked(index: i32);
+        fn on_queue_item_removed(index: i32);
+        fn on_queue_item_moved(from: i32, to: i32);
+        fn on_queue_clear_requested();
         fn on_stats_requested();
         fn on_history_requested();
         fn on_youtube_login_success(headers_json: &str, name: &str, avatar_url: &str);
@@ -584,6 +589,28 @@ pub fn on_search_item_clicked(track: bridge::Track) {
     with_player(|p| p.play_track_dto(track));
 }
 
+fn queue_track_from_dto(track: bridge::Track) -> crate::player::queue::TrackInfo {
+    crate::player::queue::TrackInfo {
+        id: track.id,
+        title: track.title,
+        artist: track.artist,
+        album: track.album,
+        duration_ms: track.duration_ms,
+        thumbnail: track.thumbnail,
+        stream_url: String::new(),
+    }
+}
+
+pub fn on_add_to_queue_next(track: bridge::Track) {
+    log::info!("Adding track {} next in queue", track.id);
+    with_player(|player| player.enqueue_next(queue_track_from_dto(track)));
+}
+
+pub fn on_add_to_queue_end(track: bridge::Track) {
+    log::info!("Adding track {} to end of queue", track.id);
+    with_player(|player| player.enqueue(queue_track_from_dto(track)));
+}
+
 pub fn on_timer_tick() {
     with_player(|p| {
         p.poll();
@@ -860,8 +887,41 @@ pub fn on_lastfm_disconnect_requested() {
 }
 
 pub fn on_queue_item_clicked(index: i32) {
+    if index < 0 {
+        log::warn!("Ignoring invalid queue index {index}");
+        return;
+    }
     log::info!("Queue item clicked: jump to index {index}");
     with_player(|p| p.play_index(index as usize));
+}
+
+pub fn on_queue_item_removed(index: i32) {
+    if index < 0 {
+        log::warn!("Ignoring invalid queue removal index {index}");
+        return;
+    }
+    with_player(|player| {
+        if !player.remove_queue_item(index as usize) {
+            log::warn!("Queue removal index {index} is out of bounds");
+        }
+    });
+}
+
+pub fn on_queue_item_moved(from: i32, to: i32) {
+    if from < 0 || to < 0 {
+        log::warn!("Ignoring invalid queue move {from} -> {to}");
+        return;
+    }
+    with_player(|player| {
+        if !player.move_queue_item(from as usize, to as usize) {
+            log::warn!("Queue move {from} -> {to} is invalid");
+        }
+    });
+}
+
+pub fn on_queue_clear_requested() {
+    log::info!("Clearing playback queue");
+    with_player(|player| player.clear_queue());
 }
 
 pub fn on_stats_requested() {

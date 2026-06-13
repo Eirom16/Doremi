@@ -135,6 +135,10 @@ void SearchView::show_results(const std::vector<Track> &songs,
                     emit add_favorite_requested(track);
                 } else if (action == "download") {
                     emit download_requested(track);
+                } else if (action == "queue_next") {
+                    emit add_to_queue_next_requested(track);
+                } else if (action == "queue_end") {
+                    emit add_to_queue_end_requested(track);
                 }
             });
         }

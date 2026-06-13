@@ -18,6 +18,8 @@ public:
 
 signals:
     void clicked(int index);
+    void remove_requested(int index);
+    void move_requested(int from, int to);
 
 protected:
     void mousePressEvent(QMouseEvent *event) override;
@@ -39,6 +41,9 @@ public:
 
 signals:
     void item_clicked(int index);
+    void item_removed(int index);
+    void item_moved(int from, int to);
+    void clear_requested();
 
 private:
     void clearLayout();

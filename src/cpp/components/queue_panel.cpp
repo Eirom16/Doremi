@@ -78,6 +78,34 @@ QueueRow::QueueRow(int index, const Track &track,
         row_layout->addWidget(playing_icon);
     }
 
+    auto *move_up = new QPushButton(this);
+    move_up->setIcon(IconProvider::getIcon("keyboard_arrow_up", c.text_secondary, 16));
+    move_up->setToolTip("Mover arriba");
+    move_up->setFixedSize(26, 26);
+    move_up->setFlat(true);
+    connect(move_up, &QPushButton::clicked, this, [this]() {
+        if (index_ > 0) emit move_requested(index_, index_ - 1);
+    });
+    row_layout->addWidget(move_up);
+
+    auto *move_down = new QPushButton(this);
+    move_down->setIcon(IconProvider::getIcon("keyboard_arrow_down", c.text_secondary, 16));
+    move_down->setToolTip("Mover abajo");
+    move_down->setFixedSize(26, 26);
+    move_down->setFlat(true);
+    connect(move_down, &QPushButton::clicked, this, [this]() {
+        emit move_requested(index_, index_ + 1);
+    });
+    row_layout->addWidget(move_down);
+
+    auto *remove = new QPushButton(this);
+    remove->setIcon(IconProvider::getIcon("close", c.text_secondary, 16));
+    remove->setToolTip("Quitar de la cola");
+    remove->setFixedSize(26, 26);
+    remove->setFlat(true);
+    connect(remove, &QPushButton::clicked, this, [this]() { emit remove_requested(index_); });
+    row_layout->addWidget(remove);
+
     setLayout(row_layout);
 
     QString bg_color = is_current_ ?
@@ -169,16 +197,30 @@ void QueuePanel::setQueue(const std::vector<Track> &tracks, int current_index) {
         return;
     }
 
-    auto *header = new QLabel(QString("Cola de reproducción (%1 canciones)").arg(tracks.size()), container_);
+    auto *header_widget = new QWidget(container_);
+    auto *header_layout = new QHBoxLayout(header_widget);
+    header_layout->setContentsMargins(0, 0, 0, 4);
+    auto *header = new QLabel(QString("Cola de reproducción (%1 canciones)").arg(tracks.size()), header_widget);
     header->setFont(DesignTokens::getFont("heading_sm", 13));
     header->setStyleSheet(QString("color: %1; font-weight: bold; margin-bottom: 8px;").arg(c.text_secondary.name()));
-    layout_->addWidget(header);
+    auto *clear = new QPushButton("Vaciar", header_widget);
+    clear->setToolTip("Vaciar cola");
+    clear->setFlat(true);
+    clear->setStyleSheet(QString("color: %1;").arg(c.text_secondary.name()));
+    connect(clear, &QPushButton::clicked, this, &QueuePanel::clear_requested);
+    header_layout->addWidget(header, 1);
+    header_layout->addWidget(clear);
+    layout_->addWidget(header_widget);
 
     for (int i = 0; i < static_cast<int>(tracks.size()); ++i) {
         bool is_curr = (i == current_index_);
         auto *row = new QueueRow(i, tracks[i], is_curr, container_);
 
         connect(row, &QueueRow::clicked, this, &QueuePanel::item_clicked);
+        connect(row, &QueueRow::remove_requested, this, &QueuePanel::item_removed);
+        connect(row, &QueueRow::move_requested, this, [this, count = static_cast<int>(tracks.size())](int from, int to) {
+            if (to >= 0 && to < count) emit item_moved(from, to);
+        });
 
         layout_->addWidget(row);
     }

@@ -54,21 +54,50 @@ impl PlayerService {
     // ── Queue management ──
 
     pub fn enqueue(&self, track: TrackInfo) {
-        let mut queue = self.queue.lock().unwrap();
-        queue.enqueue(track);
+        self.queue.lock().unwrap().enqueue(track);
+        self.sync_queue_ui();
     }
 
-    pub fn enqueue_front(&self, track: TrackInfo) {
-        let mut queue = self.queue.lock().unwrap();
-        queue.enqueue_front(track);
+    pub fn enqueue_next(&self, track: TrackInfo) {
+        self.queue.lock().unwrap().enqueue_next(track);
+        self.sync_queue_ui();
     }
 
-    pub fn remove(&self, index: usize) -> Option<TrackInfo> {
-        self.queue.lock().unwrap().remove(index)
+    pub fn remove_queue_item(&self, index: usize) -> bool {
+        let (removed, was_current, replacement) = {
+            let mut queue = self.queue.lock().unwrap();
+            let was_current = !queue.is_empty() && queue.current_index() == index;
+            let removed = queue.remove(index).is_some();
+            let replacement = if removed && was_current { queue.current().cloned() } else { None };
+            (removed, was_current, replacement)
+        };
+
+        if !removed {
+            return false;
+        }
+        if was_current {
+            if let Some(track) = replacement {
+                self.play_track_info(track);
+            } else {
+                self.audio.stop();
+            }
+        }
+        self.sync_queue_ui();
+        true
+    }
+
+    pub fn move_queue_item(&self, from: usize, to: usize) -> bool {
+        let moved = self.queue.lock().unwrap().move_item(from, to);
+        if moved {
+            self.sync_queue_ui();
+        }
+        moved
     }
 
     pub fn clear_queue(&self) {
         self.queue.lock().unwrap().clear();
+        self.audio.stop();
+        self.sync_queue_ui();
     }
 
     pub fn current_track(&self) -> Option<TrackInfo> {
@@ -91,7 +120,7 @@ impl PlayerService {
         {
             let mut queue = self.queue.lock().unwrap();
             queue.clear();
-            queue.enqueue_front(track);
+            queue.enqueue(track);
         }
         self.play_index(0);
     }
@@ -110,7 +139,7 @@ impl PlayerService {
         {
             let mut queue = self.queue.lock().unwrap();
             queue.clear();
-            queue.enqueue_front(track_info);
+            queue.enqueue(track_info);
         }
         self.play_index(0);
     }
@@ -441,27 +470,7 @@ impl PlayerService {
         );
         crate::bridge::bridge::set_playing(is_playing);
 
-        // Sync queue to C++
-        {
-            if let Ok(q) = self.queue.lock() {
-                let mut queue_list = Vec::new();
-                for track in q.all_tracks() {
-                    let mut thumb = track.thumbnail.clone();
-                    if thumb.is_empty() {
-                        thumb = crate::bridge::bridge::get_or_create_thumbnail(&track.title, 0);
-                    }
-                    queue_list.push(crate::bridge::bridge::Track {
-                        id: track.id.clone(),
-                        title: track.title.clone(),
-                        artist: track.artist.clone(),
-                        album: track.album.clone(),
-                        duration_ms: track.duration_ms,
-                        thumbnail: thumb,
-                    });
-                }
-                crate::bridge::bridge::set_playback_queue(queue_list, q.current_index() as i32);
-            }
-        }
+        self.sync_queue_ui();
 
         if let Some(track) = self.current_track() {
             let mut thumb = track.thumbnail.clone();
@@ -570,6 +579,29 @@ impl PlayerService {
                 crate::services::discord::disconnect();
             }
         }
+    }
+
+    fn sync_queue_ui(&self) {
+        let (tracks, current_index) = {
+            let queue = self.queue.lock().unwrap();
+            (queue.all_tracks().to_vec(), queue.current_index() as i32)
+        };
+        let queue_list = tracks.into_iter().map(|track| {
+            let thumbnail = if track.thumbnail.is_empty() {
+                crate::bridge::bridge::get_or_create_thumbnail(&track.title, 0)
+            } else {
+                track.thumbnail
+            };
+            crate::bridge::bridge::Track {
+                id: track.id,
+                title: track.title,
+                artist: track.artist,
+                album: track.album,
+                duration_ms: track.duration_ms,
+                thumbnail,
+            }
+        }).collect();
+        crate::bridge::bridge::set_playback_queue(queue_list, current_index);
     }
 }
 

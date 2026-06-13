@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use rand::seq::SliceRandom;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TrackInfo {
@@ -112,8 +112,13 @@ impl PlaybackQueue {
         }
     }
 
-    pub fn enqueue_front(&mut self, track: TrackInfo) {
-        self.tracks.insert(0, track);
+    pub fn enqueue_next(&mut self, track: TrackInfo) {
+        let insert_at = if self.tracks.is_empty() {
+            0
+        } else {
+            (self.current_index + 1).min(self.tracks.len())
+        };
+        self.tracks.insert(insert_at, track);
         if self.shuffle_mode {
             self.build_shuffle();
         }
@@ -124,12 +129,41 @@ impl PlaybackQueue {
             return None;
         }
         let removed = self.tracks.remove(index);
+        if self.tracks.is_empty() {
+            self.current_index = 0;
+        } else if index < self.current_index {
+            self.current_index -= 1;
+        } else if self.current_index >= self.tracks.len() {
+            self.current_index = self.tracks.len() - 1;
+        }
         if self.shuffle_mode {
             self.build_shuffle();
-        } else if index < self.current_index {
-            self.current_index = self.current_index.saturating_sub(1);
         }
         Some(removed)
+    }
+
+    pub fn move_item(&mut self, from: usize, to: usize) -> bool {
+        if from >= self.tracks.len() || to >= self.tracks.len() || from == to {
+            return false;
+        }
+
+        let current = self.current_index;
+        let track = self.tracks.remove(from);
+        self.tracks.insert(to, track);
+        self.current_index = if current == from {
+            to
+        } else if from < current && to >= current {
+            current - 1
+        } else if from > current && to <= current {
+            current + 1
+        } else {
+            current
+        };
+
+        if self.shuffle_mode {
+            self.build_shuffle();
+        }
+        true
     }
 
     pub fn clear(&mut self) {
@@ -190,5 +224,69 @@ impl PlaybackQueue {
 
     pub fn iter(&self) -> impl Iterator<Item = (usize, &TrackInfo)> {
         self.tracks.iter().enumerate()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn track(id: &str) -> TrackInfo {
+        TrackInfo {
+            id: id.to_string(),
+            title: id.to_string(),
+            artist: String::new(),
+            album: String::new(),
+            duration_ms: 0,
+            thumbnail: String::new(),
+            stream_url: String::new(),
+        }
+    }
+
+    fn ids(queue: &PlaybackQueue) -> Vec<&str> {
+        queue
+            .all_tracks()
+            .iter()
+            .map(|track| track.id.as_str())
+            .collect()
+    }
+
+    #[test]
+    fn enqueue_next_inserts_after_current_track() {
+        let mut queue = PlaybackQueue::new();
+        queue.set_tracks(vec![track("a"), track("b"), track("c")]);
+        queue.jump_to(1);
+
+        queue.enqueue_next(track("next"));
+
+        assert_eq!(ids(&queue), vec!["a", "b", "next", "c"]);
+        assert_eq!(queue.current().map(|track| track.id.as_str()), Some("b"));
+    }
+
+    #[test]
+    fn remove_and_move_preserve_current_track_identity() {
+        let mut queue = PlaybackQueue::new();
+        queue.set_tracks(vec![track("a"), track("b"), track("c"), track("d")]);
+        queue.jump_to(2);
+
+        assert!(queue.move_item(0, 3));
+        assert_eq!(ids(&queue), vec!["b", "c", "d", "a"]);
+        assert_eq!(queue.current().map(|track| track.id.as_str()), Some("c"));
+
+        assert_eq!(queue.remove(0).map(|track| track.id), Some("b".to_string()));
+        assert_eq!(queue.current().map(|track| track.id.as_str()), Some("c"));
+    }
+
+    #[test]
+    fn queue_operations_reject_invalid_indices_and_reset_when_empty() {
+        let mut queue = PlaybackQueue::new();
+        queue.enqueue(track("a"));
+
+        assert!(!queue.move_item(0, 1));
+        assert!(queue.remove(1).is_none());
+        assert_eq!(queue.remove(0).map(|track| track.id), Some("a".to_string()));
+        assert!(queue.is_empty());
+        assert_eq!(queue.current_index(), 0);
+        assert!(queue.jump_to(0).is_none());
     }
 }

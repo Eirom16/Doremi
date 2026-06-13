@@ -28,6 +28,8 @@ signals:
     void search_requested(const std::string &query);
     void add_favorite_requested(Track track);
     void download_requested(Track track);
+    void add_to_queue_next_requested(Track track);
+    void add_to_queue_end_requested(Track track);
 private:
     QLabel *header_;
     QVBoxLayout *results_;

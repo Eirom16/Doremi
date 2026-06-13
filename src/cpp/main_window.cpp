@@ -277,6 +277,10 @@ void DoremiMainWindow::connect_signals() {
         [](Track track) {
             on_download_requested(track);
         });
+    QObject::connect(search_view_, &SearchView::add_to_queue_next_requested, this,
+        [](Track track) { on_add_to_queue_next(track); });
+    QObject::connect(search_view_, &SearchView::add_to_queue_end_requested, this,
+        [](Track track) { on_add_to_queue_end(track); });
 
     QObject::connect(library_view_, &LibraryView::tab_changed, this,
         [](const std::string &tab) {
@@ -294,6 +298,10 @@ void DoremiMainWindow::connect_signals() {
         [](Track track) {
             on_download_requested(track);
         });
+    QObject::connect(library_view_, &LibraryView::add_to_queue_next_requested, this,
+        [](Track track) { on_add_to_queue_next(track); });
+    QObject::connect(library_view_, &LibraryView::add_to_queue_end_requested, this,
+        [](Track track) { on_add_to_queue_end(track); });
 
     QObject::connect(trending_view_, &TrendingView::play_requested, this,
         [](Track track) {
@@ -607,7 +615,7 @@ rust::String get_or_create_thumbnail(rust::Str title, int32_t variant) {
 
 namespace {
 constexpr uint16_t kBridgeContractMajor = 1;
-constexpr uint16_t kBridgeContractMinor = 0;
+constexpr uint16_t kBridgeContractMinor = 1;
 }
 
 uint16_t bridge_contract_major() {

@@ -26,6 +26,8 @@ signals:
     void play_requested(Track track);
     void remove_favorite_requested(const std::string &track_id);
     void download_requested(Track track);
+    void add_to_queue_next_requested(Track track);
+    void add_to_queue_end_requested(Track track);
 private:
     QVBoxLayout *list_;
     std::vector<QPushButton *> tab_btns_;
