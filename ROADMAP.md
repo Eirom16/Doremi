@@ -169,7 +169,7 @@ El port se considera terminado cuando Doremi cubra los flujos reales de Pyrolist
 
 - [x] Completar add next, add to end, remove, move, clear y jump.
 - [x] Implementar drag and drop en el panel de cola.
-- [ ] Preservar correctamente cola original al activar/desactivar shuffle.
+- [x] Preservar correctamente cola original al activar/desactivar shuffle.
 - [ ] Probar repeat off/all/one en bordes y cola vacia.
 - [ ] Construir auto queue usando radio/related real de YouTube Music.
 - [ ] Evitar duplicados excesivos y contenido no reproducible.

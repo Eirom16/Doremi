@@ -17,6 +17,7 @@ pub struct PlaybackQueue {
     tracks: Vec<TrackInfo>,
     current_index: usize,
     shuffled: Vec<usize>,
+    shuffle_position: usize,
     shuffle_mode: bool,
     repeat_mode: RepeatMode,
 }
@@ -34,6 +35,7 @@ impl PlaybackQueue {
             tracks: Vec::new(),
             current_index: 0,
             shuffled: Vec::new(),
+            shuffle_position: 0,
             shuffle_mode: false,
             repeat_mode: RepeatMode::None,
         }
@@ -71,6 +73,9 @@ impl PlaybackQueue {
         self.shuffle_mode = !self.shuffle_mode;
         if self.shuffle_mode {
             self.build_shuffle();
+        } else {
+            self.shuffled.clear();
+            self.shuffle_position = 0;
         }
     }
 
@@ -88,21 +93,20 @@ impl PlaybackQueue {
 
     fn build_shuffle(&mut self) {
         let n = self.tracks.len();
-        self.shuffled = (0..n).collect();
-        self.shuffled.shuffle(&mut rand::rng());
-        if self.current_index < n {
-            self.shuffled.swap(0, self.current_index);
+        if n == 0 {
+            self.shuffled.clear();
+            self.shuffle_position = 0;
+            self.current_index = 0;
+            return;
         }
-        self.current_index = 0;
-    }
 
-    #[allow(dead_code)]
-    fn actual_index(&self) -> usize {
-        if self.shuffle_mode && !self.shuffled.is_empty() {
-            self.shuffled.get(self.current_index).copied().unwrap_or(0)
-        } else {
-            self.current_index
-        }
+        self.current_index = self.current_index.min(n - 1);
+        self.shuffled = (0..n)
+            .filter(|index| *index != self.current_index)
+            .collect();
+        self.shuffled.shuffle(&mut rand::rng());
+        self.shuffled.insert(0, self.current_index);
+        self.shuffle_position = 0;
     }
 
     pub fn enqueue(&mut self, track: TrackInfo) {
@@ -170,6 +174,7 @@ impl PlaybackQueue {
         self.tracks.clear();
         self.current_index = 0;
         self.shuffled.clear();
+        self.shuffle_position = 0;
     }
 
     pub fn next(&mut self) -> Option<&TrackInfo> {
@@ -178,6 +183,17 @@ impl PlaybackQueue {
         }
         if self.repeat_mode == RepeatMode::One {
             return self.tracks.get(self.current_index);
+        }
+        if self.shuffle_mode {
+            if self.shuffle_position + 1 < self.shuffled.len() {
+                self.shuffle_position += 1;
+            } else if self.repeat_mode == RepeatMode::All {
+                self.shuffle_position = 0;
+            } else {
+                return None;
+            }
+            self.current_index = self.shuffled[self.shuffle_position];
+            return self.current();
         }
         if self.current_index + 1 < self.tracks.len() {
             self.current_index += 1;
@@ -193,6 +209,15 @@ impl PlaybackQueue {
         if self.tracks.is_empty() {
             return None;
         }
+        if self.shuffle_mode {
+            if self.shuffle_position > 0 {
+                self.shuffle_position -= 1;
+            } else if self.repeat_mode == RepeatMode::All {
+                self.shuffle_position = self.shuffled.len() - 1;
+            }
+            self.current_index = self.shuffled[self.shuffle_position];
+            return self.current();
+        }
         if self.current_index > 0 {
             self.current_index -= 1;
         } else if self.repeat_mode == RepeatMode::All {
@@ -204,6 +229,13 @@ impl PlaybackQueue {
     pub fn jump_to(&mut self, index: usize) -> Option<&TrackInfo> {
         if index < self.tracks.len() {
             self.current_index = index;
+            if self.shuffle_mode {
+                if let Some(position) = self.shuffled.iter().position(|value| *value == index) {
+                    self.shuffle_position = position;
+                } else {
+                    self.build_shuffle();
+                }
+            }
             self.current()
         } else {
             None
@@ -213,6 +245,7 @@ impl PlaybackQueue {
     pub fn set_tracks(&mut self, tracks: Vec<TrackInfo>) {
         self.tracks = tracks;
         self.current_index = 0;
+        self.shuffle_position = 0;
         if self.shuffle_mode {
             self.build_shuffle();
         }
@@ -288,5 +321,47 @@ mod tests {
         assert!(queue.is_empty());
         assert_eq!(queue.current_index(), 0);
         assert!(queue.jump_to(0).is_none());
+    }
+
+    #[test]
+    fn shuffle_preserves_original_order_and_current_track_when_toggled() {
+        let mut queue = PlaybackQueue::new();
+        queue.set_tracks(vec![track("a"), track("b"), track("c"), track("d")]);
+        queue.jump_to(2);
+        let original: Vec<String> = ids(&queue).into_iter().map(str::to_string).collect();
+
+        queue.toggle_shuffle();
+
+        assert!(queue.shuffle_mode());
+        assert_eq!(ids(&queue), vec!["a", "b", "c", "d"]);
+        assert_eq!(queue.current().map(|track| track.id.as_str()), Some("c"));
+        assert_eq!(queue.current_index(), 2);
+
+        queue.toggle_shuffle();
+
+        assert!(!queue.shuffle_mode());
+        assert_eq!(
+            ids(&queue),
+            original.iter().map(String::as_str).collect::<Vec<_>>()
+        );
+        assert_eq!(queue.current().map(|track| track.id.as_str()), Some("c"));
+        assert_eq!(queue.next().map(|track| track.id.as_str()), Some("d"));
+    }
+
+    #[test]
+    fn shuffle_visits_each_track_once_without_mutating_the_queue() {
+        let mut queue = PlaybackQueue::new();
+        queue.set_tracks(vec![track("a"), track("b"), track("c"), track("d")]);
+        queue.jump_to(1);
+        queue.toggle_shuffle();
+
+        let mut visited = vec![queue.current().unwrap().id.clone()];
+        while let Some(next) = queue.next() {
+            visited.push(next.id.clone());
+        }
+        visited.sort();
+
+        assert_eq!(visited, vec!["a", "b", "c", "d"]);
+        assert_eq!(ids(&queue), vec!["a", "b", "c", "d"]);
     }
 }
