@@ -2,6 +2,11 @@
 #include "../design_tokens.h"
 #include "../icon_provider.h"
 #include <QHBoxLayout>
+#include <QApplication>
+#include <QDrag>
+#include <QDragEnterEvent>
+#include <QDropEvent>
+#include <QMimeData>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPainterPath>
@@ -119,10 +124,36 @@ QueueRow::QueueRow(int index, const Track &track,
 }
 
 void QueueRow::mousePressEvent(QMouseEvent *event) {
-    QWidget::mousePressEvent(event);
     if (event->button() == Qt::LeftButton) {
+        drag_start_position_ = event->position().toPoint();
+        dragging_ = false;
+    }
+    QWidget::mousePressEvent(event);
+}
+
+void QueueRow::mouseMoveEvent(QMouseEvent *event) {
+    if (!(event->buttons() & Qt::LeftButton) ||
+        (event->position().toPoint() - drag_start_position_).manhattanLength() < QApplication::startDragDistance()) {
+        QWidget::mouseMoveEvent(event);
+        return;
+    }
+
+    dragging_ = true;
+    auto *mime = new QMimeData();
+    mime->setData("application/x-doremi-queue-index", QByteArray::number(index_));
+    auto *drag = new QDrag(this);
+    drag->setMimeData(mime);
+    drag->setPixmap(grab());
+    drag->setHotSpot(event->position().toPoint());
+    drag->exec(Qt::MoveAction);
+}
+
+void QueueRow::mouseReleaseEvent(QMouseEvent *event) {
+    if (event->button() == Qt::LeftButton && !dragging_) {
         emit clicked(index_);
     }
+    dragging_ = false;
+    QWidget::mouseReleaseEvent(event);
 }
 
 void QueueRow::enterEvent(QEnterEvent *event) {
@@ -160,6 +191,8 @@ QueuePanel::QueuePanel(QWidget *parent)
     setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     setFrameShape(QFrame::NoFrame);
     setStyleSheet("background: transparent;");
+    viewport()->setAcceptDrops(true);
+    viewport()->installEventFilter(this);
 
     container_ = new QWidget(this);
     container_->setStyleSheet("background: transparent;");
@@ -168,6 +201,12 @@ QueuePanel::QueuePanel(QWidget *parent)
     layout_->setContentsMargins(16, 16, 16, 16);
     layout_->setSpacing(6);
     layout_->setAlignment(Qt::AlignTop);
+
+    drop_indicator_ = new QFrame(container_);
+    drop_indicator_->setFixedHeight(2);
+    drop_indicator_->setStyleSheet(QString("background-color: %1; border-radius: 1px;")
+        .arg(DesignTokens::current().accent.name()));
+    drop_indicator_->hide();
 
     setWidget(container_);
 }
@@ -184,6 +223,8 @@ void QueuePanel::clearLayout() {
 
 void QueuePanel::setQueue(const std::vector<Track> &tracks, int current_index) {
     current_index_ = current_index;
+    queue_size_ = static_cast<int>(tracks.size());
+    hideDropIndicator();
     clearLayout();
 
     const auto &c = DesignTokens::current();
@@ -226,4 +267,83 @@ void QueuePanel::setQueue(const std::vector<Track> &tracks, int current_index) {
     }
 
     layout_->addStretch(1);
+}
+
+bool QueuePanel::eventFilter(QObject *watched, QEvent *event) {
+    if (watched != viewport()) return QScrollArea::eventFilter(watched, event);
+
+    constexpr auto mime_type = "application/x-doremi-queue-index";
+    if (event->type() == QEvent::DragEnter) {
+        auto *drag_event = static_cast<QDragEnterEvent *>(event);
+        if (drag_event->mimeData()->hasFormat(mime_type)) {
+            drag_event->acceptProposedAction();
+            return true;
+        }
+    } else if (event->type() == QEvent::DragMove) {
+        auto *drag_event = static_cast<QDragMoveEvent *>(event);
+        if (drag_event->mimeData()->hasFormat(mime_type)) {
+            bool ok = false;
+            const int source = drag_event->mimeData()->data(mime_type).toInt(&ok);
+            int indicator_y = 0;
+            const int target = ok ? dropIndexAt(drag_event->position().toPoint(), source, &indicator_y) : -1;
+            if (target >= 0) {
+                const QPoint container_pos = container_->mapFrom(viewport(), QPoint(0, indicator_y));
+                drop_indicator_->setGeometry(
+                    layout_->contentsMargins().left(),
+                    container_pos.y() - 1,
+                    qMax(0, container_->width() - layout_->contentsMargins().left() - layout_->contentsMargins().right()),
+                    2);
+                drop_indicator_->raise();
+                drop_indicator_->show();
+                drag_event->acceptProposedAction();
+                return true;
+            }
+        }
+    } else if (event->type() == QEvent::Drop) {
+        auto *drop_event = static_cast<QDropEvent *>(event);
+        if (drop_event->mimeData()->hasFormat(mime_type)) {
+            bool ok = false;
+            const int source = drop_event->mimeData()->data(mime_type).toInt(&ok);
+            const int target = ok ? dropIndexAt(drop_event->position().toPoint(), source, nullptr) : -1;
+            hideDropIndicator();
+            if (target >= 0 && target != source) {
+                emit item_moved(source, target);
+            }
+            drop_event->acceptProposedAction();
+            return true;
+        }
+    } else if (event->type() == QEvent::DragLeave) {
+        hideDropIndicator();
+    }
+
+    return QScrollArea::eventFilter(watched, event);
+}
+
+int QueuePanel::dropIndexAt(const QPoint &viewport_position, int source_index, int *indicator_y) const {
+    if (source_index < 0 || source_index >= queue_size_ || queue_size_ < 2) return -1;
+
+    const QPoint container_position = container_->mapFrom(viewport(), viewport_position);
+    int insertion_index = queue_size_;
+    int line_y = container_->height() - layout_->contentsMargins().bottom();
+
+    const auto rows = container_->findChildren<QueueRow *>(QString(), Qt::FindDirectChildrenOnly);
+    for (auto *row : rows) {
+        const int midpoint = row->geometry().center().y();
+        if (container_position.y() < midpoint) {
+            insertion_index = row->index();
+            line_y = row->geometry().top();
+            break;
+        }
+        line_y = row->geometry().bottom() + 1;
+    }
+
+    if (indicator_y) {
+        *indicator_y = container_->mapTo(viewport(), QPoint(0, line_y)).y();
+    }
+    if (insertion_index > source_index) --insertion_index;
+    return qBound(0, insertion_index, queue_size_ - 1);
+}
+
+void QueuePanel::hideDropIndicator() {
+    if (drop_indicator_) drop_indicator_->hide();
 }
