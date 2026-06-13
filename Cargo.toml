@@ -38,6 +38,7 @@ zbus = { version = "4", features = ["tokio"] }
 discord-rich-presence = "1.1.0"
 md5 = "0.8.0"
 zip = "0.6"
+zeroize = "1"
 
 
 [build-dependencies]

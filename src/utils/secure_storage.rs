@@ -129,6 +129,13 @@ pub fn migrate_legacy_youtube_headers(config_dir: &Path) -> Result<bool, String>
         return Ok(false);
     }
 
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))
+            .map_err(|e| format!("Could not restrict legacy YouTube credentials: {e}"))?;
+    }
+
     let headers = std::fs::read_to_string(&path)
         .map_err(|e| format!("Could not read legacy YouTube credentials: {e}"))?;
     save_youtube_headers(&headers)?;

@@ -1,5 +1,6 @@
 use std::sync::Mutex;
 use once_cell::sync::Lazy;
+use zeroize::Zeroize;
 
 static ENABLED: Lazy<Mutex<bool>> = Lazy::new(|| Mutex::new(false));
 
@@ -18,7 +19,7 @@ pub fn is_enabled() -> bool {
 }
 
 fn generate_sig(params: &[(String, String)], api_secret: &str) -> String {
-    let mut sorted_params = params.to_vec();
+    let mut sorted_params: Vec<_> = params.iter().collect();
     // Sort alphabetically by parameter name
     sorted_params.sort_by(|a, b| a.0.cmp(&b.0));
     
@@ -33,6 +34,7 @@ fn generate_sig(params: &[(String, String)], api_secret: &str) -> String {
     
     // Compute MD5
     let digest = md5::compute(sig_str.as_bytes());
+    sig_str.zeroize();
     format!("{:x}", digest)
 }
 
@@ -43,23 +45,25 @@ pub async fn authenticate(
     password: &str,
 ) -> Result<String, String> {
     let client = reqwest::Client::new();
-    let params = vec![
+    let mut form_data = vec![
         ("method".to_string(), "auth.getMobileSession".to_string()),
         ("api_key".to_string(), api_key.to_string()),
         ("username".to_string(), username.to_string()),
         ("password".to_string(), password.to_string()),
     ];
-    let api_sig = generate_sig(&params, api_secret);
-    
-    let mut form_data = params;
+    let api_sig = generate_sig(&form_data, api_secret);
     form_data.push(("api_sig".to_string(), api_sig));
     form_data.push(("format".to_string(), "json".to_string()));
     
-    let resp = client.post("https://ws.audioscrobbler.com/2.0/")
+    let response = client.post("https://ws.audioscrobbler.com/2.0/")
         .form(&form_data)
         .send()
-        .await
-        .map_err(|e| format!("HTTP request failed: {e}"))?;
+        .await;
+
+    for (_, value) in &mut form_data {
+        value.zeroize();
+    }
+    let resp = response.map_err(|e| format!("HTTP request failed: {e}"))?;
         
     if !resp.status().is_success() {
         return Err(format!("HTTP error status: {}", resp.status()));

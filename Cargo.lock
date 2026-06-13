@@ -870,6 +870,7 @@ dependencies = [
  "toml",
  "vlc-rs",
  "zbus",
+ "zeroize",
  "zip",
 ]
 

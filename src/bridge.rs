@@ -537,14 +537,24 @@ pub fn on_setting_changed(key: &str, value: &str) {
 }
 
 pub fn on_lastfm_auth_requested(api_key: &str, api_secret: &str, username: &str, password: &str) {
+    use zeroize::{Zeroize, Zeroizing};
+
     let api_key = api_key.trim().to_string();
-    let api_secret = api_secret.trim().to_string();
+    let api_secret = Zeroizing::new(api_secret.trim().to_string());
     let username = username.trim().to_string();
-    let password = password.to_string();
+    let mut password = Zeroizing::new(password.to_string());
 
     tokio::spawn(async move {
         bridge::show_notification("Conectando con Last.fm...", "info");
-        match crate::services::lastfm::authenticate(&api_key, &api_secret, &username, &password).await {
+        let auth_result = crate::services::lastfm::authenticate(
+            &api_key,
+            &api_secret,
+            &username,
+            &password,
+        ).await;
+        password.zeroize();
+
+        match auth_result {
             Ok(session_key) => {
                 log::info!("Last.fm auth successful");
                 let dirs = crate::config::paths::AppDirs::global();
@@ -552,7 +562,7 @@ pub fn on_lastfm_auth_requested(api_key: &str, api_secret: &str, username: &str,
 
                 let credentials = crate::utils::secure_storage::LastFmCredentials {
                     api_key: api_key.clone(),
-                    api_secret: api_secret.clone(),
+                    api_secret: api_secret.to_string(),
                     session_key,
                 };
                 if let Err(e) = crate::utils::secure_storage::save_lastfm_credentials(&credentials) {
@@ -801,9 +811,11 @@ pub fn on_youtube_login_success(headers_json: &str, name: &str, avatar_url: &str
         "name": name,
         "avatar_url": avatar_url
     });
-    if let Ok(mut file) = std::fs::File::create(&profile_path) {
-        use std::io::Write;
-        let _ = file.write_all(profile_data.to_string().as_bytes());
+    if let Err(e) = crate::config::settings::write_private_file(
+        &profile_path,
+        profile_data.to_string().as_bytes(),
+    ) {
+        log::warn!("Failed to save YouTube profile: {e}");
     }
 
     // Notify UI
@@ -925,5 +937,3 @@ pub fn import_backup(zip_path: &str) -> bool {
     let path = std::path::Path::new(zip_path);
     crate::utils::backup::import_backup(path)
 }
-
-

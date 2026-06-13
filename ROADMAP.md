@@ -82,9 +82,9 @@ El port se considera terminado cuando Doremi cubra los flujos reales de Pyrolist
 - [x] Hecho - Integrar Secret Service mediante una abstraccion nativa por plataforma.
 - [x] Hecho - Mover API key, API secret y session key de Last.fm fuera de `settings.toml`.
 - [x] Hecho - Mover cookies/headers de YouTube Music fuera de `headers_auth.json`.
-- [ ] Aplicar permisos `0600` durante cualquier migracion temporal.
+- [x] Hecho - Aplicar permisos `0600` durante cualquier migracion temporal y escritura de ajustes/perfil.
 - [x] Hecho - Eliminar archivos legacy de secretos solo despues de confirmar la migracion.
-- [ ] Evitar passwords de Last.fm en logs, errores, bridge o memoria mas tiempo del necesario.
+- [x] Hecho - Evitar passwords de Last.fm en logs, errores, bridge o memoria mas tiempo del necesario.
 - [ ] Redactar headers, cookies, tokens, URLs firmadas y passwords en logging.
 - [x] Hecho - Añadir logout que borre credenciales, estado de sesion y artefactos temporales.
 - [x] Hecho - Definir fallback seguro cuando no exista un keyring disponible: fallar cerrado sin persistir texto plano.

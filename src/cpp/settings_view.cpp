@@ -7,6 +7,7 @@
 #include <QFileDialog>
 #include <QMessageBox>
 #include <QDir>
+#include <algorithm>
 #include "doremi/src/bridge.rs.h"
 
 SettingsView::SettingsView(QWidget *parent)
@@ -498,6 +499,10 @@ SettingsView::SettingsView(QWidget *parent)
             std::string username = lastfm_username_input_->text().toStdString();
             std::string password = lastfm_password_input_->text().toStdString();
             emit lastfm_auth_requested(apiKey, apiSecret, username, password);
+            std::fill(password.begin(), password.end(), '\0');
+            std::fill(apiSecret.begin(), apiSecret.end(), '\0');
+            lastfm_password_input_->clear();
+            lastfm_api_secret_input_->clear();
         } else {
             emit lastfm_disconnect_requested();
         }

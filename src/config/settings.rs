@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::path::Path;
+use std::io::Write;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppearanceSettings {
@@ -322,9 +323,30 @@ impl AppSettings {
             std::fs::create_dir_all(parent)?;
         }
         let data = toml::to_string_pretty(self)?;
-        std::fs::write(path, data)?;
+        write_private_file(path, data.as_bytes())?;
         Ok(())
     }
+
+    pub fn sanitized_toml(&self) -> Result<String, toml::ser::Error> {
+        toml::to_string_pretty(self)
+    }
+}
+
+pub(crate) fn write_private_file(path: &Path, data: &[u8]) -> std::io::Result<()> {
+    let mut options = std::fs::OpenOptions::new();
+    options.create(true).truncate(true).write(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options.open(path)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        file.set_permissions(std::fs::Permissions::from_mode(0o600))?;
+    }
+    file.write_all(data)
 }
 
 #[cfg(test)]
@@ -344,5 +366,21 @@ mod tests {
         assert!(!serialized.contains("api-secret"));
         assert!(!serialized.contains("session-key"));
         assert!(!serialized.contains("client-secret"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn saved_settings_are_private() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let path = std::env::temp_dir().join(format!(
+            "doremi-settings-permissions-{}-{}.toml",
+            std::process::id(),
+            std::thread::current().name().unwrap_or("test")
+        ));
+        AppSettings::default().save(&path).unwrap();
+        let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        let _ = std::fs::remove_file(path);
+        assert_eq!(mode, 0o600);
     }
 }

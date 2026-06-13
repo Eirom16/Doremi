@@ -46,24 +46,19 @@ pub fn export_backup(zip_path: &Path) -> bool {
         }
     }
 
-    // 2. Add settings
+    // 2. Add sanitized settings. Never copy the raw file into a backup.
     if settings_path.exists() {
         if let Err(e) = zip.start_file("settings.toml", options) {
             log::error!("Failed to add settings.toml to zip: {e}");
             return false;
         }
-        let mut settings_file = match File::open(&settings_path) {
-            Ok(f) => f,
+        let buffer = match sanitized_settings_file(&settings_path) {
+            Ok(data) => data.into_bytes(),
             Err(e) => {
-                log::error!("Failed to open settings.toml: {e}");
+                log::error!("Failed to sanitize settings.toml: {e}");
                 return false;
             }
         };
-        let mut buffer = Vec::new();
-        if let Err(e) = settings_file.read_to_end(&mut buffer) {
-            log::error!("Failed to read settings.toml: {e}");
-            return false;
-        }
         if let Err(e) = zip.write_all(&buffer) {
             log::error!("Failed to write settings.toml to zip: {e}");
             return false;
@@ -77,6 +72,12 @@ pub fn export_backup(zip_path: &Path) -> bool {
 
     log::info!("Backup exported successfully");
     true
+}
+
+fn sanitized_settings_file(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
+    let raw = std::fs::read_to_string(path)?;
+    let settings: crate::config::settings::AppSettings = toml::from_str(&raw)?;
+    Ok(settings.sanitized_toml()?)
 }
 
 pub fn import_backup(zip_path: &Path) -> bool {
@@ -147,6 +148,11 @@ pub fn import_backup(zip_path: &Path) -> bool {
             if let Err(e) = std::io::copy(&mut file, &mut outfile) {
                 log::error!("Failed to extract settings.toml: {e}");
             } else {
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    let _ = outfile.set_permissions(std::fs::Permissions::from_mode(0o600));
+                }
                 settings_extracted = true;
             }
         }
@@ -169,4 +175,33 @@ pub fn import_backup(zip_path: &Path) -> bool {
     );
 
     db_extracted || settings_extracted
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn backup_settings_exclude_legacy_secrets() {
+        let path = std::env::temp_dir().join(format!(
+            "doremi-backup-settings-{}.toml",
+            std::process::id()
+        ));
+        let raw = r#"
+google_client_secret = "google-secret"
+
+[integrations]
+lastfm_api_key = "lastfm-key"
+lastfm_api_secret = "lastfm-secret"
+lastfm_session_key = "lastfm-session"
+"#;
+        std::fs::write(&path, raw).unwrap();
+        let sanitized = sanitized_settings_file(&path).unwrap();
+        let _ = std::fs::remove_file(path);
+
+        assert!(!sanitized.contains("google-secret"));
+        assert!(!sanitized.contains("lastfm-key"));
+        assert!(!sanitized.contains("lastfm-secret"));
+        assert!(!sanitized.contains("lastfm-session"));
+    }
 }
