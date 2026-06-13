@@ -1,4 +1,5 @@
 #include "login_dialog.h"
+#include "ffi_utils.h"
 #include "design_tokens.h"
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -174,9 +175,9 @@ void WebLoginDialog::save_cookies_and_close(const QString &avatar_url, const QSt
 
     // Call Rust bridge function
     on_youtube_login_success(
-        headers_json.toStdString(),
-        user_name.toStdString(),
-        avatar_url.toStdString()
+        Ffi::to_std_string(headers_json),
+        Ffi::to_std_string(user_name),
+        Ffi::to_std_string(avatar_url)
     );
 
     emit login_successful(avatar_url, user_name);

@@ -59,6 +59,11 @@ impl DoremiApp {
         log::info!("Theme: {}", self.settings.appearance.theme_mode);
         log::info!("Language: {}", self.settings.language);
 
+        if let Err(error) = bridge::verify_contract() {
+            log::error!("Cannot start Doremi: {error}");
+            return;
+        }
+
         // Initialize player
         let player = Arc::new(PlayerService::new());
         bridge::init_player(player.clone());

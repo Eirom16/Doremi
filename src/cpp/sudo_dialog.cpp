@@ -1,4 +1,5 @@
 #include "sudo_dialog.h"
+#include "ffi_utils.h"
 #include "design_tokens.h"
 #include "icon_provider.h"
 #include <QGraphicsDropShadowEffect>
@@ -209,7 +210,7 @@ void SudoPasswordDialog::on_accept() {
 
     // Run validate password in background thread to avoid freezing UI
     auto *worker = QThread::create([this, pwd]() {
-        bool is_valid = on_validate_sudo_password(pwd.toStdString());
+        bool is_valid = on_validate_sudo_password(Ffi::to_std_string(pwd));
         QMetaObject::invokeMethod(this, [this, pwd, is_valid]() {
             if (is_valid) {
                 password_ = pwd;

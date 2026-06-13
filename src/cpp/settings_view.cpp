@@ -1,4 +1,5 @@
 #include "settings_view.h"
+#include "ffi_utils.h"
 #include "design_tokens.h"
 #include "icon_provider.h"
 #include <QHBoxLayout>
@@ -452,16 +453,16 @@ SettingsView::SettingsView(QWidget *parent)
 
     // Emit signals on changes
     QObject::connect(theme_cmb_, &QComboBox::currentTextChanged, this, [this](const QString &v) {
-        emit setting_changed("theme_mode", v.toStdString());
+        emit setting_changed("theme_mode", Ffi::to_std_string(v));
     });
     QObject::connect(accent_cmb_, &QComboBox::currentTextChanged, this, [this](const QString &v) {
-        emit setting_changed("accent_color", v.toStdString());
+        emit setting_changed("accent_color", Ffi::to_std_string(v));
     });
     QObject::connect(font_cmb_, &QComboBox::currentTextChanged, this, [this](const QString &v) {
-        emit setting_changed("font_size", v.toStdString());
+        emit setting_changed("font_size", Ffi::to_std_string(v));
     });
     QObject::connect(lang_cmb_, &QComboBox::currentTextChanged, this, [this](const QString &v) {
-        emit setting_changed("language", v.toStdString());
+        emit setting_changed("language", Ffi::to_std_string(v));
     });
     QObject::connect(normalize_cb_, &AnimatedToggle::toggled, this, [this](bool v) {
         emit setting_changed("normalize_audio", v ? "true" : "false");
@@ -483,7 +484,7 @@ SettingsView::SettingsView(QWidget *parent)
         emit setting_changed("equalizer_enabled", v ? "true" : "false");
     });
     QObject::connect(eq_preset_cmb_, &QComboBox::currentTextChanged, this, [this](const QString &v) {
-        emit setting_changed("equalizer_preset", v.toStdString());
+        emit setting_changed("equalizer_preset", Ffi::to_std_string(v));
     });
     QObject::connect(discord_rpc_cb_, &AnimatedToggle::toggled, this, [this](bool v) {
         emit setting_changed("discord_rpc_enabled", v ? "true" : "false");
@@ -494,10 +495,10 @@ SettingsView::SettingsView(QWidget *parent)
     });
     QObject::connect(lastfm_auth_btn_, &QPushButton::clicked, this, [this]() {
         if (lastfm_auth_btn_->text() == "Conectar Cuenta") {
-            std::string apiKey = lastfm_api_key_input_->text().toStdString();
-            std::string apiSecret = lastfm_api_secret_input_->text().toStdString();
-            std::string username = lastfm_username_input_->text().toStdString();
-            std::string password = lastfm_password_input_->text().toStdString();
+            std::string apiKey = Ffi::to_std_string(lastfm_api_key_input_->text());
+            std::string apiSecret = Ffi::to_std_string(lastfm_api_secret_input_->text());
+            std::string username = Ffi::to_std_string(lastfm_username_input_->text());
+            std::string password = Ffi::to_std_string(lastfm_password_input_->text());
             emit lastfm_auth_requested(apiKey, apiSecret, username, password);
             std::fill(password.begin(), password.end(), '\0');
             std::fill(apiSecret.begin(), apiSecret.end(), '\0');
@@ -520,7 +521,7 @@ SettingsView::SettingsView(QWidget *parent)
         emit setting_changed("subtitle_font_size", std::to_string(size));
     });
     QObject::connect(sub_line_spacing_cmb_, &QComboBox::currentTextChanged, this, [this](const QString &v) {
-        emit setting_changed("subtitle_line_spacing", v.toStdString());
+        emit setting_changed("subtitle_line_spacing", Ffi::to_std_string(v));
     });
     QObject::connect(sub_auto_scroll_cb_, &AnimatedToggle::toggled, this, [this](bool v) {
         emit setting_changed("subtitle_auto_scroll", v ? "true" : "false");
@@ -566,7 +567,7 @@ SettingsView::SettingsView(QWidget *parent)
             "Zip Files (*.zip)"
         );
         if (!path.isEmpty()) {
-            bool ok = export_backup(path.toStdString());
+            bool ok = export_backup(Ffi::to_std_string(path));
             if (ok) {
                 show_notification(std::string(doremi_tr("backup_export_success")), "success");
             } else {
@@ -583,7 +584,7 @@ SettingsView::SettingsView(QWidget *parent)
             "Zip Files (*.zip)"
         );
         if (!path.isEmpty()) {
-            bool ok = import_backup(path.toStdString());
+            bool ok = import_backup(Ffi::to_std_string(path));
             if (ok) {
                 refresh_storage_sizes();
                 show_notification(std::string(doremi_tr("backup_import_success")), "success");

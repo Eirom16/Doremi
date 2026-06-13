@@ -117,10 +117,10 @@ El port se considera terminado cuando Doremi cubra los flujos reales de Pyrolist
 - [x] Separar IDs de presentacion y texto traducido.
 - [x] Introducir DTOs tipados para resultados, detalles, cola, historial, stats y progreso.
 - [x] No resolver acciones buscando por titulo; usar IDs.
-- [ ] Añadir version o compatibilidad al contrato si el bridge crece.
-- [ ] Centralizar conversiones QString/string y manejo de errores FFI.
-- [ ] Documentar ownership, thread affinity de Qt y callbacks permitidos.
-- [ ] Garantizar que toda mutacion Qt ocurra en el hilo de GUI.
+- [x] Añadir version o compatibilidad al contrato si el bridge crece.
+- [x] Centralizar conversiones QString/string y manejo de errores FFI.
+- [x] Documentar ownership, thread affinity de Qt y callbacks permitidos.
+- [x] Garantizar que toda mutacion Qt ocurra en el hilo de GUI.
 - [ ] Probar strings vacios, Unicode, listas grandes e IDs invalidos.
 
 **Criterio de salida:** las acciones del usuario no dependen de parsear texto visible.

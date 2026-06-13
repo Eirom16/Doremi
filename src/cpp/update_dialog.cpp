@@ -10,6 +10,7 @@
 #include <QTimer>
 #include <QProcess>
 #include <QCoreApplication>
+#include "ffi_utils.h"
 #include "doremi/src/bridge.rs.h"
 
 UpdateDialog *UpdateDialog::active_instance_ = nullptr;
@@ -246,7 +247,9 @@ void UpdateDialog::on_update_clicked() {
     downloading_ = true;
 
     // Call Rust to start downloading
-    on_download_update_requested(asset_url_.toStdString(), asset_name_.toStdString());
+    on_download_update_requested(
+        Ffi::to_std_string(asset_url_),
+        Ffi::to_std_string(asset_name_));
 }
 
 void UpdateDialog::set_download_progress(double percent, const QString &message) {
@@ -282,7 +285,9 @@ void UpdateDialog::set_download_finished(const QString &package_path) {
     progress_label_->setText(QString::fromStdString(std::string(doremi_tr("update_installing"))));
 
     // Call Rust to start installation
-    on_install_update_requested(package_path_.toStdString(), pwd.toStdString());
+    on_install_update_requested(
+        Ffi::to_std_string(package_path_),
+        Ffi::to_std_string(pwd));
 }
 
 void UpdateDialog::set_install_finished(bool success) {
@@ -310,13 +315,18 @@ void UpdateDialog::restart_app() {
 // ── CXX Bridge Callbacks ──
 
 void set_update_available(rust::Str version, rust::Str notes, rust::Str url, rust::Str asset_url, rust::Str asset_name, int64_t asset_size) {
-    QMetaObject::invokeMethod(QCoreApplication::instance(), [=]() {
+    const QString version_copy = Ffi::to_qstring(version);
+    const QString notes_copy = Ffi::to_qstring(notes);
+    const QString url_copy = Ffi::to_qstring(url);
+    const QString asset_url_copy = Ffi::to_qstring(asset_url);
+    const QString asset_name_copy = Ffi::to_qstring(asset_name);
+    Ffi::on_gui("set_update_available", [=]() {
         UpdateDialog::show_if_available(
-            QString::fromUtf8(version.data(), version.size()),
-            QString::fromUtf8(notes.data(), notes.size()),
-            QString::fromUtf8(url.data(), url.size()),
-            QString::fromUtf8(asset_url.data(), asset_url.size()),
-            QString::fromUtf8(asset_name.data(), asset_name.size()),
+            version_copy,
+            notes_copy,
+            url_copy,
+            asset_url_copy,
+            asset_name_copy,
             asset_size
         );
     });
@@ -327,41 +337,36 @@ void set_no_update_available() {
 }
 
 void set_update_download_progress(double percent, rust::Str message) {
-    QMetaObject::invokeMethod(QCoreApplication::instance(), [=]() {
+    const QString message_copy = Ffi::to_qstring(message);
+    Ffi::on_gui("set_update_download_progress", [=]() {
         if (UpdateDialog::active_instance()) {
-            UpdateDialog::active_instance()->set_download_progress(
-                percent,
-                QString::fromUtf8(message.data(), message.size())
-            );
+            UpdateDialog::active_instance()->set_download_progress(percent, message_copy);
         }
     });
 }
 
 void set_update_download_finished(rust::Str package_path) {
-    QMetaObject::invokeMethod(QCoreApplication::instance(), [=]() {
+    const QString path_copy = Ffi::to_qstring(package_path);
+    Ffi::on_gui("set_update_download_finished", [=]() {
         if (UpdateDialog::active_instance()) {
-            UpdateDialog::active_instance()->set_download_finished(
-                QString::fromUtf8(package_path.data(), package_path.size())
-            );
+            UpdateDialog::active_instance()->set_download_finished(path_copy);
         }
     });
 }
 
 void set_update_download_failed(rust::Str error) {
-    QMetaObject::invokeMethod(QCoreApplication::instance(), [=]() {
+    const QString error_copy = Ffi::to_qstring(error);
+    Ffi::on_gui("set_update_download_failed", [=]() {
         if (UpdateDialog::active_instance()) {
-            UpdateDialog::active_instance()->set_download_failed(
-                QString::fromUtf8(error.data(), error.size())
-            );
+            UpdateDialog::active_instance()->set_download_failed(error_copy);
         }
     });
 }
 
 void set_update_install_finished(bool success) {
-    QMetaObject::invokeMethod(QCoreApplication::instance(), [=]() {
+    Ffi::on_gui("set_update_install_finished", [=]() {
         if (UpdateDialog::active_instance()) {
             UpdateDialog::active_instance()->set_install_finished(success);
         }
     });
 }
-

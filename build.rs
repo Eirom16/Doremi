@@ -160,6 +160,7 @@ fn main() {
     println!("cargo:rerun-if-changed=src/bridge.rs");
     println!("cargo:rerun-if-changed=src/cpp/main_window.cpp");
     println!("cargo:rerun-if-changed=src/cpp/main_window.h");
+    println!("cargo:rerun-if-changed=src/cpp/ffi_utils.h");
     println!("cargo:rerun-if-changed=src/cpp/title_bar.cpp");
     println!("cargo:rerun-if-changed=src/cpp/title_bar.h");
     println!("cargo:rerun-if-changed=src/cpp/nav_sidebar.cpp");

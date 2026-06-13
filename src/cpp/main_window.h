@@ -10,6 +10,7 @@
 #include <QMenu>
 #include <QHBoxLayout>
 #include <QVBoxLayout>
+#include <cstdint>
 #include "rust/cxx.h"
 
 struct Track;
@@ -120,6 +121,8 @@ private:
 
 extern DoremiMainWindow *g_main_window;
 
+uint16_t bridge_contract_major();
+uint16_t bridge_contract_minor();
 void create_main_window(rust::Str app_name, rust::Str theme_mode,
                         rust::Str accent_color, int32_t font_size);
 void show_main_window();

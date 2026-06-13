@@ -12,6 +12,7 @@
 #include <QIcon>
 #include <QPixmap>
 #include <QPainter>
+#include <QPointer>
 #include <QScrollBar>
 #include <QFile>
 #include <QCryptographicHash>
@@ -37,11 +38,23 @@
 #include "playlist_detail_view.h"
 #include "welcome_view.h"
 #include "components/theme_transition.h"
+#include "ffi_utils.h"
 #include "doremi/src/bridge.rs.h"
 
 
 
 DoremiMainWindow *g_main_window = nullptr;
+
+namespace {
+template <typename Callback>
+void mutate_main_window(const char *operation, Callback callback) {
+    Ffi::on_gui(operation, [callback = std::move(callback)]() mutable {
+        if (g_main_window) {
+            callback(*g_main_window);
+        }
+    });
+}
+}
 
 DoremiMainWindow::DoremiMainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -490,7 +503,7 @@ void DoremiMainWindow::set_history_data(const rust::Vec<Track> &history, const r
         std::vector<Track> h;
         for (const auto &t : history) h.push_back(t);
         std::vector<std::string> pa;
-        for (const auto &x : played_at) pa.push_back(std::string(x));
+        for (const auto &x : played_at) pa.push_back(Ffi::to_std_string(x));
         history_view_->set_history(h, pa);
     }
 }
@@ -542,56 +555,68 @@ void DoremiMainWindow::setup_tray() {
 // ── Placeholder thumbnail generation ──────────────────────
 
 rust::String get_or_create_thumbnail(rust::Str title, int32_t variant) {
-    std::string t = std::string(title);
-    QByteArray hash = QCryptographicHash::hash(
-        QByteArray::fromStdString(t + std::to_string(variant)),
-        QCryptographicHash::Md5
-    );
-    int r = 50 + (static_cast<unsigned char>(hash[0]) % 156);
-    int g = 30 + (static_cast<unsigned char>(hash[1]) % 120);
-    int b = 70 + (static_cast<unsigned char>(hash[2]) % 140);
+    const std::string title_copy = Ffi::to_std_string(title);
+    const std::string filepath = Ffi::on_gui_blocking(
+        "get_or_create_thumbnail",
+        std::string(),
+        [title_copy, variant]() {
+            QByteArray hash = QCryptographicHash::hash(
+                QByteArray::fromStdString(title_copy + std::to_string(variant)),
+                QCryptographicHash::Md5);
+            int r = 50 + (static_cast<unsigned char>(hash[0]) % 156);
+            int g = 30 + (static_cast<unsigned char>(hash[1]) % 120);
+            int b = 70 + (static_cast<unsigned char>(hash[2]) % 140);
 
-    QColor c1(r, g, b);
-    QColor c2((r + 60) % 256, (g + 40) % 256, (b + 80) % 256);
+            QColor c1(r, g, b);
+            QColor c2((r + 60) % 256, (g + 40) % 256, (b + 80) % 256);
+            QString thumb_dir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + "/artwork";
+            QDir().mkpath(thumb_dir);
+            QString filename = QString("placeholder_%1_%2.png")
+                .arg(QString(hash.toHex().left(12)))
+                .arg(variant);
+            QString filepath = thumb_dir + "/" + filename;
+            if (QFile::exists(filepath)) return Ffi::to_std_string(filepath);
 
-    QString cache_dir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
-    QString thumb_dir = cache_dir + "/artwork";
-    QDir().mkpath(thumb_dir);
+            QPixmap px(128, 128);
+            px.fill(Qt::transparent);
+            QPainter painter(&px);
+            painter.setRenderHint(QPainter::Antialiasing);
+            QLinearGradient gradient(0, 0, 128, 128);
+            gradient.setColorAt(0.0, c1);
+            gradient.setColorAt(1.0, c2);
+            painter.setBrush(gradient);
+            painter.setPen(Qt::NoPen);
+            painter.drawRoundedRect(0, 0, 128, 128, 12, 12);
 
-    QString filename = QString("placeholder_%1_%2.png")
-        .arg(QString(hash.toHex().left(12)))
-        .arg(variant);
-    QString filepath = thumb_dir + "/" + filename;
-
-    if (QFile::exists(filepath))
-        return rust::String(filepath.toStdString());
-
-    QPixmap px(128, 128);
-    px.fill(Qt::transparent);
-    QPainter p(&px);
-    p.setRenderHint(QPainter::Antialiasing);
-
-    QLinearGradient grad(0, 0, 128, 128);
-    grad.setColorAt(0.0, c1);
-    grad.setColorAt(1.0, c2);
-    p.setBrush(grad);
-    p.setPen(Qt::NoPen);
-    p.drawRoundedRect(0, 0, 128, 128, 12, 12);
-
-    QChar first = QString::fromStdString(t).at(0).toUpper();
-    p.setPen(QPen(QColor(255, 255, 255, 200), 2));
-    QFont f = p.font();
-    f.setPixelSize(52);
-    f.setBold(true);
-    p.setFont(f);
-    p.drawText(QRect(0, 0, 128, 128), Qt::AlignCenter, QString(first));
-
-    p.end();
-    px.save(filepath, "PNG");
-    return rust::String(filepath.toStdString());
+            const QString display_title = Ffi::to_qstring(title_copy);
+            const QChar first = display_title.isEmpty() ? QChar('?') : display_title.at(0).toUpper();
+            painter.setPen(QPen(QColor(255, 255, 255, 200), 2));
+            QFont font = painter.font();
+            font.setPixelSize(52);
+            font.setBold(true);
+            painter.setFont(font);
+            painter.drawText(QRect(0, 0, 128, 128), Qt::AlignCenter, QString(first));
+            painter.end();
+            px.save(filepath, "PNG");
+            return Ffi::to_std_string(filepath);
+        });
+    return rust::String(filepath);
 }
 
 // ── Bridge functions ──────────────────────────────────────
+
+namespace {
+constexpr uint16_t kBridgeContractMajor = 1;
+constexpr uint16_t kBridgeContractMinor = 0;
+}
+
+uint16_t bridge_contract_major() {
+    return kBridgeContractMajor;
+}
+
+uint16_t bridge_contract_minor() {
+    return kBridgeContractMinor;
+}
 
 void create_main_window(rust::Str, rust::Str, rust::Str, int32_t) {
     if (!QApplication::instance()) {
@@ -603,76 +628,98 @@ void create_main_window(rust::Str, rust::Str, rust::Str, int32_t) {
 }
 
 void show_main_window() {
-    if (g_main_window) g_main_window->show();
+    mutate_main_window("show_main_window", [](DoremiMainWindow &window) { window.show(); });
 }
 
 void navigate_to(rust::Str route) {
-    if (g_main_window) g_main_window->navigate_to(std::string(route));
+    const std::string route_copy = Ffi::to_std_string(route);
+    mutate_main_window("navigate_to", [route_copy](DoremiMainWindow &window) {
+        window.navigate_to(route_copy);
+    });
 }
 
 void show_notification(rust::Str message, rust::Str kind) {
-    if (g_main_window) g_main_window->show_notif(std::string(message), std::string(kind));
+    const std::string message_copy = Ffi::to_std_string(message);
+    const std::string kind_copy = Ffi::to_std_string(kind);
+    mutate_main_window("show_notification", [message_copy, kind_copy](DoremiMainWindow &window) {
+        window.show_notif(message_copy, kind_copy);
+    });
 }
 
 void apply_theme(rust::Str theme_mode, rust::Str accent_color) {
-    if (!g_main_window) return;
-    
-    std::string t_mode = std::string(theme_mode);
-    std::string a_color = std::string(accent_color);
-    
-    auto apply_fn = [t_mode, a_color]() {
-        bool dark = t_mode != "light";
-        DesignTokens::setTheme(dark ? DesignTokens::Theme::Dark : DesignTokens::Theme::Light);
-        if (!a_color.empty()) {
-            DesignTokens::setAccentColor(QString::fromStdString(a_color));
+    std::string t_mode = Ffi::to_std_string(theme_mode);
+    std::string a_color = Ffi::to_std_string(accent_color);
+    mutate_main_window("apply_theme", [t_mode, a_color](DoremiMainWindow &window) {
+        QPointer<DoremiMainWindow> window_ptr(&window);
+        auto apply_fn = [window_ptr, t_mode, a_color]() {
+            if (!window_ptr) return;
+            bool dark = t_mode != "light";
+            DesignTokens::setTheme(dark ? DesignTokens::Theme::Dark : DesignTokens::Theme::Light);
+            if (!a_color.empty()) {
+                DesignTokens::setAccentColor(Ffi::to_qstring(a_color));
+            }
+            window_ptr->setStyleSheet(DesignTokens::getGlobalStyleSheet());
+            if (window_ptr->title_bar()) window_ptr->title_bar()->update_theme();
+            if (window_ptr->nav_sidebar()) window_ptr->nav_sidebar()->update_theme();
+            if (window_ptr->player_bar()) window_ptr->player_bar()->update_theme();
+        };
+        if (window.isVisible() && window.theme_transition()) {
+            window.theme_transition()->start_transition(apply_fn);
+        } else {
+            apply_fn();
         }
-        
-        g_main_window->setStyleSheet(DesignTokens::getGlobalStyleSheet());
-        
-        if (g_main_window->title_bar()) g_main_window->title_bar()->update_theme();
-        if (g_main_window->nav_sidebar()) g_main_window->nav_sidebar()->update_theme();
-        if (g_main_window->player_bar()) g_main_window->player_bar()->update_theme();
-    };
-
-    if (g_main_window->isVisible() && g_main_window->theme_transition()) {
-        g_main_window->theme_transition()->start_transition(apply_fn);
-    } else {
-        apply_fn();
-    }
+    });
 }
 
 void update_player_state(int32_t state, int32_t pos, int32_t dur) {
-    if (g_main_window) g_main_window->update_player_state(state, pos, dur);
+    mutate_main_window("update_player_state", [=](DoremiMainWindow &window) {
+        window.update_player_state(state, pos, dur);
+    });
 }
 
 void set_mini_player(rust::Str title, rust::Str artist, rust::Str thumb) {
-    if (g_main_window) g_main_window->set_mini_player_info(std::string(title), std::string(artist), std::string(thumb));
+    const std::string title_copy = Ffi::to_std_string(title);
+    const std::string artist_copy = Ffi::to_std_string(artist);
+    const std::string thumb_copy = Ffi::to_std_string(thumb);
+    mutate_main_window("set_mini_player", [=](DoremiMainWindow &window) {
+        window.set_mini_player_info(title_copy, artist_copy, thumb_copy);
+    });
 }
 
 rust::String get_search_bar_text() {
-    if (g_main_window && g_main_window->title_bar())
-        return rust::String(g_main_window->title_bar()->search_text());
-    return rust::String("");
+    const std::string text = Ffi::on_gui_blocking("get_search_bar_text", std::string(), []() {
+        if (g_main_window && g_main_window->title_bar()) {
+            return g_main_window->title_bar()->search_text();
+        }
+        return std::string();
+    });
+    return rust::String(text);
 }
 
 void set_search_bar_text(rust::Str text) {
-    if (g_main_window && g_main_window->title_bar())
-        g_main_window->title_bar()->set_search_text(std::string(text));
+    const std::string text_copy = Ffi::to_std_string(text);
+    mutate_main_window("set_search_bar_text", [text_copy](DoremiMainWindow &window) {
+        if (window.title_bar()) window.title_bar()->set_search_text(text_copy);
+    });
 }
 
 void set_window_title(rust::Str title) {
-    if (g_main_window) g_main_window->setWindowTitle(QString::fromStdString(std::string(title)));
+    const QString title_copy = Ffi::to_qstring(title);
+    mutate_main_window("set_window_title", [title_copy](DoremiMainWindow &window) {
+        window.setWindowTitle(title_copy);
+    });
 }
 
 void set_playing(bool playing) {
-    if (g_main_window) {
-        g_main_window->set_playback_playing(playing);
-    }
+    mutate_main_window("set_playing", [playing](DoremiMainWindow &window) {
+        window.set_playback_playing(playing);
+    });
 }
 
 void set_player_volume(int32_t volume) {
-    if (g_main_window && g_main_window->player_bar())
-        g_main_window->player_bar()->set_volume_value(volume);
+    mutate_main_window("set_player_volume", [volume](DoremiMainWindow &window) {
+        if (window.player_bar()) window.player_bar()->set_volume_value(volume);
+    });
 }
 
 void run_event_loop() {
@@ -681,61 +728,70 @@ void run_event_loop() {
 }
 
 void set_search_history(rust::Vec<rust::String> queries) {
-    if (!g_main_window || !g_main_window->search_view()) return;
     std::vector<std::string> q;
-    for (auto &x : queries) q.push_back(std::string(x));
-    g_main_window->search_view()->set_recent_searches(q);
+    for (auto &x : queries) q.push_back(Ffi::to_std_string(x));
+    mutate_main_window("set_search_history", [q = std::move(q)](DoremiMainWindow &window) {
+        if (window.search_view()) window.search_view()->set_recent_searches(q);
+    });
 }
 
 void set_search_results(rust::Vec<Track> songs, rust::Vec<Artist> artists, rust::Vec<Album> albums) {
-    if (!g_main_window || !g_main_window->search_view()) return;
     std::vector<Track> s;
     for (const auto &x : songs) s.push_back(x);
     std::vector<Artist> a;
     for (const auto &x : artists) a.push_back(x);
     std::vector<Album> al;
     for (const auto &x : albums) al.push_back(x);
-    g_main_window->search_view()->set_results(s, a, al);
+    mutate_main_window("set_search_results", [s = std::move(s), a = std::move(a), al = std::move(al)](DoremiMainWindow &window) {
+        if (window.search_view()) window.search_view()->set_results(s, a, al);
+    });
 }
 
 void add_home_section(rust::Str title, rust::Vec<rust::String> items) {
-    if (!g_main_window || !g_main_window->home_view()) return;
+    const std::string title_copy = Ffi::to_std_string(title);
     std::vector<std::string> v;
-    for (auto &x : items) v.push_back(std::string(x));
-    g_main_window->home_view()->add_section(std::string(title), v);
+    for (auto &x : items) v.push_back(Ffi::to_std_string(x));
+    mutate_main_window("add_home_section", [title_copy, v = std::move(v)](DoremiMainWindow &window) {
+        if (window.home_view()) window.home_view()->add_section(title_copy, v);
+    });
 }
 
 void clear_home_sections() {
-    if (!g_main_window || !g_main_window->home_view()) return;
-    g_main_window->home_view()->clear_sections();
+    mutate_main_window("clear_home_sections", [](DoremiMainWindow &window) {
+        if (window.home_view()) window.home_view()->clear_sections();
+    });
 }
 
 void set_library_albums(rust::Vec<Album> albums) {
-    if (!g_main_window || !g_main_window->library_view()) return;
     std::vector<Album> a;
     for (const auto &x : albums) a.push_back(x);
-    g_main_window->library_view()->set_albums(a);
+    mutate_main_window("set_library_albums", [a = std::move(a)](DoremiMainWindow &window) {
+        if (window.library_view()) window.library_view()->set_albums(a);
+    });
 }
 
 void set_library_artists(rust::Vec<Artist> artists) {
-    if (!g_main_window || !g_main_window->library_view()) return;
     std::vector<Artist> a;
     for (const auto &x : artists) a.push_back(x);
-    g_main_window->library_view()->set_artists(a);
+    mutate_main_window("set_library_artists", [a = std::move(a)](DoremiMainWindow &window) {
+        if (window.library_view()) window.library_view()->set_artists(a);
+    });
 }
 
 void set_library_songs(rust::Vec<Track> songs) {
-    if (!g_main_window || !g_main_window->library_view()) return;
     std::vector<Track> v;
     for (const auto &x : songs) v.push_back(x);
-    g_main_window->library_view()->set_songs(v);
+    mutate_main_window("set_library_songs", [v = std::move(v)](DoremiMainWindow &window) {
+        if (window.library_view()) window.library_view()->set_songs(v);
+    });
 }
 
 void set_library_playlists(rust::Vec<Playlist> playlists) {
-    if (!g_main_window || !g_main_window->library_view()) return;
     std::vector<Playlist> p;
     for (const auto &x : playlists) p.push_back(x);
-    g_main_window->library_view()->set_playlists(p);
+    mutate_main_window("set_library_playlists", [p = std::move(p)](DoremiMainWindow &window) {
+        if (window.library_view()) window.library_view()->set_playlists(p);
+    });
 }
 
 void apply_settings_to_ui() {
@@ -743,172 +799,155 @@ void apply_settings_to_ui() {
 }
 
 void set_settings_theme(rust::Str mode) {
-    if (g_main_window && g_main_window->settings_view())
-        g_main_window->settings_view()->set_theme(std::string(mode));
+    const std::string value = Ffi::to_std_string(mode);
+    mutate_main_window("set_settings_theme", [value](DoremiMainWindow &window) {
+        if (window.settings_view()) window.settings_view()->set_theme(value);
+    });
 }
 
 void set_settings_accent(rust::Str color) {
-    if (g_main_window && g_main_window->settings_view())
-        g_main_window->settings_view()->set_accent(std::string(color));
+    const std::string value = Ffi::to_std_string(color);
+    mutate_main_window("set_settings_accent", [value](DoremiMainWindow &window) {
+        if (window.settings_view()) window.settings_view()->set_accent(value);
+    });
 }
 
 void set_settings_font_size(int32_t size) {
-    if (g_main_window && g_main_window->settings_view())
-        g_main_window->settings_view()->set_font_size(size);
+    mutate_main_window("set_settings_font_size", [size](DoremiMainWindow &window) {
+        if (window.settings_view()) window.settings_view()->set_font_size(size);
+    });
 }
 
 void set_settings_language(rust::Str lang) {
-    if (g_main_window && g_main_window->settings_view())
-        g_main_window->settings_view()->set_language(std::string(lang));
+    const std::string value = Ffi::to_std_string(lang);
+    mutate_main_window("set_settings_language", [value](DoremiMainWindow &window) {
+        if (window.settings_view()) window.settings_view()->set_language(value);
+    });
 }
 
 void set_settings_normalize(bool on) {
-    if (g_main_window && g_main_window->settings_view())
-        g_main_window->settings_view()->set_normalize(on);
+    mutate_main_window("set_settings_normalize", [on](DoremiMainWindow &window) {
+        if (window.settings_view()) window.settings_view()->set_normalize(on);
+    });
 }
 
 void set_settings_crossfade(bool on) {
-    if (g_main_window && g_main_window->settings_view())
-        g_main_window->settings_view()->set_crossfade(on);
+    mutate_main_window("set_settings_crossfade", [on](DoremiMainWindow &window) {
+        if (window.settings_view()) window.settings_view()->set_crossfade(on);
+    });
 }
 
 void set_settings_equalizer_enabled(bool on) {
-    if (g_main_window && g_main_window->settings_view())
-        g_main_window->settings_view()->set_equalizer_enabled(on);
+    mutate_main_window("set_settings_equalizer_enabled", [on](DoremiMainWindow &window) {
+        if (window.settings_view()) window.settings_view()->set_equalizer_enabled(on);
+    });
 }
 
 void set_settings_equalizer_preset(rust::Str preset) {
-    if (g_main_window && g_main_window->settings_view())
-        g_main_window->settings_view()->set_equalizer_preset(std::string(preset));
+    const std::string value = Ffi::to_std_string(preset);
+    mutate_main_window("set_settings_equalizer_preset", [value](DoremiMainWindow &window) {
+        if (window.settings_view()) window.settings_view()->set_equalizer_preset(value);
+    });
 }
 
 void set_settings_sleep_timer(int32_t minutes) {
-    if (g_main_window && g_main_window->settings_view())
-        g_main_window->settings_view()->set_sleep_timer(minutes);
+    mutate_main_window("set_settings_sleep_timer", [minutes](DoremiMainWindow &window) {
+        if (window.settings_view()) window.settings_view()->set_sleep_timer(minutes);
+    });
 }
 
 void set_settings_discord_rpc(bool on) {
-    if (g_main_window && g_main_window->settings_view())
-        g_main_window->settings_view()->set_settings_discord_rpc(on);
+    mutate_main_window("set_settings_discord_rpc", [on](DoremiMainWindow &window) {
+        if (window.settings_view()) window.settings_view()->set_settings_discord_rpc(on);
+    });
 }
 
 void set_settings_lastfm_enabled(bool on) {
-    if (g_main_window && g_main_window->settings_view())
-        g_main_window->settings_view()->set_settings_lastfm_enabled(on);
+    mutate_main_window("set_settings_lastfm_enabled", [on](DoremiMainWindow &window) {
+        if (window.settings_view()) window.settings_view()->set_settings_lastfm_enabled(on);
+    });
 }
 
 void set_settings_lastfm_session(bool authenticated, rust::Str username, rust::Str apiKey, rust::Str apiSecret) {
-    if (g_main_window && g_main_window->settings_view()) {
-        g_main_window->settings_view()->set_settings_lastfm_session(
-            authenticated,
-            std::string(username),
-            std::string(apiKey),
-            std::string(apiSecret)
-        );
-    }
+    const std::string username_copy = Ffi::to_std_string(username);
+    const std::string api_key_copy = Ffi::to_std_string(apiKey);
+    const std::string api_secret_copy = Ffi::to_std_string(apiSecret);
+    mutate_main_window("set_settings_lastfm_session", [=](DoremiMainWindow &window) {
+        if (window.settings_view()) {
+            window.settings_view()->set_settings_lastfm_session(
+                authenticated, username_copy, api_key_copy, api_secret_copy);
+        }
+    });
 }
 
 void set_track_lyrics(rust::Str plain, rust::Str synced) {
-    if (g_main_window) {
-        std::string p_str = std::string(plain);
-        std::string s_str = std::string(synced);
-        QMetaObject::invokeMethod(g_main_window, [=]() {
-            g_main_window->set_track_lyrics(p_str, s_str);
-        }, Qt::QueuedConnection);
-    }
+    const std::string plain_copy = Ffi::to_std_string(plain);
+    const std::string synced_copy = Ffi::to_std_string(synced);
+    mutate_main_window("set_track_lyrics", [=](DoremiMainWindow &window) {
+        window.set_track_lyrics(plain_copy, synced_copy);
+    });
 }
 
 void set_settings_subtitle_alignment(rust::Str align) {
-    if (g_main_window) {
-        std::string a_str = std::string(align);
-        if (g_main_window->settings_view())
-            g_main_window->settings_view()->set_subtitle_alignment(a_str);
-        if (g_main_window->now_playing_view()) {
-            QMetaObject::invokeMethod(g_main_window->now_playing_view(), [=]() {
-                g_main_window->now_playing_view()->setSubtitleAlignment(a_str);
-            }, Qt::QueuedConnection);
-        }
-    }
+    const std::string value = Ffi::to_std_string(align);
+    mutate_main_window("set_settings_subtitle_alignment", [value](DoremiMainWindow &window) {
+        if (window.settings_view()) window.settings_view()->set_subtitle_alignment(value);
+        if (window.now_playing_view()) window.now_playing_view()->setSubtitleAlignment(value);
+    });
 }
 
 void set_settings_subtitle_font_size(int32_t size) {
-    if (g_main_window) {
-        if (g_main_window->settings_view())
-            g_main_window->settings_view()->set_subtitle_font_size(size);
-        if (g_main_window->now_playing_view()) {
-            QMetaObject::invokeMethod(g_main_window->now_playing_view(), [=]() {
-                g_main_window->now_playing_view()->setSubtitleFontSize(size);
-            }, Qt::QueuedConnection);
-        }
-    }
+    mutate_main_window("set_settings_subtitle_font_size", [size](DoremiMainWindow &window) {
+        if (window.settings_view()) window.settings_view()->set_subtitle_font_size(size);
+        if (window.now_playing_view()) window.now_playing_view()->setSubtitleFontSize(size);
+    });
 }
 
 void set_settings_subtitle_line_spacing(double spacing) {
-    if (g_main_window) {
-        if (g_main_window->settings_view())
-            g_main_window->settings_view()->set_subtitle_line_spacing(spacing);
-        if (g_main_window->now_playing_view()) {
-            QMetaObject::invokeMethod(g_main_window->now_playing_view(), [=]() {
-                g_main_window->now_playing_view()->setSubtitleLineSpacing(spacing);
-            }, Qt::QueuedConnection);
-        }
-    }
+    mutate_main_window("set_settings_subtitle_line_spacing", [spacing](DoremiMainWindow &window) {
+        if (window.settings_view()) window.settings_view()->set_subtitle_line_spacing(spacing);
+        if (window.now_playing_view()) window.now_playing_view()->setSubtitleLineSpacing(spacing);
+    });
 }
 
 void set_settings_subtitle_auto_scroll(bool on) {
-    if (g_main_window) {
-        if (g_main_window->settings_view())
-            g_main_window->settings_view()->set_subtitle_auto_scroll(on);
-        if (g_main_window->now_playing_view()) {
-            QMetaObject::invokeMethod(g_main_window->now_playing_view(), [=]() {
-                g_main_window->now_playing_view()->setSubtitleAutoScroll(on);
-            }, Qt::QueuedConnection);
-        }
-    }
+    mutate_main_window("set_settings_subtitle_auto_scroll", [on](DoremiMainWindow &window) {
+        if (window.settings_view()) window.settings_view()->set_subtitle_auto_scroll(on);
+        if (window.now_playing_view()) window.now_playing_view()->setSubtitleAutoScroll(on);
+    });
 }
 
 void set_settings_subtitle_glow_effect(bool on) {
-    if (g_main_window) {
-        if (g_main_window->settings_view())
-            g_main_window->settings_view()->set_subtitle_glow_effect(on);
-        if (g_main_window->now_playing_view()) {
-            QMetaObject::invokeMethod(g_main_window->now_playing_view(), [=]() {
-                g_main_window->now_playing_view()->setSubtitleGlowEffect(on);
-            }, Qt::QueuedConnection);
-        }
-    }
+    mutate_main_window("set_settings_subtitle_glow_effect", [on](DoremiMainWindow &window) {
+        if (window.settings_view()) window.settings_view()->set_subtitle_glow_effect(on);
+        if (window.now_playing_view()) window.now_playing_view()->setSubtitleGlowEffect(on);
+    });
 }
 
 
 
 void set_dominant_colors(rust::Vec<rust::String> colors) {
-    if (g_main_window) {
-        std::vector<std::string> c_vec;
-        for (const auto &c : colors) c_vec.push_back(std::string(c));
-        QMetaObject::invokeMethod(g_main_window, [=]() {
-            g_main_window->set_dominant_colors(c_vec);
-        }, Qt::QueuedConnection);
-    }
+    std::vector<std::string> values;
+    for (const auto &color : colors) values.push_back(Ffi::to_std_string(color));
+    mutate_main_window("set_dominant_colors", [values = std::move(values)](DoremiMainWindow &window) {
+        window.set_dominant_colors(values);
+    });
 }
 
 void set_playback_queue(rust::Vec<Track> queue, int32_t current_index) {
-    if (g_main_window) {
-        std::vector<Track> q;
-        for (const auto &t : queue) q.push_back(t);
-        QMetaObject::invokeMethod(g_main_window, [=]() {
-            rust::Vec<Track> r_queue;
-            for (const auto &t : q) r_queue.push_back(t);
-            g_main_window->set_playback_queue(r_queue, current_index);
-        }, Qt::QueuedConnection);
-    }
+    std::vector<Track> tracks;
+    for (const auto &track : queue) tracks.push_back(track);
+    mutate_main_window("set_playback_queue", [tracks = std::move(tracks), current_index](DoremiMainWindow &window) {
+        rust::Vec<Track> queue_copy;
+        for (const auto &track : tracks) queue_copy.push_back(track);
+        window.set_playback_queue(queue_copy, current_index);
+    });
 }
 
 void set_stats_data(StatsData stats) {
-    if (g_main_window) {
-        QMetaObject::invokeMethod(g_main_window, [=]() {
-            g_main_window->set_stats_data(stats);
-        }, Qt::QueuedConnection);
-    }
+    mutate_main_window("set_stats_data", [stats = std::move(stats)](DoremiMainWindow &window) {
+        window.set_stats_data(stats);
+    });
 }
 
 
@@ -916,17 +955,17 @@ void set_stats_data(StatsData stats) {
 // ── Player state sync ──
 
 void set_player_shuffle(bool on) {
-    if (g_main_window) {
-        if (g_main_window->player_bar()) g_main_window->player_bar()->set_shuffle(on);
-        if (g_main_window->now_playing_view()) g_main_window->now_playing_view()->setShuffle(on);
-    }
+    mutate_main_window("set_player_shuffle", [on](DoremiMainWindow &window) {
+        if (window.player_bar()) window.player_bar()->set_shuffle(on);
+        if (window.now_playing_view()) window.now_playing_view()->setShuffle(on);
+    });
 }
 
 void set_player_repeat(int32_t mode) {
-    if (g_main_window) {
-        if (g_main_window->player_bar()) g_main_window->player_bar()->set_repeat_mode(mode);
-        if (g_main_window->now_playing_view()) g_main_window->now_playing_view()->setRepeatMode(mode);
-    }
+    mutate_main_window("set_player_repeat", [mode](DoremiMainWindow &window) {
+        if (window.player_bar()) window.player_bar()->set_repeat_mode(mode);
+        if (window.now_playing_view()) window.now_playing_view()->setRepeatMode(mode);
+    });
 }
 
 
@@ -935,15 +974,18 @@ void set_player_repeat(int32_t mode) {
 void set_trending_items(rust::Vec<rust::String> titles,
                          rust::Vec<rust::String> subtitles,
                          rust::Vec<rust::String> thumbnails) {
-    if (!g_main_window || !g_main_window->trending_view()) return;
-    g_main_window->trending_view()->clear_items();
     std::vector<std::string> t, s, th;
-    for (auto &x : titles) t.push_back(std::string(x));
-    for (auto &x : subtitles) s.push_back(std::string(x));
-    for (auto &x : thumbnails) th.push_back(std::string(x));
-    size_t n = std::min({t.size(), s.size(), th.size()});
-    for (size_t i = 0; i < n; ++i)
-        g_main_window->trending_view()->add_item(t[i], s[i], th[i]);
+    for (auto &x : titles) t.push_back(Ffi::to_std_string(x));
+    for (auto &x : subtitles) s.push_back(Ffi::to_std_string(x));
+    for (auto &x : thumbnails) th.push_back(Ffi::to_std_string(x));
+    mutate_main_window("set_trending_items", [t = std::move(t), s = std::move(s), th = std::move(th)](DoremiMainWindow &window) {
+        if (!window.trending_view()) return;
+        window.trending_view()->clear_items();
+        const size_t count = std::min({t.size(), s.size(), th.size()});
+        for (size_t i = 0; i < count; ++i) {
+            window.trending_view()->add_item(t[i], s[i], th[i]);
+        }
+    });
 }
 
 // ── Downloads ──
@@ -951,86 +993,87 @@ void set_trending_items(rust::Vec<rust::String> titles,
 void set_downloads_list(rust::Vec<rust::String> titles,
                          rust::Vec<rust::String> artists,
                          rust::Vec<rust::String> thumbnails) {
-    if (!g_main_window || !g_main_window->downloads_view()) return;
     std::vector<std::string> t, a, th;
-    for (auto &x : titles) t.push_back(std::string(x));
-    for (auto &x : artists) a.push_back(std::string(x));
-    for (auto &x : thumbnails) th.push_back(std::string(x));
-    g_main_window->downloads_view()->set_downloads(t, a, th);
+    for (auto &x : titles) t.push_back(Ffi::to_std_string(x));
+    for (auto &x : artists) a.push_back(Ffi::to_std_string(x));
+    for (auto &x : thumbnails) th.push_back(Ffi::to_std_string(x));
+    mutate_main_window("set_downloads_list", [t = std::move(t), a = std::move(a), th = std::move(th)](DoremiMainWindow &window) {
+        if (window.downloads_view()) window.downloads_view()->set_downloads(t, a, th);
+    });
 }
 
 // ── History ──
 
 void set_history_data(rust::Vec<Track> history, rust::Vec<rust::String> played_at) {
-    if (!g_main_window || !g_main_window->history_view()) return;
     std::vector<Track> h;
     for (const auto &t : history) h.push_back(t);
     std::vector<std::string> pa;
-    for (const auto &x : played_at) pa.push_back(std::string(x));
-    QMetaObject::invokeMethod(g_main_window, [=]() {
+    for (const auto &x : played_at) pa.push_back(Ffi::to_std_string(x));
+    mutate_main_window("set_history_data", [h = std::move(h), pa = std::move(pa)](DoremiMainWindow &window) {
         rust::Vec<Track> r_history;
         for (const auto &t : h) r_history.push_back(t);
         rust::Vec<rust::String> r_played_at;
         for (const auto &x : pa) r_played_at.push_back(x);
-        g_main_window->set_history_data(r_history, r_played_at);
-    }, Qt::QueuedConnection);
+        window.set_history_data(r_history, r_played_at);
+    });
 }
 
 // ── Album Detail ──
 
 void set_album_detail(Album album, rust::Vec<Track> tracks) {
-    if (!g_main_window || !g_main_window->album_detail_view()) return;
     std::vector<Track> tt;
     for (const auto &x : tracks) tt.push_back(x);
-    QMetaObject::invokeMethod(g_main_window, [=]() {
+    mutate_main_window("set_album_detail", [album = std::move(album), tt = std::move(tt)](DoremiMainWindow &window) {
+        if (!window.album_detail_view()) return;
         std::vector<Track> r_tracks;
         for (const auto &t : tt) r_tracks.push_back(t);
-        g_main_window->album_detail_view()->set_album_info(album);
-        g_main_window->album_detail_view()->set_album_tracks(r_tracks);
-        g_main_window->navigate_to("album_detail");
-    }, Qt::QueuedConnection);
+        window.album_detail_view()->set_album_info(album);
+        window.album_detail_view()->set_album_tracks(r_tracks);
+        window.navigate_to("album_detail");
+    });
 }
 
 // ── Artist Detail ──
 
 void set_artist_detail(Artist artist, rust::Vec<Track> tracks, rust::Vec<Album> albums) {
-    if (!g_main_window || !g_main_window->artist_detail_view()) return;
     std::vector<Track> tt;
     for (const auto &x : tracks) tt.push_back(x);
     std::vector<Album> al;
     for (const auto &x : albums) al.push_back(x);
-    QMetaObject::invokeMethod(g_main_window, [=]() {
+    mutate_main_window("set_artist_detail", [artist = std::move(artist), tt = std::move(tt), al = std::move(al)](DoremiMainWindow &window) {
+        if (!window.artist_detail_view()) return;
         std::vector<Track> r_tracks;
         for (const auto &t : tt) r_tracks.push_back(t);
         std::vector<Album> r_albums;
         for (const auto &a : al) r_albums.push_back(a);
-        g_main_window->artist_detail_view()->set_artist_info(artist);
-        g_main_window->artist_detail_view()->set_artist_tracks(r_tracks, r_albums);
-        g_main_window->navigate_to("artist_detail");
-    }, Qt::QueuedConnection);
+        window.artist_detail_view()->set_artist_info(artist);
+        window.artist_detail_view()->set_artist_tracks(r_tracks, r_albums);
+        window.navigate_to("artist_detail");
+    });
 }
 
 // ── Playlist Detail ──
 
 void set_playlist_detail(Playlist playlist, rust::Vec<Track> tracks) {
-    if (!g_main_window || !g_main_window->playlist_detail_view()) return;
     std::vector<Track> tt;
     for (const auto &x : tracks) tt.push_back(x);
-    QMetaObject::invokeMethod(g_main_window, [=]() {
+    mutate_main_window("set_playlist_detail", [playlist = std::move(playlist), tt = std::move(tt)](DoremiMainWindow &window) {
+        if (!window.playlist_detail_view()) return;
         std::vector<Track> r_tracks;
         for (const auto &t : tt) r_tracks.push_back(t);
-        g_main_window->playlist_detail_view()->set_playlist_info(playlist);
-        g_main_window->playlist_detail_view()->set_playlist_tracks(r_tracks);
-        g_main_window->navigate_to("playlist_detail");
-    }, Qt::QueuedConnection);
+        window.playlist_detail_view()->set_playlist_info(playlist);
+        window.playlist_detail_view()->set_playlist_tracks(r_tracks);
+        window.navigate_to("playlist_detail");
+    });
 }
 
 void update_youtube_auth_state(bool authenticated, rust::Str name, rust::Str avatar_url) {
-    if (!g_main_window) return;
-    if (g_main_window->nav_sidebar()) {
-        g_main_window->nav_sidebar()->update_profile(authenticated, std::string(name), std::string(avatar_url));
-    }
-    if (g_main_window->welcome_view()) {
-        g_main_window->welcome_view()->update_theme();
-    }
+    const std::string name_copy = Ffi::to_std_string(name);
+    const std::string avatar_copy = Ffi::to_std_string(avatar_url);
+    mutate_main_window("update_youtube_auth_state", [=](DoremiMainWindow &window) {
+        if (window.nav_sidebar()) {
+            window.nav_sidebar()->update_profile(authenticated, name_copy, avatar_copy);
+        }
+        if (window.welcome_view()) window.welcome_view()->update_theme();
+    });
 }

@@ -6,6 +6,45 @@ use crate::services::search::SearchService;
 static PLAYER: OnceCell<Arc<PlayerService>> = OnceCell::new();
 static SEARCH: OnceCell<SearchService> = OnceCell::new();
 
+pub const CONTRACT_MAJOR: u16 = 1;
+pub const CONTRACT_MINOR: u16 = 0;
+
+fn versions_are_compatible(
+    required_major: u16,
+    required_minor: u16,
+    provided_major: u16,
+    provided_minor: u16,
+) -> bool {
+    provided_major == required_major && provided_minor >= required_minor
+}
+
+pub fn is_contract_compatible(cpp_major: u16, cpp_minor: u16) -> bool {
+    versions_are_compatible(CONTRACT_MAJOR, CONTRACT_MINOR, cpp_major, cpp_minor)
+}
+
+pub fn verify_contract() -> Result<(), String> {
+    let cpp_major = bridge::bridge_contract_major();
+    let cpp_minor = bridge::bridge_contract_minor();
+    if is_contract_compatible(cpp_major, cpp_minor) {
+        log::info!(
+            "Rust/C++ bridge contract compatible: Rust {}.{}, C++ {}.{}",
+            CONTRACT_MAJOR,
+            CONTRACT_MINOR,
+            cpp_major,
+            cpp_minor
+        );
+        Ok(())
+    } else {
+        Err(format!(
+            "incompatible Rust/C++ bridge contract: Rust requires {}.{}, C++ provides {}.{}",
+            CONTRACT_MAJOR,
+            CONTRACT_MINOR,
+            cpp_major,
+            cpp_minor
+        ))
+    }
+}
+
 pub fn init_player(player: Arc<PlayerService>) {
     let _ = PLAYER.set(player);
 }
@@ -111,6 +150,8 @@ pub mod bridge {
     // C++ functions called from Rust
     unsafe extern "C++" {
         include!("main_window.h");
+        fn bridge_contract_major() -> u16;
+        fn bridge_contract_minor() -> u16;
         fn create_main_window(app_name: &str, theme_mode: &str,
                               accent_color: &str, font_size: i32);
         fn show_main_window();
@@ -346,7 +387,18 @@ pub fn on_library_tab_changed(tab_key: &str) {
 
 #[cfg(test)]
 mod contract_tests {
-    use super::LibraryTab;
+    use super::{
+        is_contract_compatible, versions_are_compatible, LibraryTab, CONTRACT_MAJOR,
+        CONTRACT_MINOR,
+    };
+
+    #[test]
+    fn bridge_contract_rejects_incompatible_versions() {
+        assert!(is_contract_compatible(CONTRACT_MAJOR, CONTRACT_MINOR));
+        assert!(is_contract_compatible(CONTRACT_MAJOR, CONTRACT_MINOR + 1));
+        assert!(!is_contract_compatible(CONTRACT_MAJOR + 1, CONTRACT_MINOR));
+        assert!(!versions_are_compatible(1, 2, 1, 1));
+    }
 
     #[test]
     fn library_tabs_use_stable_non_localized_keys() {
