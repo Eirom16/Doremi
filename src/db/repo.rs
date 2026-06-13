@@ -401,36 +401,6 @@ impl DownloadsRepo {
         })
     }
 
-    pub fn find_by_title_artist(title: &str, artist: &str) -> SqlResult<Option<DownloadTrack>> {
-        with_db(|conn| {
-            let mut stmt = conn.prepare(
-                "SELECT video_id, title, artist, album, file_path, thumbnail_url, duration_ms, downloaded_at,
-                        parent_playlist_id, parent_playlist_title, parent_playlist_thumbnail_url
-                 FROM downloads WHERE title = ?1 AND artist = ?2 LIMIT 1"
-            )?;
-            let mut rows = stmt.query_map(params![title, artist], |r| {
-                Ok(DownloadTrack {
-                    video_id: r.get(0)?,
-                    title: r.get(1)?,
-                    artist: r.get(2)?,
-                    album: r.get(3)?,
-                    file_path: r.get(4)?,
-                    thumbnail_url: r.get(5)?,
-                    duration_ms: r.get(6)?,
-                    downloaded_at: r.get(7)?,
-                    parent_playlist_id: r.get(8)?,
-                    parent_playlist_title: r.get(9)?,
-                    parent_playlist_thumbnail_url: r.get(10)?,
-                })
-            })?;
-            if let Some(res) = rows.next() {
-                res.map(Some)
-            } else {
-                Ok(None)
-            }
-        })
-    }
-
     pub fn is_downloaded(video_id: &str) -> SqlResult<bool> {
         with_db(|conn| {
             conn.query_row(
@@ -586,6 +556,30 @@ mod tests {
                 "SELECT COUNT(*) FROM search_history", [], |r| r.get(0)
             ).unwrap();
             assert_eq!(count, 2);
+        });
+    }
+
+    #[test]
+    fn downloads_with_duplicate_text_are_selected_by_id() {
+        with_test_conn(|conn| {
+            conn.execute(
+                "INSERT INTO downloads (video_id, title, artist, file_path)
+                 VALUES ('video-a', 'Same Song', 'Same Artist', '/tmp/a.m4a')",
+                [],
+            ).unwrap();
+            conn.execute(
+                "INSERT INTO downloads (video_id, title, artist, file_path)
+                 VALUES ('video-b', 'Same Song', 'Same Artist', '/tmp/b.m4a')",
+                [],
+            ).unwrap();
+
+            let path: String = conn.query_row(
+                "SELECT file_path FROM downloads WHERE video_id = ?1",
+                params!["video-b"],
+                |row| row.get(0),
+            ).unwrap();
+
+            assert_eq!(path, "/tmp/b.m4a");
         });
     }
 }

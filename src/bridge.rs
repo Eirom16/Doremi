@@ -122,7 +122,7 @@ pub mod bridge {
         fn get_search_bar_text() -> String;
         fn set_search_bar_text(text: &str);
         fn set_window_title(title: &str);
-        fn set_playing(playing: &str);
+        fn set_playing(playing: bool);
         fn run_event_loop();
         fn set_player_volume(volume: i32);
         fn set_library_songs(songs: Vec<Track>);
@@ -255,11 +255,36 @@ pub fn on_app_quit() {
     let _ = crate::db::take_connection();
 }
 
-pub fn on_library_tab_changed(tab: &str) {
-    log::info!("Library tab changed: {tab}");
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LibraryTab {
+    Songs,
+    Albums,
+    Artists,
+    Playlists,
+}
+
+impl LibraryTab {
+    fn from_key(key: &str) -> Option<Self> {
+        match key {
+            "songs" => Some(Self::Songs),
+            "albums" => Some(Self::Albums),
+            "artists" => Some(Self::Artists),
+            "playlists" => Some(Self::Playlists),
+            _ => None,
+        }
+    }
+}
+
+pub fn on_library_tab_changed(tab_key: &str) {
+    log::info!("Library tab changed: {tab_key}");
     use crate::db::repo::*;
+    let Some(tab) = LibraryTab::from_key(tab_key) else {
+        log::warn!("Ignoring unknown library tab key: {tab_key}");
+        return;
+    };
+
     match tab {
-        "Canciones" => {
+        LibraryTab::Songs => {
             if let Ok(tracks) = FavoritesRepo::all_tracks() {
                 let songs: Vec<crate::bridge::bridge::Track> = tracks.iter()
                     .map(|t| crate::bridge::bridge::Track {
@@ -273,7 +298,7 @@ pub fn on_library_tab_changed(tab: &str) {
                 crate::bridge::bridge::set_library_songs(songs);
             }
         }
-        "Álbumes" => {
+        LibraryTab::Albums => {
             if let Ok(albums) = FavoritesRepo::all_albums() {
                 let a_list: Vec<crate::bridge::bridge::Album> = albums.iter()
                     .map(|a| crate::bridge::bridge::Album {
@@ -287,7 +312,7 @@ pub fn on_library_tab_changed(tab: &str) {
                 crate::bridge::bridge::set_library_albums(a_list);
             }
         }
-        "Artistas" => {
+        LibraryTab::Artists => {
             if let Ok(artists) = FavoritesRepo::all_artists() {
                 let art_list: Vec<crate::bridge::bridge::Artist> = artists.iter()
                     .map(|a| crate::bridge::bridge::Artist {
@@ -300,7 +325,7 @@ pub fn on_library_tab_changed(tab: &str) {
                 crate::bridge::bridge::set_library_artists(art_list);
             }
         }
-        "Playlists" => {
+        LibraryTab::Playlists => {
             if let Ok(playlists) = PlaylistRepo::all() {
                 let p_list: Vec<crate::bridge::bridge::Playlist> = playlists.iter()
                     .map(|p| {
@@ -316,7 +341,22 @@ pub fn on_library_tab_changed(tab: &str) {
                 crate::bridge::bridge::set_library_playlists(p_list);
             }
         }
-        _ => {}
+    }
+}
+
+#[cfg(test)]
+mod contract_tests {
+    use super::LibraryTab;
+
+    #[test]
+    fn library_tabs_use_stable_non_localized_keys() {
+        assert_eq!(LibraryTab::from_key("songs"), Some(LibraryTab::Songs));
+        assert_eq!(LibraryTab::from_key("albums"), Some(LibraryTab::Albums));
+        assert_eq!(LibraryTab::from_key("artists"), Some(LibraryTab::Artists));
+        assert_eq!(LibraryTab::from_key("playlists"), Some(LibraryTab::Playlists));
+        assert_eq!(LibraryTab::from_key("Canciones"), None);
+        assert_eq!(LibraryTab::from_key("Songs"), None);
+        assert_eq!(LibraryTab::from_key(""), None);
     }
 }
 

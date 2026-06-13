@@ -131,7 +131,7 @@ void set_mini_player(rust::Str title, rust::Str artist, rust::Str thumb);
 rust::String get_search_bar_text();
 void set_search_bar_text(rust::Str text);
 void set_window_title(rust::Str title);
-void set_playing(rust::Str playing);
+void set_playing(bool playing);
 void set_player_volume(int32_t volume);
 void run_event_loop();
 void set_search_results(rust::Vec<Track> songs, rust::Vec<Artist> artists, rust::Vec<Album> albums);
@@ -198,4 +198,3 @@ void set_update_install_finished(bool success);
 
 #include "doremi/src/bridge.rs.h"
 #endif
-

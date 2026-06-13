@@ -664,10 +664,9 @@ void set_window_title(rust::Str title) {
     if (g_main_window) g_main_window->setWindowTitle(QString::fromStdString(std::string(title)));
 }
 
-void set_playing(rust::Str playing) {
+void set_playing(bool playing) {
     if (g_main_window) {
-        bool is_playing = std::string(playing) == "true";
-        g_main_window->set_playback_playing(is_playing);
+        g_main_window->set_playback_playing(playing);
     }
 }
 

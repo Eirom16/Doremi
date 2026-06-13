@@ -139,18 +139,13 @@ impl PlayerService {
                 local_path = Some(download.file_path);
             }
         }
-        if local_path.is_none() {
-            if let Ok(Some(download)) = crate::db::repo::DownloadsRepo::find_by_title_artist(&t.title, &t.artist) {
-                local_path = Some(download.file_path);
-            }
-        }
 
         if let Some(path) = local_path {
             log::info!("Playing offline downloaded track from path: {}", path);
             {
                 if let Ok(mut q) = self.queue.lock() {
                     if let Some(current_track) = q.current_mut() {
-                        if current_track.title == t.title && current_track.artist == t.artist {
+                        if current_track.id == t.id {
                             current_track.stream_url = path.clone();
                         }
                     }
@@ -363,7 +358,7 @@ impl PlayerService {
         crate::bridge::bridge::update_player_state(
             state as i32, pos as i32, dur as i32,
         );
-        crate::bridge::bridge::set_playing(if is_playing { "true" } else { "false" });
+        crate::bridge::bridge::set_playing(is_playing);
 
         // Sync queue to C++
         {

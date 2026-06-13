@@ -3,6 +3,21 @@
 #include "icon_provider.h"
 #include <QFrame>
 #include <QHBoxLayout>
+#include <QVariant>
+
+namespace {
+struct LibraryTabSpec {
+    const char *key;
+    const char *translation_key;
+};
+
+constexpr LibraryTabSpec kLibraryTabs[] = {
+    {"playlists", "playlists"},
+    {"songs", "songs"},
+    {"albums", "albums"},
+    {"artists", "artists"},
+};
+}
 
 LibraryView::LibraryView(QWidget *parent)
     : QWidget(parent)
@@ -25,8 +40,12 @@ LibraryView::LibraryView(QWidget *parent)
     tab_lay->setContentsMargins(24, 0, 24, 0);
     tab_lay->setSpacing(8);
     
-    for (const char *name : {"Playlists", "Canciones", "Álbumes", "Artistas"}) {
-        auto *btn = new QPushButton(name, tab_bar);
+    for (const auto &tab : kLibraryTabs) {
+        const std::string key(tab.key);
+        auto *btn = new QPushButton(
+            QString::fromStdString(std::string(doremi_tr(tab.translation_key))),
+            tab_bar);
+        btn->setProperty("tabKey", QString::fromStdString(key));
         btn->setCheckable(true);
         btn->setFixedHeight(43); // 1px less to overlap with border-bottom
         btn->setCursor(Qt::PointingHandCursor);
@@ -56,7 +75,7 @@ LibraryView::LibraryView(QWidget *parent)
         btn->setStyleSheet(btnStyle);
         tab_lay->addWidget(btn);
         tab_btns_.push_back(btn);
-        connect(btn, &QPushButton::clicked, this, [this, name]() { emit tab_changed(name); });
+        connect(btn, &QPushButton::clicked, this, [this, key]() { emit tab_changed(key); });
     }
     tab_lay->addStretch(1);
     root->addWidget(tab_bar);
@@ -94,9 +113,9 @@ QWidget *LibraryView::make_list_item(const std::string &text, const std::string 
         if (label->font().family() == "Material Symbols Rounded") {
             const auto &c = DesignTokens::current();
             QString iconName = "music_note";
-            if (active_tab_ == "Playlists") iconName = "queue_music";
-            else if (active_tab_ == "Álbumes") iconName = "album";
-            else if (active_tab_ == "Artistas") iconName = "person";
+            if (active_tab_ == "playlists") iconName = "queue_music";
+            else if (active_tab_ == "albums") iconName = "album";
+            else if (active_tab_ == "artists") iconName = "person";
             
             label->setPixmap(IconProvider::getIcon(iconName, c.text_secondary, 18).pixmap(36, 36));
         }
@@ -153,7 +172,7 @@ void LibraryView::clear_list() {
 }
 
 void LibraryView::set_playlists(const std::vector<Playlist> &playlists) {
-    active_tab_ = "Playlists";
+    active_tab_ = "playlists";
     clear_list();
     for (const auto &p : playlists) {
         list_->addWidget(make_list_item(static_cast<std::string>(p.name), std::to_string(p.track_count) + " canciones", static_cast<std::string>(p.id)));
@@ -163,7 +182,7 @@ void LibraryView::set_playlists(const std::vector<Playlist> &playlists) {
 }
 
 void LibraryView::set_songs(const std::vector<Track> &songs) {
-    active_tab_ = "Canciones";
+    active_tab_ = "songs";
     clear_list();
     for (const auto &t : songs) {
         list_->addWidget(make_song_item(t));
@@ -173,7 +192,7 @@ void LibraryView::set_songs(const std::vector<Track> &songs) {
 }
 
 void LibraryView::set_albums(const std::vector<Album> &albums) {
-    active_tab_ = "Álbumes";
+    active_tab_ = "albums";
     clear_list();
     for (const auto &a : albums) {
         list_->addWidget(make_list_item(static_cast<std::string>(a.title), static_cast<std::string>(a.artist), static_cast<std::string>(a.id)));
@@ -183,7 +202,7 @@ void LibraryView::set_albums(const std::vector<Album> &albums) {
 }
 
 void LibraryView::set_artists(const std::vector<Artist> &artists) {
-    active_tab_ = "Artistas";
+    active_tab_ = "artists";
     clear_list();
     for (const auto &a : artists) {
         list_->addWidget(make_list_item(static_cast<std::string>(a.name), "", static_cast<std::string>(a.id)));
@@ -198,6 +217,6 @@ std::string LibraryView::current_tab() const {
 
 void LibraryView::set_active_tab(const std::string &tab) {
     for (auto *btn : tab_btns_) {
-        btn->setChecked(btn->text().toStdString() == tab);
+        btn->setChecked(btn->property("tabKey").toString().toStdString() == tab);
     }
 }

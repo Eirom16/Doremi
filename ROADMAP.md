@@ -114,9 +114,9 @@ El port se considera terminado cuando Doremi cubra los flujos reales de Pyrolist
 
 - [x] Sustituir payloads concatenados como `title - artist` o strings delimitados por structs compartidos.
 - [x] Definir IDs estables para track, album, artist, playlist y descarga.
-- [ ] Separar IDs de presentacion y texto traducido.
+- [x] Separar IDs de presentacion y texto traducido.
 - [x] Introducir DTOs tipados para resultados, detalles, cola, historial, stats y progreso.
-- [~] No resolver acciones buscando por titulo; usar IDs.
+- [x] No resolver acciones buscando por titulo; usar IDs.
 - [ ] Añadir version o compatibilidad al contrato si el bridge crece.
 - [ ] Centralizar conversiones QString/string y manejo de errores FFI.
 - [ ] Documentar ownership, thread affinity de Qt y callbacks permitidos.
