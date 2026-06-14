@@ -154,6 +154,7 @@ void set_settings_normalize(bool on);
 void set_settings_crossfade(bool on);
 void set_settings_equalizer_enabled(bool on);
 void set_settings_equalizer_preset(rust::Str preset);
+void set_settings_equalizer_values(double preamp, rust::Vec<double> bands);
 void set_settings_sleep_timer(int32_t minutes);
 void set_settings_discord_rpc(bool on);
 void set_settings_lastfm_enabled(bool on);

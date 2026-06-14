@@ -3,6 +3,18 @@ use std::sync::{Arc, Mutex};
 
 use super::state::PlayState;
 
+const EXPECTED_EQ_BANDS: usize = 10;
+
+fn normalized_equalizer(preamp: f64, bands: &[f64], available_bands: usize) -> (f32, Vec<f32>) {
+    let preamp = preamp.clamp(-20.0, 20.0) as f32;
+    let mut values = bands.iter()
+        .take(available_bands)
+        .map(|value| value.clamp(-20.0, 20.0) as f32)
+        .collect::<Vec<_>>();
+    values.resize(available_bands, 0.0);
+    (preamp, values)
+}
+
 #[derive(Clone)]
 pub struct AudioEngine {
     inner: Arc<Mutex<AudioInner>>,
@@ -58,6 +70,13 @@ impl AudioEngine {
             }
         }
 
+        let band_count = unsafe { sys::libvlc_audio_equalizer_get_band_count() as usize };
+        if band_count == EXPECTED_EQ_BANDS {
+            log::info!("VLC equalizer capability verified: {band_count} bands");
+        } else {
+            log::warn!("VLC exposes {band_count} equalizer bands; Doremi expects {EXPECTED_EQ_BANDS}");
+        }
+
         engine
     }
 
@@ -76,6 +95,12 @@ impl AudioEngine {
             }
         }
         false
+    }
+
+    pub fn has_ended(&self) -> bool {
+        self.inner.lock().ok()
+            .and_then(|inner| inner.player.as_ref().map(|player| player.state() == State::Ended))
+            .unwrap_or(false)
     }
 
     pub fn position_ms(&self) -> i64 {
@@ -260,42 +285,22 @@ impl AudioEngine {
 
             // Create new equalizer
             unsafe {
-                let eq = if !preset_name.is_empty() && preset_name != "Flat" {
-                    // Try to find preset index
-                    let mut preset_idx = None;
-                    let count = sys::libvlc_audio_equalizer_get_preset_count();
-                    for i in 0..count {
-                        let ptr = sys::libvlc_audio_equalizer_get_preset_name(i);
-                        if !ptr.is_null() {
-                            if let Ok(s) = std::ffi::CStr::from_ptr(ptr).to_str() {
-                                if s.eq_ignore_ascii_case(preset_name) {
-                                    preset_idx = Some(i);
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                    if let Some(idx) = preset_idx {
-                        sys::libvlc_audio_equalizer_new_from_preset(idx)
-                    } else {
-                        sys::libvlc_audio_equalizer_new()
-                    }
-                } else {
-                    sys::libvlc_audio_equalizer_new()
-                };
+                let eq = sys::libvlc_audio_equalizer_new();
 
                 if eq.is_null() {
                     log::error!("Failed to create VLC equalizer");
                     return;
                 }
 
-                // Apply preamp
-                let _ = sys::libvlc_audio_equalizer_set_preamp(eq, preamp as f32);
-
-                // Apply bands (usually 10 bands)
                 let num_bands = sys::libvlc_audio_equalizer_get_band_count() as usize;
-                for i in 0..bands.len().min(num_bands) {
-                    let _ = sys::libvlc_audio_equalizer_set_amp_at_index(eq, bands[i] as f32, i as u32);
+                let (preamp, bands) = normalized_equalizer(preamp, bands, num_bands);
+                if sys::libvlc_audio_equalizer_set_preamp(eq, preamp) != 0 {
+                    log::warn!("VLC rejected equalizer preamp {preamp}dB");
+                }
+                for (index, value) in bands.iter().enumerate() {
+                    if sys::libvlc_audio_equalizer_set_amp_at_index(eq, *value, index as u32) != 0 {
+                        log::warn!("VLC rejected equalizer band {index} value {value}dB");
+                    }
                 }
 
                 // Apply to player
@@ -312,5 +317,20 @@ impl AudioEngine {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::normalized_equalizer;
+
+    #[test]
+    fn equalizer_values_are_clamped_padded_and_truncated_for_runtime_band_count() {
+        let (preamp, bands) = normalized_equalizer(30.0, &[-25.0, 2.5, 30.0], 2);
+        assert_eq!(preamp, 20.0);
+        assert_eq!(bands, vec![-20.0, 2.5]);
+
+        let (_, padded) = normalized_equalizer(0.0, &[1.0], 3);
+        assert_eq!(padded, vec![1.0, 0.0, 0.0]);
     }
 }

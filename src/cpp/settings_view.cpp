@@ -3,6 +3,7 @@
 #include "design_tokens.h"
 #include "icon_provider.h"
 #include <QHBoxLayout>
+#include <QGridLayout>
 #include <QFrame>
 #include <QTimer>
 #include <QFileDialog>
@@ -127,9 +128,49 @@ SettingsView::SettingsView(QWidget *parent)
     content->addWidget(check_row(std::string(doremi_tr("enable_equalizer")), equalizer_cb_));
 
     eq_preset_cmb_ = new QComboBox(inner);
-    eq_preset_cmb_->addItems({"Flat", "Bass Boost", "Treble Boost", "Vocal", "Classical", "Electronic", "Hip-Hop", "Rock", "Jazz", "Pop"});
+    eq_preset_cmb_->addItems({"Flat", "Bass Boost", "Treble Boost", "Vocal", "Classical", "Electronic", "Hip-Hop", "Rock", "Jazz", "Pop", "Custom"});
     eq_preset_cmb_->setStyleSheet(comboStyle);
     content->addWidget(combo_row(std::string(doremi_tr("preset")), eq_preset_cmb_));
+
+    auto *preamp_row = new QWidget(inner);
+    auto *preamp_layout = new QHBoxLayout(preamp_row);
+    preamp_layout->setContentsMargins(12, 4, 12, 4);
+    auto *preamp_label = new QLabel("Preamp", preamp_row);
+    eq_preamp_slider_ = new QSlider(Qt::Horizontal, preamp_row);
+    eq_preamp_slider_->setRange(-200, 200);
+    eq_preamp_slider_->setValue(0);
+    eq_preamp_value_ = new QLabel("0.0 dB", preamp_row);
+    eq_preamp_value_->setMinimumWidth(58);
+    preamp_layout->addWidget(preamp_label);
+    preamp_layout->addWidget(eq_preamp_slider_, 1);
+    preamp_layout->addWidget(eq_preamp_value_);
+    content->addWidget(preamp_row);
+
+    auto *bands_widget = new QWidget(inner);
+    auto *bands_layout = new QGridLayout(bands_widget);
+    bands_layout->setContentsMargins(12, 4, 12, 4);
+    bands_layout->setHorizontalSpacing(8);
+    static const char *band_labels[] = {"60", "170", "310", "600", "1k", "3k", "6k", "12k", "14k", "16k"};
+    for (int i = 0; i < 10; ++i) {
+        auto *label = new QLabel(band_labels[i], bands_widget);
+        label->setAlignment(Qt::AlignCenter);
+        auto *slider = new QSlider(Qt::Vertical, bands_widget);
+        slider->setRange(-200, 200);
+        slider->setValue(0);
+        slider->setMinimumHeight(110);
+        auto *value = new QLabel("0.0", bands_widget);
+        value->setAlignment(Qt::AlignCenter);
+        bands_layout->addWidget(label, 0, i);
+        bands_layout->addWidget(slider, 1, i, Qt::AlignHCenter);
+        bands_layout->addWidget(value, 2, i);
+        eq_band_sliders_.push_back(slider);
+        eq_band_values_.push_back(value);
+    }
+    content->addWidget(bands_widget);
+
+    eq_reset_btn_ = new QPushButton("Reset Flat", inner);
+    eq_reset_btn_->setCursor(Qt::PointingHandCursor);
+    content->addWidget(eq_reset_btn_, 0, Qt::AlignRight);
 
     content->addSpacing(12);
     auto *sep3 = new QFrame(inner);
@@ -484,7 +525,31 @@ SettingsView::SettingsView(QWidget *parent)
         emit setting_changed("equalizer_enabled", v ? "true" : "false");
     });
     QObject::connect(eq_preset_cmb_, &QComboBox::currentTextChanged, this, [this](const QString &v) {
-        emit setting_changed("equalizer_preset", Ffi::to_std_string(v));
+        if (v != "Custom") emit setting_changed("equalizer_preset", Ffi::to_std_string(v));
+    });
+    QObject::connect(eq_preamp_slider_, &QSlider::valueChanged, this, [this](int value) {
+        eq_preamp_value_->setText(QString::number(value / 10.0, 'f', 1) + " dB");
+        eq_preset_cmb_->blockSignals(true);
+        eq_preset_cmb_->setCurrentText("Custom");
+        eq_preset_cmb_->blockSignals(false);
+        emit setting_changed("equalizer_preamp", std::to_string(value / 10.0));
+    });
+    for (auto *slider : eq_band_sliders_) {
+        QObject::connect(slider, &QSlider::valueChanged, this, [this](int) {
+            std::string values;
+            for (size_t i = 0; i < eq_band_sliders_.size(); ++i) {
+                eq_band_values_[i]->setText(QString::number(eq_band_sliders_[i]->value() / 10.0, 'f', 1));
+                if (!values.empty()) values += ',';
+                values += std::to_string(eq_band_sliders_[i]->value() / 10.0);
+            }
+            eq_preset_cmb_->blockSignals(true);
+            eq_preset_cmb_->setCurrentText("Custom");
+            eq_preset_cmb_->blockSignals(false);
+            emit setting_changed("equalizer_bands", values);
+        });
+    }
+    QObject::connect(eq_reset_btn_, &QPushButton::clicked, this, [this]() {
+        eq_preset_cmb_->setCurrentText("Flat");
     });
     QObject::connect(discord_rpc_cb_, &AnimatedToggle::toggled, this, [this](bool v) {
         emit setting_changed("discord_rpc_enabled", v ? "true" : "false");
@@ -713,6 +778,20 @@ void SettingsView::set_equalizer_preset(const std::string &preset) {
     int idx = eq_preset_cmb_->findText(QString::fromStdString(preset));
     if (idx >= 0) eq_preset_cmb_->setCurrentIndex(idx);
     eq_preset_cmb_->blockSignals(false);
+}
+
+void SettingsView::set_equalizer_values(double preamp, const std::vector<double> &bands) {
+    eq_preamp_slider_->blockSignals(true);
+    eq_preamp_slider_->setValue(qRound(preamp * 10.0));
+    eq_preamp_value_->setText(QString::number(preamp, 'f', 1) + " dB");
+    eq_preamp_slider_->blockSignals(false);
+    for (size_t i = 0; i < eq_band_sliders_.size(); ++i) {
+        const double value = i < bands.size() ? bands[i] : 0.0;
+        eq_band_sliders_[i]->blockSignals(true);
+        eq_band_sliders_[i]->setValue(qRound(value * 10.0));
+        eq_band_values_[i]->setText(QString::number(value, 'f', 1));
+        eq_band_sliders_[i]->blockSignals(false);
+    }
 }
 void SettingsView::set_sleep_timer(int32_t minutes) {
     sleep_timer_cmb_->blockSignals(true);

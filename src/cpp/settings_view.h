@@ -9,6 +9,8 @@
 #include <QPushButton>
 #include <QScrollArea>
 #include <QLineEdit>
+#include <QSlider>
+#include <vector>
 #include "components/animated_toggle.h"
 #include "components/ripple_button.h"
 
@@ -25,6 +27,7 @@ public:
     void set_crossfade(bool on);
     void set_equalizer_enabled(bool on);
     void set_equalizer_preset(const std::string &preset);
+    void set_equalizer_values(double preamp, const std::vector<double> &bands);
     void set_sleep_timer(int32_t minutes);
     void set_settings_discord_rpc(bool on);
     void set_settings_lastfm_enabled(bool on);
@@ -63,6 +66,11 @@ private:
     AnimatedToggle *crossfade_cb_;
     AnimatedToggle *equalizer_cb_;
     QComboBox *eq_preset_cmb_;
+    QSlider *eq_preamp_slider_;
+    QLabel *eq_preamp_value_;
+    std::vector<QSlider *> eq_band_sliders_;
+    std::vector<QLabel *> eq_band_values_;
+    QPushButton *eq_reset_btn_;
     QComboBox *sleep_timer_cmb_;
 
     AnimatedToggle *discord_rpc_cb_;

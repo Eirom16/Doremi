@@ -34,6 +34,11 @@ impl LyricsService {
         // Clean metadata like Pyrolist did
         let clean_title = Self::clean_title(title);
         let clean_artist = Self::clean_artist(artist);
+        let cache_key = format!("lyrics:{}:{}", clean_artist.to_lowercase(), clean_title.to_lowercase());
+
+        if let Some(entry) = crate::db::cache::ResponseCache::get::<Option<LyricsResponse>>(&cache_key) {
+            return Ok(entry.data);
+        }
 
         log::info!("Fetching lyrics for '{}' by '{}'...", clean_title, clean_artist);
 
@@ -49,6 +54,11 @@ impl LyricsService {
 
         if resp.status() == 404 {
             log::info!("No lyrics found for '{}' by '{}'", clean_title, clean_artist);
+            let _ = crate::db::cache::ResponseCache::set::<Option<LyricsResponse>>(
+                &cache_key,
+                &None,
+                Some(30 * 24 * 60 * 60),
+            );
             return Ok(None);
         }
 
@@ -59,6 +69,12 @@ impl LyricsService {
         let lyrics: LyricsResponse = resp.json()
             .await
             .map_err(|e| format!("JSON parse error: {e}"))?;
+
+        let _ = crate::db::cache::ResponseCache::set(
+            &cache_key,
+            &Some(lyrics.clone()),
+            Some(30 * 24 * 60 * 60),
+        );
 
         Ok(Some(lyrics))
     }

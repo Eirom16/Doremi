@@ -615,7 +615,7 @@ rust::String get_or_create_thumbnail(rust::Str title, int32_t variant) {
 
 namespace {
 constexpr uint16_t kBridgeContractMajor = 1;
-constexpr uint16_t kBridgeContractMinor = 1;
+constexpr uint16_t kBridgeContractMinor = 2;
 }
 
 uint16_t bridge_contract_major() {
@@ -855,6 +855,15 @@ void set_settings_equalizer_preset(rust::Str preset) {
     const std::string value = Ffi::to_std_string(preset);
     mutate_main_window("set_settings_equalizer_preset", [value](DoremiMainWindow &window) {
         if (window.settings_view()) window.settings_view()->set_equalizer_preset(value);
+    });
+}
+
+void set_settings_equalizer_values(double preamp, rust::Vec<double> bands) {
+    std::vector<double> values;
+    values.reserve(bands.size());
+    for (double band : bands) values.push_back(band);
+    mutate_main_window("set_settings_equalizer_values", [preamp, values = std::move(values)](DoremiMainWindow &window) {
+        if (window.settings_view()) window.settings_view()->set_equalizer_values(preamp, values);
     });
 }
 

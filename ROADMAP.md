@@ -170,12 +170,12 @@ El port se considera terminado cuando Doremi cubra los flujos reales de Pyrolist
 - [x] Completar add next, add to end, remove, move, clear y jump.
 - [x] Implementar drag and drop en el panel de cola.
 - [x] Preservar correctamente cola original al activar/desactivar shuffle.
-- [ ] Probar repeat off/all/one en bordes y cola vacia.
-- [ ] Construir auto queue usando radio/related real de YouTube Music.
-- [ ] Evitar duplicados excesivos y contenido no reproducible.
-- [ ] Precargar metadata, artwork, letras y stream de la siguiente pista.
-- [ ] Cancelar precarga cuando cambia la cola.
-- [ ] Persistir y restaurar la cola.
+- [x] Probar repeat off/all/one en bordes y cola vacia.
+- [x] Construir auto queue usando radio/related real de YouTube Music.
+- [x] Evitar duplicados excesivos y contenido no reproducible.
+- [x] Precargar metadata, artwork, letras y stream de la siguiente pista.
+- [x] Cancelar precarga cuando cambia la cola.
+- [x] Persistir y restaurar la cola.
 
 ### P1.4 Audio avanzado
 

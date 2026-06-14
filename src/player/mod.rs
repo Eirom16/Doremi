@@ -5,11 +5,17 @@ pub mod audio;
 pub mod resolver;
 
 use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicU64;
+use once_cell::sync::Lazy;
 use std::time::{Duration, Instant};
 
 use audio::AudioEngine;
 use queue::{PlaybackQueue, TrackInfo};
 use state::PlayState;
+
+static QUEUE_PERSIST_GENERATION: AtomicU64 = AtomicU64::new(0);
+static QUEUE_PERSIST_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 
 pub struct PlayerService {
     audio: AudioEngine,
@@ -22,10 +28,17 @@ pub struct PlayerService {
     accumulated_playback_ms: std::sync::atomic::AtomicI64,
     last_playback_poll: Mutex<Instant>,
     last_retried_track_id: Mutex<Option<String>>,
+    auto_queue_loading: Arc<AtomicBool>,
+    preload_next: bool,
+    prefetch_task: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>>,
 }
 
 impl PlayerService {
     pub fn new() -> Self {
+        Self::new_with_preload(true)
+    }
+
+    pub fn new_with_preload(preload_next: bool) -> Self {
         let audio = AudioEngine::new();
         if !audio.is_available() {
             log::warn!("VLC audio engine not available");
@@ -44,6 +57,9 @@ impl PlayerService {
             accumulated_playback_ms: std::sync::atomic::AtomicI64::new(0),
             last_playback_poll: Mutex::new(Instant::now()),
             last_retried_track_id: Mutex::new(None),
+            auto_queue_loading: Arc::new(AtomicBool::new(false)),
+            preload_next,
+            prefetch_task: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -56,11 +72,15 @@ impl PlayerService {
     pub fn enqueue(&self, track: TrackInfo) {
         self.queue.lock().unwrap().enqueue(track);
         self.sync_queue_ui();
+        self.schedule_prefetch();
+        self.persist_queue_session();
     }
 
     pub fn enqueue_next(&self, track: TrackInfo) {
         self.queue.lock().unwrap().enqueue_next(track);
         self.sync_queue_ui();
+        self.schedule_prefetch();
+        self.persist_queue_session();
     }
 
     pub fn remove_queue_item(&self, index: usize) -> bool {
@@ -83,6 +103,8 @@ impl PlayerService {
             }
         }
         self.sync_queue_ui();
+        self.schedule_prefetch();
+        self.persist_queue_session();
         true
     }
 
@@ -90,6 +112,8 @@ impl PlayerService {
         let moved = self.queue.lock().unwrap().move_item(from, to);
         if moved {
             self.sync_queue_ui();
+            self.schedule_prefetch();
+            self.persist_queue_session();
         }
         moved
     }
@@ -98,6 +122,8 @@ impl PlayerService {
         self.queue.lock().unwrap().clear();
         self.audio.stop();
         self.sync_queue_ui();
+        self.cancel_prefetch();
+        self.persist_queue_session();
     }
 
     pub fn current_track(&self) -> Option<TrackInfo> {
@@ -160,6 +186,8 @@ impl PlayerService {
         };
         if let Some(t) = track {
             self.play_track_info(t);
+            self.schedule_prefetch();
+            self.persist_queue_session();
         }
     }
 
@@ -253,12 +281,19 @@ impl PlayerService {
     }
 
     pub fn next(&self) {
-        let next_track = {
+        let (next_track, seed) = {
             let mut queue = self.queue.lock().unwrap();
-            queue.next().cloned()
+            let seed = queue.current().cloned();
+            (queue.next().cloned(), seed)
         };
         if let Some(t) = next_track {
             self.play_track_info(t);
+            self.schedule_prefetch();
+            self.persist_queue_session();
+        } else if let Some(seed) = seed {
+            self.audio.stop();
+            self.audio.set_state(PlayState::Loading);
+            self.request_auto_queue(seed);
         } else {
             self.audio.stop();
         }
@@ -275,6 +310,8 @@ impl PlayerService {
         };
         if let Some(t) = prev_track {
             self.play_track_info(t);
+            self.schedule_prefetch();
+            self.persist_queue_session();
         }
     }
 
@@ -319,10 +356,13 @@ impl PlayerService {
 
     pub fn toggle_shuffle(&self) {
         self.queue.lock().unwrap().toggle_shuffle();
+        self.schedule_prefetch();
+        self.persist_queue_session();
     }
 
     pub fn cycle_repeat(&self) {
         self.queue.lock().unwrap().cycle_repeat();
+        self.persist_queue_session();
     }
 
     pub fn shuffle_mode(&self) -> bool {
@@ -374,6 +414,10 @@ impl PlayerService {
         }
 
         self.audio.poll_position();
+
+        if self.audio.has_ended() {
+            self.next();
+        }
 
         // Check for playback error and handle retry
         if self.audio.has_error() {
@@ -582,10 +626,219 @@ impl PlayerService {
     }
 
     fn sync_queue_ui(&self) {
-        let (tracks, current_index) = {
-            let queue = self.queue.lock().unwrap();
-            (queue.all_tracks().to_vec(), queue.current_index() as i32)
+        sync_queue_to_ui(&self.queue);
+    }
+
+    fn request_auto_queue(&self, seed: TrackInfo) {
+        if seed.id.is_empty() || self.auto_queue_loading.swap(true, Ordering::AcqRel) {
+            return;
+        }
+
+        let queue = self.queue.clone();
+        let audio = self.audio.clone();
+        let loading = self.auto_queue_loading.clone();
+        let prefetch_task = self.prefetch_task.clone();
+        let preload_next = self.preload_next;
+        tokio::spawn(async move {
+            let seed_id = seed.id.clone();
+            let result = tokio::task::spawn_blocking(move || {
+                crate::api::innertube::related_tracks(&seed_id)
+            }).await;
+
+            let related = match result {
+                Ok(Ok(tracks)) => tracks,
+                Ok(Err(error)) => {
+                    log::warn!("Could not build auto queue for {}: {error}", seed.id);
+                    loading.store(false, Ordering::Release);
+                    return;
+                }
+                Err(error) => {
+                    log::warn!("Auto queue worker failed for {}: {error}", seed.id);
+                    loading.store(false, Ordering::Release);
+                    return;
+                }
+            };
+
+            let candidates = related.into_iter().map(|track| TrackInfo {
+                id: track.id,
+                title: track.title,
+                artist: track.artists.into_iter().next().unwrap_or_default(),
+                album: track.album.unwrap_or_default(),
+                duration_ms: track.duration_ms,
+                thumbnail: track.thumbnail,
+                stream_url: track.stream_url.unwrap_or_default(),
+            }).collect();
+
+            let next_track = {
+                let mut queue_guard = queue.lock().unwrap();
+                let added = queue_guard.append_unique(candidates, 25);
+                log::info!("Auto queue added {added} related tracks for {}", seed.id);
+                if added > 0 { queue_guard.next().cloned() } else { None }
+            };
+            sync_queue_to_ui(&queue);
+            persist_queue_snapshot(queue.clone());
+
+            if let Some(mut track) = next_track {
+                if track.stream_url.is_empty() {
+                    match crate::player::resolver::StreamResolver::resolve(&track.id).await {
+                        Ok(url) => {
+                            track.stream_url = url.clone();
+                            if let Ok(mut queue_guard) = queue.lock() {
+                                if let Some(current) = queue_guard.current_mut() {
+                                    if current.id == track.id {
+                                        current.stream_url = url;
+                                    }
+                                }
+                            }
+                        }
+                        Err(error) => {
+                            log::warn!("Could not resolve auto queue track {}: {error}", track.id);
+                            loading.store(false, Ordering::Release);
+                            return;
+                        }
+                    }
+                }
+                audio.play_url(&track.stream_url);
+                if preload_next {
+                    schedule_prefetch_task(queue.clone(), prefetch_task);
+                }
+            }
+            loading.store(false, Ordering::Release);
+        });
+    }
+
+    fn schedule_prefetch(&self) {
+        if self.preload_next {
+            schedule_prefetch_task(self.queue.clone(), self.prefetch_task.clone());
+        } else {
+            self.cancel_prefetch();
+        }
+    }
+
+    fn cancel_prefetch(&self) {
+        if let Ok(mut task) = self.prefetch_task.lock() {
+            if let Some(handle) = task.take() {
+                handle.abort();
+            }
+        }
+    }
+
+    pub fn restore_queue_session(&self) -> bool {
+        let path = queue_session_path();
+        let Ok(content) = std::fs::read_to_string(&path) else { return false; };
+        let Ok(snapshot) = serde_json::from_str(&content) else {
+            log::warn!("Ignoring invalid queue session at {}", path.display());
+            return false;
         };
+        self.queue.lock().map(|mut queue| queue.restore(snapshot)).unwrap_or(false)
+    }
+
+    pub fn refresh_queue_ui(&self) {
+        self.sync_queue_ui();
+        self.schedule_prefetch();
+    }
+
+    fn persist_queue_session(&self) {
+        persist_queue_snapshot(self.queue.clone());
+    }
+}
+
+fn queue_session_path() -> std::path::PathBuf {
+    crate::config::paths::AppDirs::global().data_dir().join("queue-session.json")
+}
+
+fn persist_queue_snapshot(queue: Arc<Mutex<PlaybackQueue>>) {
+    let snapshot = match queue.lock() {
+        Ok(queue) => queue.snapshot(),
+        Err(_) => return,
+    };
+    let path = queue_session_path();
+    let generation = QUEUE_PERSIST_GENERATION.fetch_add(1, Ordering::AcqRel) + 1;
+    tokio::task::spawn_blocking(move || {
+        let Ok(_guard) = QUEUE_PERSIST_LOCK.lock() else { return; };
+        if QUEUE_PERSIST_GENERATION.load(Ordering::Acquire) != generation {
+            return;
+        }
+        let Ok(data) = serde_json::to_vec_pretty(&snapshot) else { return; };
+        if let Err(error) = crate::config::settings::write_private_file(&path, &data) {
+            log::warn!("Could not persist queue session: {error}");
+        }
+    });
+}
+
+fn schedule_prefetch_task(
+    queue: Arc<Mutex<PlaybackQueue>>,
+    task_slot: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>>,
+) {
+    let candidate = queue.lock().ok().and_then(|queue| queue.next_candidate().cloned());
+    let Ok(mut slot) = task_slot.lock() else { return; };
+    if let Some(handle) = slot.take() {
+        handle.abort();
+    }
+    let Some(candidate) = candidate else { return; };
+
+    let handle = tokio::spawn(async move {
+        let stream_future = async {
+            if candidate.stream_url.is_empty() {
+                crate::player::resolver::StreamResolver::resolve(&candidate.id).await.ok()
+            } else {
+                Some(candidate.stream_url.clone())
+            }
+        };
+        let lyrics_service = crate::services::lyrics::LyricsService::new();
+        let lyrics_future = lyrics_service.fetch_lyrics(&candidate.title, &candidate.artist);
+        let artwork_future = prefetch_artwork(&candidate);
+        let (stream_url, _, artwork_path) = tokio::join!(stream_future, lyrics_future, artwork_future);
+
+        if let Ok(mut queue_guard) = queue.lock() {
+            let still_next = queue_guard.next_candidate()
+                .map(|track| track.id == candidate.id)
+                .unwrap_or(false);
+            if !still_next {
+                return;
+            }
+            if let Some(target) = queue_guard.all_tracks().iter().position(|track| track.id == candidate.id) {
+                if let Some(track) = queue_guard.track_mut(target) {
+                    if let Some(url) = stream_url { track.stream_url = url; }
+                    if let Some(path) = artwork_path { track.thumbnail = path; }
+                }
+            }
+        }
+        sync_queue_to_ui(&queue);
+    });
+    *slot = Some(handle);
+}
+
+async fn prefetch_artwork(track: &TrackInfo) -> Option<String> {
+    if track.thumbnail.is_empty() || !track.thumbnail.starts_with("http") {
+        return None;
+    }
+    let safe_id: String = track.id.chars()
+        .filter(|character| character.is_ascii_alphanumeric() || matches!(character, '-' | '_'))
+        .take(80)
+        .collect();
+    if safe_id.is_empty() { return None; }
+    let path = crate::config::paths::AppDirs::global().artwork_cache_dir()
+        .join(format!("{safe_id}.img"));
+    if path.exists() {
+        return Some(path.to_string_lossy().into_owned());
+    }
+    let response = reqwest::Client::builder()
+        .timeout(Duration::from_secs(8))
+        .build().ok()?
+        .get(&track.thumbnail)
+        .send().await.ok()?;
+    if !response.status().is_success() { return None; }
+    let bytes = response.bytes().await.ok()?;
+    tokio::fs::write(&path, bytes).await.ok()?;
+    Some(path.to_string_lossy().into_owned())
+}
+
+fn sync_queue_to_ui(queue: &Arc<Mutex<PlaybackQueue>>) {
+    let (tracks, current_index) = {
+        let queue = queue.lock().unwrap();
+        (queue.all_tracks().to_vec(), queue.current_index() as i32)
+    };
         let queue_list = tracks.into_iter().map(|track| {
             let thumbnail = if track.thumbnail.is_empty() {
                 crate::bridge::bridge::get_or_create_thumbnail(&track.title, 0)
@@ -602,7 +855,6 @@ impl PlayerService {
             }
         }).collect();
         crate::bridge::bridge::set_playback_queue(queue_list, current_index);
-    }
 }
 
 impl Default for PlayerService {

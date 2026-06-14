@@ -1,5 +1,6 @@
 use rand::seq::SliceRandom;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TrackInfo {
@@ -9,6 +10,7 @@ pub struct TrackInfo {
     pub album: String,
     pub duration_ms: i64,
     pub thumbnail: String,
+    #[serde(default, skip_serializing)]
     pub stream_url: String,
 }
 
@@ -22,11 +24,20 @@ pub struct PlaybackQueue {
     repeat_mode: RepeatMode,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RepeatMode {
     None,
     All,
     One,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QueueSnapshot {
+    pub version: u8,
+    pub tracks: Vec<TrackInfo>,
+    pub current_index: usize,
+    pub shuffle_mode: bool,
+    pub repeat_mode: RepeatMode,
 }
 
 impl PlaybackQueue {
@@ -59,6 +70,24 @@ impl PlaybackQueue {
 
     pub fn current_mut(&mut self) -> Option<&mut TrackInfo> {
         self.tracks.get_mut(self.current_index)
+    }
+
+    pub fn track_mut(&mut self, index: usize) -> Option<&mut TrackInfo> {
+        self.tracks.get_mut(index)
+    }
+
+    pub fn next_candidate(&self) -> Option<&TrackInfo> {
+        if self.tracks.is_empty() {
+            return None;
+        }
+        if self.repeat_mode == RepeatMode::One {
+            return self.current();
+        }
+        if self.shuffle_mode {
+            return self.shuffled.get(self.shuffle_position + 1)
+                .and_then(|index| self.tracks.get(*index));
+        }
+        self.tracks.get(self.current_index + 1)
     }
 
     pub fn shuffle_mode(&self) -> bool {
@@ -126,6 +155,25 @@ impl PlaybackQueue {
         if self.shuffle_mode {
             self.build_shuffle();
         }
+    }
+
+    pub fn append_unique(&mut self, candidates: Vec<TrackInfo>, limit: usize) -> usize {
+        let mut known: HashSet<String> = self.tracks.iter()
+            .filter(|track| !track.id.is_empty())
+            .map(|track| track.id.clone())
+            .collect();
+        let mut added = 0;
+        for track in candidates {
+            if added >= limit || track.id.is_empty() || track.title.trim().is_empty() || !known.insert(track.id.clone()) {
+                continue;
+            }
+            self.tracks.push(track);
+            added += 1;
+        }
+        if added > 0 && self.shuffle_mode {
+            self.build_shuffle();
+        }
+        added
     }
 
     pub fn remove(&mut self, index: usize) -> Option<TrackInfo> {
@@ -251,6 +299,33 @@ impl PlaybackQueue {
         }
     }
 
+    pub fn snapshot(&self) -> QueueSnapshot {
+        QueueSnapshot {
+            version: 1,
+            tracks: self.tracks.clone(),
+            current_index: self.current_index,
+            shuffle_mode: self.shuffle_mode,
+            repeat_mode: self.repeat_mode,
+        }
+    }
+
+    pub fn restore(&mut self, snapshot: QueueSnapshot) -> bool {
+        if snapshot.version != 1 || snapshot.tracks.is_empty() {
+            return false;
+        }
+        self.tracks = snapshot.tracks;
+        self.current_index = snapshot.current_index.min(self.tracks.len() - 1);
+        self.shuffle_mode = snapshot.shuffle_mode;
+        self.repeat_mode = snapshot.repeat_mode;
+        self.shuffle_position = 0;
+        if self.shuffle_mode {
+            self.build_shuffle();
+        } else {
+            self.shuffled.clear();
+        }
+        true
+    }
+
     pub fn all_tracks(&self) -> &[TrackInfo] {
         &self.tracks
     }
@@ -363,5 +438,102 @@ mod tests {
 
         assert_eq!(visited, vec!["a", "b", "c", "d"]);
         assert_eq!(ids(&queue), vec!["a", "b", "c", "d"]);
+    }
+
+    #[test]
+    fn repeat_modes_cover_empty_queue_and_linear_boundaries() {
+        let mut queue = PlaybackQueue::new();
+        for mode in [RepeatMode::None, RepeatMode::All, RepeatMode::One] {
+            queue.set_repeat_mode(mode);
+            assert!(queue.next().is_none());
+            assert!(queue.previous().is_none());
+        }
+
+        queue.set_tracks(vec![track("a"), track("b")]);
+        queue.set_repeat_mode(RepeatMode::None);
+        assert_eq!(queue.next().map(|track| track.id.as_str()), Some("b"));
+        assert!(queue.next().is_none());
+        assert_eq!(queue.current().map(|track| track.id.as_str()), Some("b"));
+
+        queue.set_repeat_mode(RepeatMode::All);
+        assert_eq!(queue.next().map(|track| track.id.as_str()), Some("a"));
+        assert_eq!(queue.previous().map(|track| track.id.as_str()), Some("b"));
+
+        queue.set_repeat_mode(RepeatMode::One);
+        assert_eq!(queue.next().map(|track| track.id.as_str()), Some("b"));
+        assert_eq!(queue.current_index(), 1);
+    }
+
+    #[test]
+    fn repeat_all_wraps_at_shuffle_boundaries() {
+        let mut queue = PlaybackQueue::new();
+        queue.set_tracks(vec![track("a"), track("b"), track("c")]);
+        queue.toggle_shuffle();
+        queue.set_repeat_mode(RepeatMode::All);
+
+        let first = queue.current().unwrap().id.clone();
+        for _ in 1..queue.len() {
+            queue.next();
+        }
+        assert_eq!(queue.next().map(|track| track.id.as_str()), Some(first.as_str()));
+        let expected_last = queue.shuffled.last().map(|index| queue.tracks[*index].id.clone());
+        let previous = queue.previous().map(|track| track.id.clone());
+        assert_eq!(previous, expected_last);
+    }
+
+    #[test]
+    fn append_unique_rejects_duplicates_invalid_tracks_and_respects_limit() {
+        let mut queue = PlaybackQueue::new();
+        queue.enqueue(track("seed"));
+        let mut invalid = track("");
+        invalid.title = "invalid".to_string();
+        let mut empty_title = track("empty-title");
+        empty_title.title.clear();
+
+        let added = queue.append_unique(
+            vec![track("seed"), invalid, empty_title, track("a"), track("a"), track("b")],
+            2,
+        );
+
+        assert_eq!(added, 2);
+        assert_eq!(ids(&queue), vec!["seed", "a", "b"]);
+    }
+
+    #[test]
+    fn next_candidate_observes_linear_shuffle_and_repeat_one_without_mutation() {
+        let mut queue = PlaybackQueue::new();
+        queue.set_tracks(vec![track("a"), track("b"), track("c")]);
+        assert_eq!(queue.next_candidate().map(|track| track.id.as_str()), Some("b"));
+        assert_eq!(queue.current_index(), 0);
+
+        queue.set_repeat_mode(RepeatMode::One);
+        assert_eq!(queue.next_candidate().map(|track| track.id.as_str()), Some("a"));
+
+        queue.set_repeat_mode(RepeatMode::None);
+        queue.toggle_shuffle();
+        let expected = queue.shuffled.get(1).map(|index| queue.tracks[*index].id.clone());
+        assert_eq!(queue.next_candidate().map(|track| track.id.clone()), expected);
+        assert_eq!(queue.current_index(), 0);
+    }
+
+    #[test]
+    fn snapshot_restores_queue_state_without_signed_stream_urls() {
+        let mut queue = PlaybackQueue::new();
+        let mut first = track("a");
+        first.stream_url = "https://signed.example/audio?expire=1".to_string();
+        queue.set_tracks(vec![first, track("b")]);
+        queue.jump_to(1);
+        queue.set_repeat_mode(RepeatMode::All);
+
+        let json = serde_json::to_string(&queue.snapshot()).unwrap();
+        assert!(!json.contains("signed.example"));
+        let snapshot: QueueSnapshot = serde_json::from_str(&json).unwrap();
+        let mut restored = PlaybackQueue::new();
+
+        assert!(restored.restore(snapshot));
+        assert_eq!(ids(&restored), vec!["a", "b"]);
+        assert_eq!(restored.current_index(), 1);
+        assert_eq!(restored.repeat_mode(), RepeatMode::All);
+        assert!(restored.current().unwrap().stream_url.is_empty());
     }
 }

@@ -7,7 +7,7 @@ static PLAYER: OnceCell<Arc<PlayerService>> = OnceCell::new();
 static SEARCH: OnceCell<SearchService> = OnceCell::new();
 
 pub const CONTRACT_MAJOR: u16 = 1;
-pub const CONTRACT_MINOR: u16 = 1;
+pub const CONTRACT_MINOR: u16 = 2;
 
 fn versions_are_compatible(
     required_major: u16,
@@ -185,6 +185,7 @@ pub mod bridge {
         fn set_settings_crossfade(on: bool);
         fn set_settings_equalizer_enabled(on: bool);
         fn set_settings_equalizer_preset(preset: &str);
+        fn set_settings_equalizer_values(preamp: f64, bands: Vec<f64>);
         fn set_settings_sleep_timer(minutes: i32);
         fn set_settings_discord_rpc(on: bool);
         fn set_settings_lastfm_enabled(on: bool);
@@ -648,6 +649,7 @@ pub fn apply_settings_impl() {
     bridge::set_settings_crossfade(settings.player.crossfade_enabled);
     bridge::set_settings_equalizer_enabled(settings.equalizer.enabled);
     bridge::set_settings_equalizer_preset(&settings.equalizer.preset_name);
+    bridge::set_settings_equalizer_values(settings.equalizer.preamp, settings.equalizer.bands.clone());
     bridge::set_settings_sleep_timer(settings.player.sleep_timer_minutes);
 
     // Apply subtitles settings
@@ -721,6 +723,11 @@ pub fn on_setting_changed(key: &str, value: &str) {
         }
         "equalizer_preset" => {
             settings.equalizer.preset_name = value.to_string();
+            if let Some((preamp, bands)) = crate::config::themes::eq_presets().get(value) {
+                settings.equalizer.preamp = *preamp;
+                settings.equalizer.bands = bands.to_vec();
+                bridge::set_settings_equalizer_values(*preamp, bands.to_vec());
+            }
             let enabled = settings.equalizer.enabled;
             let preamp = settings.equalizer.preamp;
             let bands = settings.equalizer.bands.clone();
@@ -729,7 +736,8 @@ pub fn on_setting_changed(key: &str, value: &str) {
         }
         "equalizer_preamp" => {
             if let Ok(v) = value.parse::<f64>() {
-                settings.equalizer.preamp = v;
+                settings.equalizer.preamp = v.clamp(-20.0, 20.0);
+                settings.equalizer.preset_name = "Custom".to_string();
                 let enabled = settings.equalizer.enabled;
                 let preamp = settings.equalizer.preamp;
                 let bands = settings.equalizer.bands.clone();
@@ -742,7 +750,12 @@ pub fn on_setting_changed(key: &str, value: &str) {
                 .filter_map(|s| s.parse::<f64>().ok())
                 .collect();
             if !parsed_bands.is_empty() {
-                settings.equalizer.bands = parsed_bands;
+                settings.equalizer.bands = parsed_bands.into_iter()
+                    .take(10)
+                    .map(|value| value.clamp(-20.0, 20.0))
+                    .collect();
+                settings.equalizer.bands.resize(10, 0.0);
+                settings.equalizer.preset_name = "Custom".to_string();
                 let enabled = settings.equalizer.enabled;
                 let preamp = settings.equalizer.preamp;
                 let bands = settings.equalizer.bands.clone();

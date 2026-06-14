@@ -65,7 +65,11 @@ impl DoremiApp {
         }
 
         // Initialize player
-        let player = Arc::new(PlayerService::new());
+        let player = Arc::new(PlayerService::new_with_preload(
+            self.settings.network.preload_next,
+        ));
+        let restored_queue = self.settings.player.resume_on_startup
+            && player.restore_queue_session();
         bridge::init_player(player.clone());
         log::info!("Player service initialized");
 
@@ -84,6 +88,9 @@ impl DoremiApp {
         apply_theme(theme, accent);
         set_window_title("Doremi");
         show_main_window();
+        if restored_queue {
+            player.refresh_queue_ui();
+        }
 
         // Check auth on startup
         if crate::bridge::is_youtube_authenticated() {

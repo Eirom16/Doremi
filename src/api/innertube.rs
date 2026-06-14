@@ -1,7 +1,16 @@
 use serde_json::Value;
+use std::collections::HashSet;
+use once_cell::sync::Lazy;
+use std::time::Duration;
 
 const API_KEY: &str = "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8";
 const BASE_URL: &str = "https://music.youtube.com/youtubei/v1";
+static HTTP_CLIENT: Lazy<reqwest::blocking::Client> = Lazy::new(|| {
+    reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(10))
+        .build()
+        .unwrap_or_default()
+});
 
 fn client_context(hl: &str, gl: &str) -> Value {
     serde_json::json!({
@@ -29,8 +38,7 @@ fn get_auth_headers() -> Option<serde_json::Map<String, serde_json::Value>> {
 
 fn post(endpoint: &str, body: Value) -> Result<Value, String> {
     let url = format!("{BASE_URL}/{endpoint}?key={API_KEY}");
-    let client = reqwest::blocking::Client::new();
-    let mut request = client.post(&url)
+    let mut request = HTTP_CLIENT.post(&url)
         .header("Content-Type", "application/json");
 
     if let Some(headers) = get_auth_headers() {
@@ -91,6 +99,86 @@ fn extract_video_id(data: &Value) -> String {
         .and_then(|v| v.as_str())
         .map(|s| s.to_string())
         .unwrap_or_default()
+}
+
+fn parse_duration_ms(value: &str) -> i64 {
+    let mut total = 0_i64;
+    for part in value.split(':') {
+        let Ok(number) = part.trim().parse::<i64>() else { return 0; };
+        total = total.saturating_mul(60).saturating_add(number);
+    }
+    total.saturating_mul(1000)
+}
+
+fn extract_text(value: &Value) -> String {
+    value.get("simpleText")
+        .and_then(Value::as_str)
+        .map(str::to_string)
+        .unwrap_or_else(|| extract_runs(value))
+}
+
+fn collect_related_renderers(value: &Value, tracks: &mut Vec<super::models::Track>, seen: &mut HashSet<String>) {
+    match value {
+        Value::Object(map) => {
+            if let Some(renderer) = map.get("playlistPanelVideoRenderer") {
+                let id = renderer.get("videoId").and_then(Value::as_str).unwrap_or_default();
+                let title = extract_text(&renderer["title"]);
+                if !id.is_empty() && !title.is_empty() && seen.insert(id.to_string()) {
+                    let byline = extract_text(
+                        renderer.get("longBylineText")
+                            .or_else(|| renderer.get("shortBylineText"))
+                            .unwrap_or(&Value::Null),
+                    );
+                    let artist = byline.split('•').next().unwrap_or_default().trim().to_string();
+                    let thumbnail = renderer["thumbnail"]["thumbnails"]
+                        .as_array()
+                        .and_then(|items| items.last())
+                        .and_then(|item| item["url"].as_str())
+                        .unwrap_or_default()
+                        .to_string();
+                    tracks.push(super::models::Track {
+                        id: id.to_string(),
+                        title,
+                        artists: if artist.is_empty() { Vec::new() } else { vec![artist] },
+                        album: None,
+                        album_id: None,
+                        duration_ms: parse_duration_ms(&extract_text(&renderer["lengthText"])),
+                        thumbnail,
+                        stream_url: None,
+                    });
+                }
+            }
+            for child in map.values() {
+                collect_related_renderers(child, tracks, seen);
+            }
+        }
+        Value::Array(items) => {
+            for child in items {
+                collect_related_renderers(child, tracks, seen);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn parse_related_tracks(json: &Value, seed_video_id: &str) -> Vec<super::models::Track> {
+    let mut tracks = Vec::new();
+    let mut seen = HashSet::from([seed_video_id.to_string()]);
+    collect_related_renderers(json, &mut tracks, &mut seen);
+    tracks
+}
+
+pub fn related_tracks(video_id: &str) -> Result<Vec<super::models::Track>, String> {
+    if video_id.trim().is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut body = client_context("es", "MX");
+    body["videoId"] = serde_json::json!(video_id);
+    body["playlistId"] = serde_json::json!(format!("RDAMVM{video_id}"));
+    body["isAudioOnly"] = serde_json::json!(true);
+    body["params"] = serde_json::json!("wAEB");
+    let json = post("next", body)?;
+    Ok(parse_related_tracks(&json, video_id))
 }
 
 pub fn search(query: &str, _filter: &str) -> Result<super::models::SearchResults, String> {
@@ -374,4 +462,46 @@ pub async fn get_stream_url_async(video_id: &str) -> Option<String> {
         }
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn related_parser_filters_seed_invalid_and_duplicate_tracks() {
+        let fixture = serde_json::json!({
+            "contents": [{
+                "playlistPanelVideoRenderer": {
+                    "videoId": "seed",
+                    "title": {"runs": [{"text": "Seed"}]}
+                }
+            }, {
+                "nested": {"playlistPanelVideoRenderer": {
+                    "videoId": "next-1",
+                    "title": {"runs": [{"text": "Next Song"}]},
+                    "longBylineText": {"runs": [{"text": "Artist"}, {"text": " • "}, {"text": "Album"}]},
+                    "lengthText": {"simpleText": "3:21"},
+                    "thumbnail": {"thumbnails": [{"url": "small"}, {"url": "large"}]}
+                }}
+            }, {
+                "playlistPanelVideoRenderer": {
+                    "videoId": "next-1",
+                    "title": {"simpleText": "Duplicate"}
+                }
+            }, {
+                "playlistPanelVideoRenderer": {
+                    "videoId": "",
+                    "title": {"simpleText": "Invalid"}
+                }
+            }]
+        });
+
+        let tracks = parse_related_tracks(&fixture, "seed");
+        assert_eq!(tracks.len(), 1);
+        assert_eq!(tracks[0].id, "next-1");
+        assert_eq!(tracks[0].artists, vec!["Artist"]);
+        assert_eq!(tracks[0].duration_ms, 201_000);
+        assert_eq!(tracks[0].thumbnail, "large");
+    }
 }
