@@ -88,6 +88,62 @@ impl ApiClient {
         }
     }
 
+    pub async fn library_playlists(&self) -> Vec<Playlist> {
+        match super::innertube::library_playlists().await {
+            Ok(playlists) => playlists,
+            Err(e) => {
+                log::error!("Library playlists API failed: {e}");
+                crate::bridge::bridge::show_notification(
+                    &format!("Error al cargar playlists de biblioteca: {e}"),
+                    "error",
+                );
+                Vec::new()
+            }
+        }
+    }
+
+    pub async fn library_songs(&self) -> Vec<Track> {
+        match super::innertube::library_songs(None).await {
+            Ok(songs) => songs,
+            Err(e) => {
+                log::error!("Library songs API failed: {e}");
+                crate::bridge::bridge::show_notification(
+                    &format!("Error al cargar canciones de biblioteca: {e}"),
+                    "error",
+                );
+                Vec::new()
+            }
+        }
+    }
+
+    pub async fn library_albums(&self) -> Vec<Album> {
+        match super::innertube::library_albums().await {
+            Ok(albums) => albums,
+            Err(e) => {
+                log::error!("Library albums API failed: {e}");
+                crate::bridge::bridge::show_notification(
+                    &format!("Error al cargar álbumes de biblioteca: {e}"),
+                    "error",
+                );
+                Vec::new()
+            }
+        }
+    }
+
+    pub async fn library_artists(&self) -> Vec<Artist> {
+        match super::innertube::library_artists().await {
+            Ok(artists) => artists,
+            Err(e) => {
+                log::error!("Library artists API failed: {e}");
+                crate::bridge::bridge::show_notification(
+                    &format!("Error al cargar artistas de biblioteca: {e}"),
+                    "error",
+                );
+                Vec::new()
+            }
+        }
+    }
+
     pub fn get_stream_url(&self, video_id: &str) -> Option<String> {
         let url = super::innertube::get_stream_url(video_id);
         if url.is_some() {

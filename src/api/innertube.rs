@@ -3,7 +3,9 @@
 //! New Innertube work belongs in `auth`, `transport`, `endpoints`, or `parsers`.
 
 pub use super::endpoints::{
-    album_detail, artist_detail, charts, home_sections, related_tracks, search, search_suggestions,
+    album_detail, artist_detail, charts, home_sections, library_albums, library_artists,
+    library_playlists, library_songs, playlist_detail, related_tracks, search,
+    search_suggestions,
 };
 
 pub fn get_stream_url(video_id: &str) -> Option<String> {

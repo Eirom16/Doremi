@@ -7,3 +7,4 @@ pub mod lyrics;
 pub mod search;
 pub mod trending;
 pub mod updater;
+pub mod library;

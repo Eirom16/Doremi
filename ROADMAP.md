@@ -223,9 +223,9 @@ El port se considera terminado cuando Doremi cubra los flujos reales de Pyrolist
 - [x] Trending/charts reales por region.
 - [x] Album detail y tracks.
 - [x] Artist detail, top songs, albums, singles y related.
-- [ ] Playlist detail, continuations y disponibilidad.
-- [ ] Related/radio/watch playlist para autoplay.
-- [ ] Library songs, albums, artists, playlists y subscriptions.
+- [x] Hecho - Playlist detail, continuations y disponibilidad.
+- [x] Hecho - Related/radio/watch playlist para autoplay.
+- [x] Hecho - Library songs, albums, artists, playlists y subscriptions.
 - [ ] Like/unlike y estado de like.
 - [ ] Crear, editar, borrar playlists.
 - [ ] Añadir y eliminar canciones de playlists.

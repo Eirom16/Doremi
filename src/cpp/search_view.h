@@ -20,7 +20,8 @@ public:
     void set_query(const std::string &query);
     void set_results(const std::vector<Track> &songs,
                      const std::vector<Artist> &artists,
-                     const std::vector<Album> &albums);
+                     const std::vector<Album> &albums,
+                     const std::vector<Playlist> &playlists);
     void set_recent_searches(const std::vector<std::string> &queries);
 signals:
     void filter_changed(const std::string &filter);
@@ -28,6 +29,7 @@ signals:
     void search_requested(const std::string &query, const std::string &filter);
     void album_requested(const std::string &browse_id);
     void artist_requested(const std::string &browse_id);
+    void playlist_requested(const std::string &playlist_id);
     void add_favorite_requested(Track track);
     void download_requested(Track track);
     void add_to_queue_next_requested(Track track);
@@ -42,7 +44,8 @@ private:
     void show_recent_searches(const std::vector<std::string> &queries);
     void show_results(const std::vector<Track> &songs,
                       const std::vector<Artist> &artists,
-                      const std::vector<Album> &albums);
+                      const std::vector<Album> &albums,
+                      const std::vector<Playlist> &playlists);
     bool showing_recent_ = false;
 };
 

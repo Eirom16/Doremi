@@ -259,6 +259,56 @@ pub async fn artist_detail(browse_id: &str) -> Result<super::models::ArtistDetai
     Ok(detail)
 }
 
+pub async fn playlist_detail(playlist_id: &str) -> Result<super::models::PlaylistDetail, String> {
+    let playlist_id = playlist_id.trim();
+    if playlist_id.is_empty() {
+        return Err("Playlist ID cannot be empty".to_string());
+    }
+    let browse_id = if playlist_id.starts_with("VL") {
+        playlist_id.to_string()
+    } else {
+        format!("VL{playlist_id}")
+    };
+    let key = cache_key(&format!("playlist:{browse_id}"));
+    if let Some(detail) = cached(&key) {
+        return Ok(detail);
+    }
+    let mut body = context();
+    body["browseId"] = serde_json::json!(browse_id);
+    let response = super::transport::post("browse", body).await?;
+    let (detail, _, _, mut continuation) =
+        super::parsers::parse_playlist_page(&response, &browse_id)?;
+    let mut detail = detail.ok_or_else(|| "Playlist initial response had no header".to_string())?;
+    let mut seen_tokens = HashSet::new();
+    let mut seen_tracks = detail
+        .tracks
+        .iter()
+        .map(|track| track.id.clone())
+        .collect::<HashSet<_>>();
+    for _ in 0..MAX_CONTINUATION_PAGES {
+        let Some(token) = continuation.take() else {
+            break;
+        };
+        if !seen_tokens.insert(token.clone()) {
+            break;
+        }
+        let mut continuation_body = context();
+        continuation_body["continuation"] = serde_json::json!(token);
+        let response = super::transport::post("browse", continuation_body).await?;
+        let (_, tracks, unavailable, next) =
+            super::parsers::parse_playlist_page(&response, &browse_id)?;
+        detail.unavailable_count += unavailable;
+        for track in tracks {
+            if seen_tracks.insert(track.id.clone()) {
+                detail.tracks.push(track);
+            }
+        }
+        continuation = next;
+    }
+    cache(&key, &detail, HOME_CACHE_TTL_SECS);
+    Ok(detail)
+}
+
 pub async fn related_tracks(video_id: &str) -> Result<Vec<super::models::Track>, String> {
     if video_id.trim().is_empty() {
         return Ok(Vec::new());
@@ -299,6 +349,157 @@ pub async fn related_tracks(video_id: &str) -> Result<Vec<super::models::Track>,
     }
     cache(&key, &tracks, RELATED_CACHE_TTL_SECS);
     Ok(tracks)
+}
+
+pub async fn library_playlists() -> Result<Vec<super::models::Playlist>, String> {
+    let key = cache_key("library:playlists");
+    if let Some(playlists) = cached(&key) {
+        return Ok(playlists);
+    }
+    let mut body = context();
+    body["browseId"] = serde_json::json!("FEmusic_liked_playlists");
+    let response = super::transport::post("browse", body).await?;
+    let mut page = super::parsers::parse_library_playlists(&response)?;
+    let mut playlists = page.items;
+    let mut seen_tokens = HashSet::new();
+    for _ in 0..MAX_CONTINUATION_PAGES {
+        let Some(token) = page.continuation.take() else {
+            break;
+        };
+        if !seen_tokens.insert(token.clone()) {
+            break;
+        }
+        let mut continuation_body = context();
+        continuation_body["continuation"] = serde_json::json!(token);
+        let response = super::transport::post("browse", continuation_body).await?;
+        page = super::parsers::parse_library_playlists(&response)?;
+        playlists.append(&mut page.items);
+    }
+    cache(&key, &playlists, RELATED_CACHE_TTL_SECS);
+    Ok(playlists)
+}
+
+pub async fn library_songs(limit: Option<usize>) -> Result<Vec<super::models::Track>, String> {
+    let limit_val = limit.unwrap_or(100);
+    let key = cache_key(&format!("library:songs:{}", limit_val));
+    if let Some(songs) = cached(&key) {
+        return Ok(songs);
+    }
+    let mut body = context();
+    body["browseId"] = serde_json::json!("FEmusic_liked_videos");
+    let response = super::transport::post("browse", body).await?;
+    let mut page = super::parsers::parse_library_songs_page(&response)?;
+    let mut songs = page.items;
+    let mut seen_tokens = HashSet::new();
+    for _ in 0..MAX_CONTINUATION_PAGES {
+        if songs.len() >= limit_val {
+            break;
+        }
+        let Some(token) = page.continuation.take() else {
+            break;
+        };
+        if !seen_tokens.insert(token.clone()) {
+            break;
+        }
+        let mut continuation_body = context();
+        continuation_body["continuation"] = serde_json::json!(token);
+        let response = super::transport::post("browse", continuation_body).await?;
+        page = super::parsers::parse_library_songs_page(&response)?;
+        songs.append(&mut page.items);
+    }
+    if limit.is_some() {
+        songs.truncate(limit_val);
+    }
+    cache(&key, &songs, RELATED_CACHE_TTL_SECS);
+    Ok(songs)
+}
+
+pub async fn library_albums() -> Result<Vec<super::models::Album>, String> {
+    let key = cache_key("library:albums");
+    if let Some(albums) = cached(&key) {
+        return Ok(albums);
+    }
+    let mut body = context();
+    body["browseId"] = serde_json::json!("FEmusic_liked_albums");
+    let response = super::transport::post("browse", body).await?;
+    let mut page = super::parsers::parse_library_albums(&response)?;
+    let mut albums = page.items;
+    let mut seen_tokens = HashSet::new();
+    for _ in 0..MAX_CONTINUATION_PAGES {
+        let Some(token) = page.continuation.take() else {
+            break;
+        };
+        if !seen_tokens.insert(token.clone()) {
+            break;
+        }
+        let mut continuation_body = context();
+        continuation_body["continuation"] = serde_json::json!(token);
+        let response = super::transport::post("browse", continuation_body).await?;
+        page = super::parsers::parse_library_albums(&response)?;
+        albums.append(&mut page.items);
+    }
+    cache(&key, &albums, RELATED_CACHE_TTL_SECS);
+    Ok(albums)
+}
+
+pub async fn library_artists() -> Result<Vec<super::models::Artist>, String> {
+    let key = cache_key("library:artists");
+    if let Some(artists) = cached(&key) {
+        return Ok(artists);
+    }
+
+    let fetch_artists = |browse_id: &'static str| async move {
+        let mut body = context();
+        body["browseId"] = serde_json::json!(browse_id);
+        let response = super::transport::post("browse", body).await?;
+        let mut page = super::parsers::parse_library_artists(&response)?;
+        let mut list = page.items;
+        let mut seen_tokens = HashSet::new();
+        for _ in 0..MAX_CONTINUATION_PAGES {
+            let Some(token) = page.continuation.take() else {
+                break;
+            };
+            if !seen_tokens.insert(token.clone()) {
+                break;
+            }
+            let mut continuation_body = context();
+            continuation_body["continuation"] = serde_json::json!(token);
+            let response = super::transport::post("browse", continuation_body).await?;
+            page = super::parsers::parse_library_artists(&response)?;
+            list.append(&mut page.items);
+        }
+        Result::<Vec<super::models::Artist>, String>::Ok(list)
+    };
+
+    let track_artists_fut = fetch_artists("FEmusic_library_corpus_track_artists");
+    let corpus_artists_fut = fetch_artists("FEmusic_library_corpus_artists");
+
+    let (track_artists_res, corpus_artists_res) = tokio::join!(track_artists_fut, corpus_artists_fut);
+
+    let mut merged = Vec::new();
+    let mut seen_ids = HashSet::new();
+
+    if let Ok(ref list) = track_artists_res {
+        for artist in list {
+            if seen_ids.insert(artist.id.clone()) {
+                merged.push(artist.clone());
+            }
+        }
+    }
+    if let Ok(ref list) = corpus_artists_res {
+        for artist in list {
+            if seen_ids.insert(artist.id.clone()) {
+                merged.push(artist.clone());
+            }
+        }
+    }
+
+    if track_artists_res.is_err() && corpus_artists_res.is_err() {
+        return Err("Failed to retrieve library artists".to_string());
+    }
+
+    cache(&key, &merged, RELATED_CACHE_TTL_SECS);
+    Ok(merged)
 }
 
 fn retain_new<T, F>(items: &mut Vec<T>, incoming: Vec<T>, id: F)

@@ -1,0 +1,13 @@
+{
+  "continuationContents": { "musicPlaylistShelfContinuation": {
+    "contents": [{ "musicResponsiveListItemRenderer": {
+      "playlistItemData": { "videoId": "playlist-track-2" },
+      "flexColumns": [
+        { "musicResponsiveListItemFlexColumnRenderer": { "text": { "runs": [{ "text": "Continuation track" }] } } },
+        { "musicResponsiveListItemFlexColumnRenderer": { "text": { "runs": [{ "text": "Second artist" }] } } },
+        { "musicResponsiveListItemFlexColumnRenderer": { "text": { "runs": [{ "text": "Second album" }] } } }
+      ],
+      "fixedColumns": [{ "musicResponsiveListItemFixedColumnRenderer": { "text": { "runs": [{ "text": "3:04" }] } } }]
+    } }]
+  } }
+}

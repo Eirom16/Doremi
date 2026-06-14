@@ -1,0 +1,35 @@
+{
+  "contents": { "twoColumnBrowseResultsRenderer": {
+    "tabs": [{ "tabRenderer": { "content": { "sectionListRenderer": { "contents": [{
+      "musicResponsiveHeaderRenderer": {
+        "title": { "runs": [{ "text": "Anonymous playlist" }] },
+        "straplineTextOne": { "runs": [{ "text": "Anonymous owner" }] },
+        "description": { "musicDescriptionShelfRenderer": { "description": { "runs": [{ "text": "Anonymous description" }] } } },
+        "secondSubtitle": { "runs": [{ "text": "3 songs" }] },
+        "thumbnail": { "musicThumbnailRenderer": { "thumbnail": { "thumbnails": [{ "url": "https://example.invalid/playlist.jpg" }] } } }
+      }
+    }] } } } }],
+    "secondaryContents": { "sectionListRenderer": { "contents": [{
+      "musicPlaylistShelfRenderer": {
+        "contents": [
+          { "musicResponsiveListItemRenderer": {
+            "playlistItemData": { "videoId": "playlist-track-1" },
+            "flexColumns": [
+              { "musicResponsiveListItemFlexColumnRenderer": { "text": { "runs": [{ "text": "Available track" }] } } },
+              { "musicResponsiveListItemFlexColumnRenderer": { "text": { "runs": [{ "text": "Anonymous artist" }] } } },
+              { "musicResponsiveListItemFlexColumnRenderer": { "text": { "runs": [{ "text": "Anonymous album" }] } } }
+            ],
+            "fixedColumns": [{ "musicResponsiveListItemFixedColumnRenderer": { "text": { "runs": [{ "text": "2:58" }] } } }],
+            "thumbnail": { "musicThumbnailRenderer": { "thumbnail": { "thumbnails": [{ "url": "https://example.invalid/track.jpg" }] } } }
+          } },
+          { "musicResponsiveListItemRenderer": {
+            "musicItemRendererDisplayPolicy": "MUSIC_ITEM_RENDERER_DISPLAY_POLICY_GREY_OUT",
+            "playlistItemData": { "videoId": "playlist-track-unavailable" },
+            "flexColumns": [{ "musicResponsiveListItemFlexColumnRenderer": { "text": { "runs": [{ "text": "Unavailable track" }] } } }]
+          } }
+        ],
+        "continuations": [{ "nextContinuationData": { "continuation": "playlist-page-2" } }]
+      }
+    }] } }
+  } }
+}

@@ -72,3 +72,46 @@ pub async fn load_artist(browse_id: &str) {
         ),
     }
 }
+
+pub async fn load_playlist(playlist_id: &str) {
+    match crate::api::innertube::playlist_detail(playlist_id).await {
+        Ok(detail) => {
+            let playlist = crate::bridge::bridge::Playlist {
+                id: detail.playlist.id,
+                name: detail.playlist.title,
+                description: detail.playlist.description.unwrap_or_default(),
+                thumbnail: detail.playlist.thumbnail,
+                track_count: detail
+                    .playlist
+                    .track_count
+                    .unwrap_or(detail.tracks.len() as i32),
+            };
+            let tracks = detail
+                .tracks
+                .into_iter()
+                .map(|track| crate::bridge::bridge::Track {
+                    id: track.id,
+                    title: track.title,
+                    artist: track.artists.join(", "),
+                    album: track.album.unwrap_or_default(),
+                    duration_ms: track.duration_ms,
+                    thumbnail: track.thumbnail,
+                })
+                .collect();
+            crate::bridge::bridge::set_playlist_detail(playlist, tracks);
+            if detail.unavailable_count > 0 {
+                crate::bridge::bridge::show_notification(
+                    &format!(
+                        "{} canciones no están disponibles",
+                        detail.unavailable_count
+                    ),
+                    "info",
+                );
+            }
+        }
+        Err(error) => crate::bridge::bridge::show_notification(
+            &format!("No se pudo cargar la playlist: {error}"),
+            "error",
+        ),
+    }
+}

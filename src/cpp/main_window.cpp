@@ -277,6 +277,8 @@ void DoremiMainWindow::connect_signals() {
         [](const std::string &browse_id) { on_album_requested(browse_id); });
     QObject::connect(search_view_, &SearchView::artist_requested, this,
         [](const std::string &browse_id) { on_artist_requested(browse_id); });
+    QObject::connect(search_view_, &SearchView::playlist_requested, this,
+        [](const std::string &playlist_id) { on_playlist_requested(playlist_id); });
     QObject::connect(search_view_, &SearchView::add_favorite_requested, this,
         [](Track track) {
             on_add_favorite(track);
@@ -766,15 +768,18 @@ void set_search_suggestions(rust::Vec<rust::String> suggestions) {
     });
 }
 
-void set_search_results(rust::Vec<Track> songs, rust::Vec<Artist> artists, rust::Vec<Album> albums) {
+void set_search_results(rust::Vec<Track> songs, rust::Vec<Artist> artists,
+                        rust::Vec<Album> albums, rust::Vec<Playlist> playlists) {
     std::vector<Track> s;
     for (const auto &x : songs) s.push_back(x);
     std::vector<Artist> a;
     for (const auto &x : artists) a.push_back(x);
     std::vector<Album> al;
     for (const auto &x : albums) al.push_back(x);
-    mutate_main_window("set_search_results", [s = std::move(s), a = std::move(a), al = std::move(al)](DoremiMainWindow &window) {
-        if (window.search_view()) window.search_view()->set_results(s, a, al);
+    std::vector<Playlist> p;
+    for (const auto &x : playlists) p.push_back(x);
+    mutate_main_window("set_search_results", [s = std::move(s), a = std::move(a), al = std::move(al), p = std::move(p)](DoremiMainWindow &window) {
+        if (window.search_view()) window.search_view()->set_results(s, a, al, p);
     });
 }
 

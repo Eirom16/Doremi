@@ -114,6 +114,7 @@ pub mod bridge {
         fn on_search_history_requested();
         fn on_album_requested(browse_id: &str);
         fn on_artist_requested(browse_id: &str);
+        fn on_playlist_requested(playlist_id: &str);
         fn on_volume_change(delta: i32);
         fn on_volume_set(volume: i32);
         fn on_seek_relative(delta_ms: i32);
@@ -211,7 +212,12 @@ pub mod bridge {
         fn set_settings_mpris_enabled(on: bool);
 
         // Data service functions
-        fn set_search_results(songs: Vec<Track>, artists: Vec<Artist>, albums: Vec<Album>);
+        fn set_search_results(
+            songs: Vec<Track>,
+            artists: Vec<Artist>,
+            albums: Vec<Album>,
+            playlists: Vec<Playlist>,
+        );
         fn add_home_section(title: &str, items: Vec<String>);
         fn clear_home_sections();
         fn set_trending_items(titles: Vec<String>, subtitles: Vec<String>, thumbnails: Vec<String>);
@@ -340,6 +346,13 @@ pub fn on_artist_requested(browse_id: &str) {
     });
 }
 
+pub fn on_playlist_requested(playlist_id: &str) {
+    let playlist_id = playlist_id.to_string();
+    tokio::spawn(async move {
+        crate::services::browse::load_playlist(&playlist_id).await;
+    });
+}
+
 pub fn on_volume_change(delta: i32) {
     with_player(|p| p.adjust_volume(delta));
 }
@@ -417,86 +430,96 @@ pub fn on_library_tab_changed(tab_key: &str) {
     log::info!("Library tab changed: {tab_key}");
     let tab_key = tab_key.to_string();
     tokio::spawn(async move {
-        tokio::task::spawn_blocking(move || {
-            use crate::db::repo::*;
-            let Some(tab) = LibraryTab::from_key(&tab_key) else {
-                log::warn!("Ignoring unknown library tab key: {tab_key}");
-                return;
-            };
+        let Some(tab) = LibraryTab::from_key(&tab_key) else {
+            log::warn!("Ignoring unknown library tab key: {tab_key}");
+            return;
+        };
 
+        if is_youtube_authenticated() {
+            let service = crate::services::library::LibraryService::new();
             match tab {
-                LibraryTab::Songs => {
-                    if let Ok(tracks) = FavoritesRepo::all_tracks() {
-                        let songs: Vec<crate::bridge::bridge::Track> = tracks
-                            .iter()
-                            .map(|t| crate::bridge::bridge::Track {
-                                id: t.id.clone(),
-                                title: t.title.clone(),
-                                artist: t.artist.clone(),
-                                album: t.album.clone(),
-                                duration_ms: t.duration_ms,
-                                thumbnail: t.thumbnail.clone(),
-                            })
-                            .collect();
-                        crate::bridge::bridge::set_library_songs(songs);
-                    }
-                }
-                LibraryTab::Albums => {
-                    if let Ok(albums) = FavoritesRepo::all_albums() {
-                        let a_list: Vec<crate::bridge::bridge::Album> = albums
-                            .iter()
-                            .map(|a| crate::bridge::bridge::Album {
-                                id: a.id.clone(),
-                                title: a.title.clone(),
-                                artist: a.artist.clone(),
-                                year: a.year.map(|y| y.to_string()).unwrap_or_default(),
-                                thumbnail: a.thumbnail.clone(),
-                                track_count: 0,
-                            })
-                            .collect();
-                        crate::bridge::bridge::set_library_albums(a_list);
-                    }
-                }
-                LibraryTab::Artists => {
-                    if let Ok(artists) = FavoritesRepo::all_artists() {
-                        let art_list: Vec<crate::bridge::bridge::Artist> = artists
-                            .iter()
-                            .map(|a| crate::bridge::bridge::Artist {
-                                id: a.id.clone(),
-                                name: a.name.clone(),
-                                thumbnail: a.thumbnail.clone(),
-                                description: String::new(),
-                                subscribers: String::new(),
-                            })
-                            .collect();
-                        crate::bridge::bridge::set_library_artists(art_list);
-                    }
-                }
-                LibraryTab::Playlists => {
-                    if let Ok(playlists) = PlaylistRepo::all() {
-                        let p_list: Vec<crate::bridge::bridge::Playlist> = playlists
-                            .iter()
-                            .map(|p| {
-                                let count = PlaylistRepo::tracks(&p.id)
-                                    .ok()
-                                    .map(|t| t.len() as i32)
-                                    .unwrap_or(0);
-                                crate::bridge::bridge::Playlist {
-                                    id: p.id.clone(),
-                                    name: p.name.clone(),
-                                    description: p.description.clone(),
-                                    thumbnail: p.artwork.clone(),
-                                    track_count: count,
-                                }
-                            })
-                            .collect();
-                        crate::bridge::bridge::set_library_playlists(p_list);
-                    }
-                }
+                LibraryTab::Songs => service.load_songs().await,
+                LibraryTab::Albums => service.load_albums().await,
+                LibraryTab::Artists => service.load_artists().await,
+                LibraryTab::Playlists => service.load_playlists().await,
             }
-        })
-        .await
-        .ok();
+        } else {
+            tokio::task::spawn_blocking(move || {
+                use crate::db::repo::*;
+                match tab {
+                    LibraryTab::Songs => {
+                        if let Ok(tracks) = FavoritesRepo::all_tracks() {
+                            let songs: Vec<crate::bridge::bridge::Track> = tracks
+                                .iter()
+                                .map(|t| crate::bridge::bridge::Track {
+                                    id: t.id.clone(),
+                                    title: t.title.clone(),
+                                    artist: t.artist.clone(),
+                                    album: t.album.clone(),
+                                    duration_ms: t.duration_ms,
+                                    thumbnail: t.thumbnail.clone(),
+                                })
+                                .collect();
+                            crate::bridge::bridge::set_library_songs(songs);
+                        }
+                    }
+                    LibraryTab::Albums => {
+                        if let Ok(albums) = FavoritesRepo::all_albums() {
+                            let a_list: Vec<crate::bridge::bridge::Album> = albums
+                                .iter()
+                                .map(|a| crate::bridge::bridge::Album {
+                                    id: a.id.clone(),
+                                    title: a.title.clone(),
+                                    artist: a.artist.clone(),
+                                    year: a.year.map(|y| y.to_string()).unwrap_or_default(),
+                                    thumbnail: a.thumbnail.clone(),
+                                    track_count: 0,
+                                })
+                                .collect();
+                            crate::bridge::bridge::set_library_albums(a_list);
+                        }
+                    }
+                    LibraryTab::Artists => {
+                        if let Ok(artists) = FavoritesRepo::all_artists() {
+                            let art_list: Vec<crate::bridge::bridge::Artist> = artists
+                                .iter()
+                                .map(|a| crate::bridge::bridge::Artist {
+                                    id: a.id.clone(),
+                                    name: a.name.clone(),
+                                    thumbnail: a.thumbnail.clone(),
+                                    description: String::new(),
+                                    subscribers: String::new(),
+                                })
+                                .collect();
+                            crate::bridge::bridge::set_library_artists(art_list);
+                        }
+                    }
+                    LibraryTab::Playlists => {
+                        if let Ok(playlists) = PlaylistRepo::all() {
+                            let p_list: Vec<crate::bridge::bridge::Playlist> = playlists
+                                .iter()
+                                .map(|p| {
+                                    let count = PlaylistRepo::tracks(&p.id)
+                                        .ok()
+                                        .map(|t| t.len() as i32)
+                                        .unwrap_or(0);
+                                    crate::bridge::bridge::Playlist {
+                                        id: p.id.clone(),
+                                        name: p.name.clone(),
+                                        description: p.description.clone(),
+                                        thumbnail: p.artwork.clone(),
+                                        track_count: count,
+                                    }
+                                })
+                                .collect();
+                            crate::bridge::bridge::set_library_playlists(p_list);
+                        }
+                    }
+                }
+            })
+            .await
+            .ok();
+        }
     });
 }
 

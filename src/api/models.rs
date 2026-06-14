@@ -133,6 +133,14 @@ pub struct Playlist {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PlaylistDetail {
+    pub playlist: Playlist,
+    pub privacy: String,
+    pub tracks: Vec<Track>,
+    pub unavailable_count: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SearchResults {
     pub query: String,
     pub songs: Vec<Track>,

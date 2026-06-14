@@ -56,8 +56,19 @@ impl SearchService {
                 track_count: a.track_count.unwrap_or(0),
             })
             .collect();
+        let playlists: Vec<crate::bridge::bridge::Playlist> = results
+            .playlists
+            .iter()
+            .map(|playlist| crate::bridge::bridge::Playlist {
+                id: playlist.id.clone(),
+                name: playlist.title.clone(),
+                description: playlist.description.clone().unwrap_or_default(),
+                thumbnail: playlist.thumbnail.clone(),
+                track_count: playlist.track_count.unwrap_or_default(),
+            })
+            .collect();
 
-        crate::bridge::bridge::set_search_results(songs, artists, albums);
+        crate::bridge::bridge::set_search_results(songs, artists, albums, playlists);
     }
 }
 

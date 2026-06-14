@@ -139,7 +139,8 @@ void set_window_title(rust::Str title);
 void set_playing(bool playing);
 void set_player_volume(int32_t volume);
 void run_event_loop();
-void set_search_results(rust::Vec<Track> songs, rust::Vec<Artist> artists, rust::Vec<Album> albums);
+void set_search_results(rust::Vec<Track> songs, rust::Vec<Artist> artists,
+                        rust::Vec<Album> albums, rust::Vec<Playlist> playlists);
 void add_home_section(rust::Str title, rust::Vec<rust::String> items);
 void clear_home_sections();
 void set_library_songs(rust::Vec<Track> songs);

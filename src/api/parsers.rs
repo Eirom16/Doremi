@@ -1,5 +1,6 @@
 use super::models::{
-    Album, Artist, ArtistDetail, HomeItem, HomeSection, Playlist, SearchResults, Track,
+    Album, Artist, ArtistDetail, HomeItem, HomeSection, Playlist, PlaylistDetail, SearchResults,
+    Track,
 };
 use serde_json::Value;
 use std::collections::HashSet;
@@ -57,6 +58,11 @@ fn thumbnail(renderer: &Value) -> String {
     renderer
         .pointer("/thumbnail/musicThumbnailRenderer/thumbnail/thumbnails")
         .or_else(|| renderer.pointer("/thumbnail/thumbnails"))
+        .or_else(|| {
+            renderer.pointer(
+                "/thumbnailRenderer/musicThumbnailRenderer/thumbnail/thumbnails",
+            )
+        })
         .and_then(Value::as_array)
         .and_then(|items| items.last())
         .and_then(|item| item["url"].as_str())
@@ -173,6 +179,305 @@ fn continuation_token(value: &Value) -> Option<String> {
         Value::Array(items) => items.iter().find_map(continuation_token),
         _ => None,
     }
+}
+
+fn find_library_contents(json: &Value) -> Option<&Value> {
+    if let Some(grid) = json.get("gridContinuation") {
+        return Some(grid);
+    }
+    if let Some(shelf) = json.get("musicShelfContinuation") {
+        return Some(shelf);
+    }
+    for tab_idx in 0..4 {
+        let path = format!(
+            "/contents/singleColumnBrowseResultsRenderer/tabs/{}/tabRenderer/content/sectionListRenderer/contents/0",
+            tab_idx
+        );
+        if let Some(item) = json.pointer(&path) {
+            if let Some(grid) = item.get("gridRenderer") {
+                return Some(grid);
+            }
+            if let Some(shelf) = item.get("musicShelfRenderer") {
+                return Some(shelf);
+            }
+            if let Some(contents) = item.pointer("/itemSectionRenderer/contents/0") {
+                if let Some(grid) = contents.get("gridRenderer") {
+                    return Some(grid);
+                }
+                if let Some(shelf) = contents.get("musicShelfRenderer") {
+                    return Some(shelf);
+                }
+            }
+        }
+    }
+    if let Some(item) = json.pointer("/contents/sectionListRenderer/contents/0") {
+        if let Some(grid) = item.get("gridRenderer") {
+            return Some(grid);
+        }
+        if let Some(shelf) = item.get("musicShelfRenderer") {
+            return Some(shelf);
+        }
+    }
+    None
+}
+
+fn parse_item_common(
+    renderer: &Value,
+) -> Option<(String, Option<String>, Option<String>, Option<String>)> {
+    let title = renderer
+        .pointer("/flexColumns/0/musicResponsiveListItemFlexColumnRenderer/text")
+        .map(runs)
+        .filter(|value| !value.is_empty())
+        .or_else(|| renderer.pointer("/title").map(runs))
+        .filter(|value| !value.is_empty())?;
+
+    let subtitle = renderer
+        .pointer("/flexColumns/1/musicResponsiveListItemFlexColumnRenderer/text")
+        .map(runs)
+        .filter(|value| !value.is_empty())
+        .or_else(|| renderer.pointer("/subtitle").map(runs))
+        .filter(|value| !value.is_empty());
+
+    let browse_id = renderer
+        .pointer("/navigationEndpoint/browseEndpoint/browseId")
+        .or_else(|| {
+            renderer.pointer(
+                "/title/runs/0/navigationEndpoint/browseEndpoint/browseId",
+            )
+        })
+        .and_then(Value::as_str)
+        .map(str::to_string);
+
+    let playlist_id = renderer
+        .pointer("/navigationEndpoint/watchPlaylistEndpoint/playlistId")
+        .or_else(|| {
+            renderer.pointer("/navigationEndpoint/watchEndpoint/playlistId")
+        })
+        .and_then(Value::as_str)
+        .map(str::to_string);
+
+    Some((title, subtitle, browse_id, playlist_id))
+}
+
+fn parse_library_playlist(renderer: &Value) -> Option<Playlist> {
+    let (title, subtitle, browse_id, playlist_id) =
+        parse_item_common(renderer)?;
+    let id = playlist_id.or_else(|| {
+        browse_id.map(|id| {
+            id.strip_prefix("VL").unwrap_or(&id).to_string()
+        })
+    })?;
+    let track_count = subtitle.as_ref().and_then(|sub| {
+        sub.split_whitespace()
+            .find_map(|part| part.replace(',', "").parse::<i32>().ok())
+    });
+    Some(Playlist {
+        id,
+        title,
+        description: None,
+        owner: subtitle,
+        thumbnail: thumbnail(renderer),
+        track_count,
+    })
+}
+
+fn parse_library_album(renderer: &Value) -> Option<Album> {
+    let (title, subtitle, browse_id, _) = parse_item_common(renderer)?;
+    let id = browse_id?;
+    if !id.starts_with("MPRE") {
+        return None;
+    }
+
+    let mut artists = Vec::new();
+    let mut year = None;
+    if let Some(runs) =
+        renderer.pointer("/subtitle/runs").and_then(Value::as_array)
+    {
+        for run in runs {
+            if let Some(text) = run["text"].as_str() {
+                let text = text.trim();
+                if text == "•" || text.is_empty() {
+                    continue;
+                }
+                if text.len() == 4 && text.chars().all(|c| c.is_ascii_digit()) {
+                    year = text.parse::<i32>().ok();
+                } else if text != "Álbum"
+                    && text != "Album"
+                    && text != "Sencillo"
+                    && text != "Single"
+                    && text != "EP"
+                {
+                    artists.push(text.to_string());
+                }
+            }
+        }
+    }
+
+    if artists.is_empty() {
+        if let Some(sub) = subtitle {
+            artists.push(sub);
+        }
+    }
+
+    Some(Album {
+        id,
+        title,
+        artists,
+        year,
+        thumbnail: thumbnail(renderer),
+        track_count: None,
+    })
+}
+
+fn parse_library_artist(renderer: &Value) -> Option<Artist> {
+    let (name, subtitle, browse_id, _) = parse_item_common(renderer)?;
+    let id = browse_id?;
+    let subscriber_count = subtitle.and_then(|sub| {
+        let parts = sub.split_whitespace().collect::<Vec<_>>();
+        parts.first().map(|s| s.to_string())
+    });
+    Some(Artist {
+        id,
+        name,
+        thumbnail: thumbnail(renderer),
+        subscriber_count,
+    })
+}
+
+pub(crate) fn parse_library_playlists(
+    json: &Value,
+) -> Result<ParsedPage<Vec<Playlist>>, String> {
+    let shelf = find_library_contents(json).ok_or_else(|| {
+        schema_error(
+            "library/playlists",
+            "gridRenderer or musicShelfRenderer",
+            json,
+        )
+    })?;
+    let items = shelf
+        .get("items")
+        .or_else(|| shelf.get("contents"))
+        .and_then(Value::as_array)
+        .ok_or_else(|| {
+            schema_error("library/playlists", "items or contents", json)
+        })?;
+
+    let mut playlists = Vec::new();
+    let start_idx = if items
+        .first()
+        .and_then(|item| {
+            item.pointer(
+                "/musicTwoRowItemRenderer/navigationEndpoint/createPlaylistEndpoint",
+            )
+            .or_else(|| {
+                item.pointer(
+                    "/musicResponsiveListItemRenderer/navigationEndpoint/createPlaylistEndpoint",
+                )
+            })
+        })
+        .is_some()
+    {
+        1
+    } else {
+        0
+    };
+
+    for item in &items[start_idx..] {
+        let renderer = item
+            .get("musicTwoRowItemRenderer")
+            .or_else(|| item.get("musicResponsiveListItemRenderer"))
+            .unwrap_or(item);
+        if let Some(playlist) = parse_library_playlist(renderer) {
+            playlists.push(playlist);
+        }
+    }
+
+    Ok(ParsedPage {
+        items: playlists,
+        continuation: continuation_token(json),
+    })
+}
+
+pub(crate) fn parse_library_songs_page(
+    json: &Value,
+) -> Result<ParsedPage<Vec<Track>>, String> {
+    let shelf = find_library_contents(json).ok_or_else(|| {
+        schema_error("library/songs", "musicShelfRenderer", json)
+    })?;
+    let items = shelf
+        .get("contents")
+        .or_else(|| shelf.get("items"))
+        .and_then(Value::as_array)
+        .ok_or_else(|| schema_error("library/songs", "shelf contents", json))?;
+
+    let (tracks, _) = parse_playlist_tracks(items);
+
+    Ok(ParsedPage {
+        items: tracks,
+        continuation: continuation_token(json),
+    })
+}
+
+pub(crate) fn parse_library_albums(
+    json: &Value,
+) -> Result<ParsedPage<Vec<Album>>, String> {
+    let shelf = find_library_contents(json).ok_or_else(|| {
+        schema_error("library/albums", "gridRenderer or musicShelfRenderer", json)
+    })?;
+    let items = shelf
+        .get("items")
+        .or_else(|| shelf.get("contents"))
+        .and_then(Value::as_array)
+        .ok_or_else(|| {
+            schema_error("library/albums", "items or contents", json)
+        })?;
+
+    let mut albums = Vec::new();
+    for item in items {
+        let renderer = item
+            .get("musicTwoRowItemRenderer")
+            .or_else(|| item.get("musicResponsiveListItemRenderer"))
+            .unwrap_or(item);
+        if let Some(album) = parse_library_album(renderer) {
+            albums.push(album);
+        }
+    }
+
+    Ok(ParsedPage {
+        items: albums,
+        continuation: continuation_token(json),
+    })
+}
+
+pub(crate) fn parse_library_artists(
+    json: &Value,
+) -> Result<ParsedPage<Vec<Artist>>, String> {
+    let shelf = find_library_contents(json).ok_or_else(|| {
+        schema_error("library/artists", "gridRenderer or musicShelfRenderer", json)
+    })?;
+    let items = shelf
+        .get("items")
+        .or_else(|| shelf.get("contents"))
+        .and_then(Value::as_array)
+        .ok_or_else(|| {
+            schema_error("library/artists", "items or contents", json)
+        })?;
+
+    let mut artists = Vec::new();
+    for item in items {
+        let renderer = item
+            .get("musicTwoRowItemRenderer")
+            .or_else(|| item.get("musicResponsiveListItemRenderer"))
+            .unwrap_or(item);
+        if let Some(artist) = parse_library_artist(renderer) {
+            artists.push(artist);
+        }
+    }
+
+    Ok(ParsedPage {
+        items: artists,
+        continuation: continuation_token(json),
+    })
 }
 
 fn search_sections(json: &Value) -> Option<&Vec<Value>> {
@@ -589,6 +894,100 @@ pub fn parse_artist_detail(json: &Value, browse_id: &str) -> Result<ArtistDetail
     Ok(detail)
 }
 
+fn parse_playlist_tracks(items: &[Value]) -> (Vec<Track>, usize) {
+    let mut tracks = Vec::new();
+    let mut unavailable = 0;
+    for item in items {
+        let renderer = &item["musicResponsiveListItemRenderer"];
+        if renderer.is_null() {
+            continue;
+        }
+        if renderer["musicItemRendererDisplayPolicy"]
+            == "MUSIC_ITEM_RENDERER_DISPLAY_POLICY_GREY_OUT"
+        {
+            unavailable += 1;
+            continue;
+        }
+        let id = video_id(renderer);
+        let title =
+            runs(&renderer["flexColumns"][0]["musicResponsiveListItemFlexColumnRenderer"]["text"]);
+        if id.is_empty() || title.is_empty() {
+            continue;
+        }
+        let artist =
+            runs(&renderer["flexColumns"][1]["musicResponsiveListItemFlexColumnRenderer"]["text"]);
+        let album =
+            runs(&renderer["flexColumns"][2]["musicResponsiveListItemFlexColumnRenderer"]["text"]);
+        let duration = text(
+            &renderer["fixedColumns"][0]["musicResponsiveListItemFixedColumnRenderer"]["text"],
+        );
+        tracks.push(Track {
+            id,
+            title,
+            artists: if artist.is_empty() {
+                Vec::new()
+            } else {
+                vec![artist]
+            },
+            album: if album.is_empty() { None } else { Some(album) },
+            album_id: None,
+            duration_ms: duration_ms(&duration),
+            thumbnail: thumbnail(renderer),
+            stream_url: None,
+        });
+    }
+    (tracks, unavailable)
+}
+
+pub(crate) fn parse_playlist_page(
+    json: &Value,
+    playlist_id: &str,
+) -> Result<(Option<PlaylistDetail>, Vec<Track>, usize, Option<String>), String> {
+    if let Some(items) = json
+        .pointer("/continuationContents/musicPlaylistShelfContinuation/contents")
+        .and_then(Value::as_array)
+    {
+        let (tracks, unavailable) = parse_playlist_tracks(items);
+        return Ok((None, tracks, unavailable, continuation_token(json)));
+    }
+
+    let header = json
+        .pointer("/contents/twoColumnBrowseResultsRenderer/tabs/0/tabRenderer/content/sectionListRenderer/contents/0/musicResponsiveHeaderRenderer")
+        .ok_or_else(|| schema_error("browse/playlist", "musicResponsiveHeaderRenderer", json))?;
+    let items = json
+        .pointer("/contents/twoColumnBrowseResultsRenderer/secondaryContents/sectionListRenderer/contents/0/musicPlaylistShelfRenderer/contents")
+        .and_then(Value::as_array)
+        .ok_or_else(|| schema_error("browse/playlist", "musicPlaylistShelfRenderer.contents", json))?;
+    let title = text(&header["title"]);
+    if title.is_empty() {
+        return Err(schema_error(
+            "browse/playlist",
+            "a non-empty playlist title",
+            json,
+        ));
+    }
+    let description = header
+        .pointer("/description/musicDescriptionShelfRenderer/description")
+        .map(text)
+        .filter(|value| !value.is_empty());
+    let owner = text(&header["straplineTextOne"]);
+    let (tracks, unavailable) = parse_playlist_tracks(items);
+    let detail = PlaylistDetail {
+        playlist: Playlist {
+            id: playlist_id.trim_start_matches("VL").to_string(),
+            title,
+            description,
+            owner: if owner.is_empty() { None } else { Some(owner) },
+            thumbnail: thumbnail(header),
+            track_count: first_number(&header["secondSubtitle"]),
+        },
+        privacy: "PUBLIC".to_string(),
+        tracks: tracks.clone(),
+        unavailable_count: unavailable,
+    };
+    Ok((Some(detail), tracks, unavailable, continuation_token(json)))
+}
+
 pub(crate) fn parse_home_page(json: &Value) -> Result<ParsedPage<Vec<HomeSection>>, String> {
     let contents = json.pointer("/contents/singleColumnBrowseResultsRenderer/tabs/0/tabRenderer/content/sectionListRenderer/contents")
         .or_else(|| json.pointer("/continuationContents/sectionListContinuation/contents"))
@@ -829,5 +1228,26 @@ mod tests {
         assert_eq!(detail.albums[0].id, "MPREartistalbum");
         assert_eq!(detail.singles[0].id, "MPREartistsingle");
         assert_eq!(detail.related[0].id, "UCanonymousrelated");
+    }
+
+    #[test]
+    fn parses_playlist_detail_availability_and_continuation() {
+        let detail_fixture = fixture(include_str!("fixtures/playlist_detail.json"));
+        let (detail, tracks, unavailable, token) =
+            parse_playlist_page(&detail_fixture, "VLPLanonymous").unwrap();
+        let detail = detail.unwrap();
+        assert_eq!(detail.playlist.title, "Anonymous playlist");
+        assert_eq!(detail.playlist.owner.as_deref(), Some("Anonymous owner"));
+        assert_eq!(tracks.len(), 1);
+        assert_eq!(unavailable, 1);
+        assert_eq!(token.as_deref(), Some("playlist-page-2"));
+
+        let continuation = fixture(include_str!("fixtures/playlist_continuation.json"));
+        let (detail, tracks, unavailable, token) =
+            parse_playlist_page(&continuation, "VLPLanonymous").unwrap();
+        assert!(detail.is_none());
+        assert_eq!(tracks[0].id, "playlist-track-2");
+        assert_eq!(unavailable, 0);
+        assert!(token.is_none());
     }
 }

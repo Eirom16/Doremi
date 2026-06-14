@@ -119,13 +119,14 @@ static void clear_layout(QVBoxLayout *lay) {
 
 void SearchView::show_results(const std::vector<Track> &songs,
                               const std::vector<Artist> &artists,
-                              const std::vector<Album> &albums) {
+                              const std::vector<Album> &albums,
+                              const std::vector<Playlist> &playlists) {
     showing_recent_ = false;
     clear_layout(results_);
 
     const auto &c = DesignTokens::current();
 
-    bool has_any = !songs.empty() || !artists.empty() || !albums.empty();
+    bool has_any = !songs.empty() || !artists.empty() || !albums.empty() || !playlists.empty();
     if (!has_any) {
         auto *empty = new QLabel("Sin resultados", this);
         empty->setFont(DesignTokens::getFont("body", 14));
@@ -192,6 +193,23 @@ void SearchView::show_results(const std::vector<Track> &songs,
             results_->addWidget(ci);
             connect(ci, &ClickableItem::clicked, this, [this, album]() {
                 emit album_requested(static_cast<std::string>(album.id));
+            });
+        }
+    }
+
+    if (!playlists.empty()) {
+        auto *sec_header = new QLabel("Playlists", this);
+        sec_header->setFont(DesignTokens::getFont("micro", 11));
+        sec_header->setStyleSheet(QString("color: %1; text-transform: uppercase; padding: 12px 12px 6px;")
+            .arg(c.accent.name()));
+        results_->addWidget(sec_header);
+        for (const auto &playlist : playlists) {
+            auto *ci = new ClickableItem(static_cast<std::string>(playlist.name),
+                                         static_cast<std::string>(playlist.description), this);
+            ci->set_item_id(static_cast<std::string>(playlist.id));
+            results_->addWidget(ci);
+            connect(ci, &ClickableItem::clicked, this, [this, playlist]() {
+                emit playlist_requested(static_cast<std::string>(playlist.id));
             });
         }
     }
@@ -267,8 +285,9 @@ void SearchView::show_recent_searches(const std::vector<std::string> &queries) {
 
 void SearchView::set_results(const std::vector<Track> &songs,
                              const std::vector<Artist> &artists,
-                             const std::vector<Album> &albums) {
-    show_results(songs, artists, albums);
+                             const std::vector<Album> &albums,
+                             const std::vector<Playlist> &playlists) {
+    show_results(songs, artists, albums, playlists);
 }
 
 void SearchView::set_recent_searches(const std::vector<std::string> &queries) {
