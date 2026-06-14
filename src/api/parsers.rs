@@ -1,4 +1,6 @@
-use super::models::{Album, Artist, HomeItem, HomeSection, Playlist, SearchResults, Track};
+use super::models::{
+    Album, Artist, ArtistDetail, HomeItem, HomeSection, Playlist, SearchResults, Track,
+};
 use serde_json::Value;
 use std::collections::HashSet;
 
@@ -82,6 +84,25 @@ fn duration_ms(value: &str) -> i64 {
         })
         .unwrap_or(0)
         .saturating_mul(1000)
+}
+
+fn first_year(value: &Value) -> Option<i32> {
+    value["runs"].as_array().and_then(|items| {
+        items.iter().find_map(|item| {
+            item["text"]
+                .as_str()
+                .filter(|text| {
+                    text.len() == 4 && text.chars().all(|character| character.is_ascii_digit())
+                })
+                .and_then(|text| text.parse().ok())
+        })
+    })
+}
+
+fn first_number(value: &Value) -> Option<i32> {
+    text(value)
+        .split_whitespace()
+        .find_map(|part| part.replace(',', "").parse().ok())
 }
 
 fn search_category(title: &str) -> &'static str {
@@ -329,6 +350,245 @@ pub fn parse_search_suggestions(json: &Value) -> Result<Vec<String>, String> {
     Ok(suggestions)
 }
 
+pub fn parse_album_detail(json: &Value, browse_id: &str) -> Result<(Album, Vec<Track>), String> {
+    let header = json
+        .pointer("/contents/twoColumnBrowseResultsRenderer/tabs/0/tabRenderer/content/sectionListRenderer/contents/0/musicResponsiveHeaderRenderer")
+        .or_else(|| json.pointer("/contents/twoColumnBrowseResultsRenderer/tabs/0/tabRenderer/content/sectionListRenderer/contents/0/musicDetailHeaderRenderer"))
+        .ok_or_else(|| {
+            schema_error(
+                "browse/album",
+                "a responsive or detail album header",
+                json,
+            )
+        })?;
+    let title = text(&header["title"]);
+    if title.is_empty() {
+        return Err(schema_error(
+            "browse/album",
+            "a non-empty album header title",
+            json,
+        ));
+    }
+    let artist_text = text(&header["straplineTextOne"]);
+    let artists = if artist_text.is_empty() {
+        Vec::new()
+    } else {
+        vec![artist_text]
+    };
+    let album_thumbnail = thumbnail(header);
+    let track_count = first_number(&header["secondSubtitle"]);
+    let album = Album {
+        id: browse_id.to_string(),
+        title: title.clone(),
+        artists: artists.clone(),
+        year: first_year(&header["subtitle"]),
+        thumbnail: album_thumbnail.clone(),
+        track_count,
+    };
+
+    let contents = json
+        .pointer("/contents/twoColumnBrowseResultsRenderer/secondaryContents/sectionListRenderer/contents/0/musicShelfRenderer/contents")
+        .and_then(Value::as_array)
+        .ok_or_else(|| {
+            schema_error(
+                "browse/album",
+                "secondaryContents musicShelfRenderer.contents",
+                json,
+            )
+        })?;
+    let mut tracks = Vec::new();
+    for item in contents {
+        let renderer = &item["musicResponsiveListItemRenderer"];
+        if renderer.is_null()
+            || renderer["musicItemRendererDisplayPolicy"]
+                == "MUSIC_ITEM_RENDERER_DISPLAY_POLICY_GREY_OUT"
+        {
+            continue;
+        }
+        let id = video_id(renderer);
+        let track_title =
+            runs(&renderer["flexColumns"][0]["musicResponsiveListItemFlexColumnRenderer"]["text"]);
+        if id.is_empty() || track_title.is_empty() {
+            continue;
+        }
+        let track_artist =
+            runs(&renderer["flexColumns"][1]["musicResponsiveListItemFlexColumnRenderer"]["text"]);
+        let duration = text(
+            &renderer["fixedColumns"][0]["musicResponsiveListItemFixedColumnRenderer"]["text"],
+        );
+        tracks.push(Track {
+            id,
+            title: track_title,
+            artists: if track_artist.is_empty() {
+                artists.clone()
+            } else {
+                vec![track_artist]
+            },
+            album: Some(title.clone()),
+            album_id: Some(browse_id.to_string()),
+            duration_ms: duration_ms(&duration),
+            thumbnail: album_thumbnail.clone(),
+            stream_url: None,
+        });
+    }
+    Ok((album, tracks))
+}
+
+fn artist_section_title(section: &Value) -> String {
+    section
+        .pointer("/musicShelfRenderer/title")
+        .or_else(|| {
+            section.pointer(
+                "/musicCarouselShelfRenderer/header/musicCarouselShelfBasicHeaderRenderer/title",
+            )
+        })
+        .map(runs)
+        .unwrap_or_default()
+        .to_lowercase()
+}
+
+fn parse_artist_release(renderer: &Value, artist_name: &str) -> Option<Album> {
+    let id = renderer
+        .pointer("/navigationEndpoint/browseEndpoint/browseId")
+        .and_then(Value::as_str)?;
+    if !id.starts_with("MPRE") {
+        return None;
+    }
+    let title = text(&renderer["title"]);
+    if title.is_empty() {
+        return None;
+    }
+    Some(Album {
+        id: id.to_string(),
+        title,
+        artists: vec![artist_name.to_string()],
+        year: first_year(&renderer["subtitle"]),
+        thumbnail: thumbnail(renderer),
+        track_count: None,
+    })
+}
+
+pub fn parse_artist_detail(json: &Value, browse_id: &str) -> Result<ArtistDetail, String> {
+    let header = json
+        .pointer("/header/musicImmersiveHeaderRenderer")
+        .ok_or_else(|| schema_error("browse/artist", "musicImmersiveHeaderRenderer", json))?;
+    let name = text(&header["title"]);
+    if name.is_empty() {
+        return Err(schema_error(
+            "browse/artist",
+            "a non-empty artist name",
+            json,
+        ));
+    }
+    let subscriber_count = header
+        .pointer("/subscriptionButton/subscribeButtonRenderer/subscriberCountText")
+        .map(text)
+        .filter(|value| !value.is_empty());
+    let sections = json
+        .pointer("/contents/singleColumnBrowseResultsRenderer/tabs/0/tabRenderer/content/sectionListRenderer/contents")
+        .and_then(Value::as_array)
+        .ok_or_else(|| schema_error("browse/artist", "sectionListRenderer.contents", json))?;
+
+    let mut detail = ArtistDetail {
+        artist: Artist {
+            id: browse_id.to_string(),
+            name: name.clone(),
+            thumbnail: thumbnail(header),
+            subscriber_count,
+        },
+        description: None,
+        top_songs: Vec::new(),
+        albums: Vec::new(),
+        singles: Vec::new(),
+        related: Vec::new(),
+    };
+    for section in sections {
+        if let Some(description) = section
+            .pointer("/musicDescriptionShelfRenderer/description")
+            .map(text)
+            .filter(|value| !value.is_empty())
+        {
+            detail.description = Some(description);
+            continue;
+        }
+        let title = artist_section_title(section);
+        if let Some(contents) = section
+            .pointer("/musicShelfRenderer/contents")
+            .and_then(Value::as_array)
+        {
+            for item in contents {
+                let renderer = &item["musicResponsiveListItemRenderer"];
+                let id = video_id(renderer);
+                let track_title = runs(
+                    &renderer["flexColumns"][0]["musicResponsiveListItemFlexColumnRenderer"]
+                        ["text"],
+                );
+                if id.is_empty() || track_title.is_empty() {
+                    continue;
+                }
+                let artist = runs(
+                    &renderer["flexColumns"][1]["musicResponsiveListItemFlexColumnRenderer"]
+                        ["text"],
+                );
+                let album = runs(
+                    &renderer["flexColumns"][2]["musicResponsiveListItemFlexColumnRenderer"]
+                        ["text"],
+                );
+                let duration = text(
+                    &renderer["fixedColumns"][0]["musicResponsiveListItemFixedColumnRenderer"]
+                        ["text"],
+                );
+                detail.top_songs.push(Track {
+                    id,
+                    title: track_title,
+                    artists: vec![if artist.is_empty() {
+                        name.clone()
+                    } else {
+                        artist
+                    }],
+                    album: if album.is_empty() { None } else { Some(album) },
+                    album_id: None,
+                    duration_ms: duration_ms(&duration),
+                    thumbnail: thumbnail(renderer),
+                    stream_url: None,
+                });
+            }
+        }
+        for item in section
+            .pointer("/musicCarouselShelfRenderer/contents")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+        {
+            let renderer = &item["musicTwoRowItemRenderer"];
+            let id = renderer
+                .pointer("/navigationEndpoint/browseEndpoint/browseId")
+                .and_then(Value::as_str)
+                .unwrap_or_default();
+            if title.contains("album") || title.contains("álbum") {
+                if let Some(album) = parse_artist_release(renderer, &name) {
+                    detail.albums.push(album);
+                }
+            } else if title.contains("single") || title.contains("sencillo") {
+                if let Some(single) = parse_artist_release(renderer, &name) {
+                    detail.singles.push(single);
+                }
+            } else if !id.is_empty() {
+                let related_name = text(&renderer["title"]);
+                if !related_name.is_empty() {
+                    detail.related.push(Artist {
+                        id: id.to_string(),
+                        name: related_name,
+                        thumbnail: thumbnail(renderer),
+                        subscriber_count: None,
+                    });
+                }
+            }
+        }
+    }
+    Ok(detail)
+}
+
 pub(crate) fn parse_home_page(json: &Value) -> Result<ParsedPage<Vec<HomeSection>>, String> {
     let contents = json.pointer("/contents/singleColumnBrowseResultsRenderer/tabs/0/tabRenderer/content/sectionListRenderer/contents")
         .or_else(|| json.pointer("/continuationContents/sectionListContinuation/contents"))
@@ -541,5 +801,33 @@ mod tests {
             suggestions,
             vec!["anonymous suggestion one", "anonymous suggestion two"]
         );
+    }
+
+    #[test]
+    fn parses_album_header_tracks_and_availability() {
+        let fixture = fixture(include_str!("fixtures/album_detail.json"));
+        let (album, tracks) = parse_album_detail(&fixture, "MPREanonymous").unwrap();
+        assert_eq!(album.title, "Anonymous album");
+        assert_eq!(album.artists, vec!["Anonymous artist"]);
+        assert_eq!(album.year, Some(2026));
+        assert_eq!(album.track_count, Some(2));
+        assert_eq!(tracks.len(), 1);
+        assert_eq!(tracks[0].id, "video-anonymous-album-1");
+        assert_eq!(tracks[0].duration_ms, 201_000);
+    }
+
+    #[test]
+    fn parses_artist_sections_and_related_content() {
+        let fixture = fixture(include_str!("fixtures/artist_detail.json"));
+        let detail = parse_artist_detail(&fixture, "UCanonymous").unwrap();
+        assert_eq!(detail.artist.name, "Anonymous artist");
+        assert_eq!(
+            detail.description.as_deref(),
+            Some("Anonymous artist biography.")
+        );
+        assert_eq!(detail.top_songs[0].duration_ms, 242_000);
+        assert_eq!(detail.albums[0].id, "MPREartistalbum");
+        assert_eq!(detail.singles[0].id, "MPREartistsingle");
+        assert_eq!(detail.related[0].id, "UCanonymousrelated");
     }
 }

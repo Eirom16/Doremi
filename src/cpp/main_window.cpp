@@ -273,6 +273,10 @@ void DoremiMainWindow::connect_signals() {
         [](const std::string &query, const std::string &filter) {
             on_search_submitted(query, filter);
         });
+    QObject::connect(search_view_, &SearchView::album_requested, this,
+        [](const std::string &browse_id) { on_album_requested(browse_id); });
+    QObject::connect(search_view_, &SearchView::artist_requested, this,
+        [](const std::string &browse_id) { on_artist_requested(browse_id); });
     QObject::connect(search_view_, &SearchView::add_favorite_requested, this,
         [](Track track) {
             on_add_favorite(track);

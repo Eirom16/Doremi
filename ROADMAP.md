@@ -221,8 +221,8 @@ El port se considera terminado cuando Doremi cubra los flujos reales de Pyrolist
 - [x] Search suggestions y busquedas recientes.
 - [x] Home autenticado y anonimo.
 - [x] Trending/charts reales por region.
-- [ ] Album detail y tracks.
-- [ ] Artist detail, top songs, albums, singles y related.
+- [x] Album detail y tracks.
+- [x] Artist detail, top songs, albums, singles y related.
 - [ ] Playlist detail, continuations y disponibilidad.
 - [ ] Related/radio/watch playlist para autoplay.
 - [ ] Library songs, albums, artists, playlists y subscriptions.

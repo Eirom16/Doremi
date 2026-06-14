@@ -2,7 +2,9 @@
 //!
 //! New Innertube work belongs in `auth`, `transport`, `endpoints`, or `parsers`.
 
-pub use super::endpoints::{charts, home_sections, related_tracks, search, search_suggestions};
+pub use super::endpoints::{
+    album_detail, artist_detail, charts, home_sections, related_tracks, search, search_suggestions,
+};
 
 pub fn get_stream_url(video_id: &str) -> Option<String> {
     let cache_key = format!("stream_url:{video_id}");
@@ -13,7 +15,11 @@ pub fn get_stream_url(video_id: &str) -> Option<String> {
 
     let output = std::process::Command::new("yt-dlp")
         .args([
-            "-f", "bestaudio/best", "--get-url", "--no-playlist", "--no-warnings",
+            "-f",
+            "bestaudio/best",
+            "--get-url",
+            "--no-playlist",
+            "--no-warnings",
             &format!("https://music.youtube.com/watch?v={video_id}"),
         ])
         .output()
@@ -30,7 +36,11 @@ pub async fn get_stream_url_async(video_id: &str) -> Option<String> {
 
     let output = tokio::process::Command::new("yt-dlp")
         .args([
-            "-f", "bestaudio/best", "--get-url", "--no-playlist", "--no-warnings",
+            "-f",
+            "bestaudio/best",
+            "--get-url",
+            "--no-playlist",
+            "--no-warnings",
             &format!("https://music.youtube.com/watch?v={video_id}"),
         ])
         .output()

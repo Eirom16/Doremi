@@ -112,6 +112,8 @@ pub mod bridge {
         fn on_search_submitted(query: &str, filter: &str);
         fn on_search_suggestions_requested(query: &str);
         fn on_search_history_requested();
+        fn on_album_requested(browse_id: &str);
+        fn on_artist_requested(browse_id: &str);
         fn on_volume_change(delta: i32);
         fn on_volume_set(volume: i32);
         fn on_seek_relative(delta_ms: i32);
@@ -322,6 +324,20 @@ async fn push_search_history_to_ui() {
 
 pub fn on_search_history_requested() {
     tokio::spawn(push_search_history_to_ui());
+}
+
+pub fn on_album_requested(browse_id: &str) {
+    let browse_id = browse_id.to_string();
+    tokio::spawn(async move {
+        crate::services::browse::load_album(&browse_id).await;
+    });
+}
+
+pub fn on_artist_requested(browse_id: &str) {
+    let browse_id = browse_id.to_string();
+    tokio::spawn(async move {
+        crate::services::browse::load_artist(&browse_id).await;
+    });
 }
 
 pub fn on_volume_change(delta: i32) {

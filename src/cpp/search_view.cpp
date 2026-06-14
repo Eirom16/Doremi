@@ -174,6 +174,9 @@ void SearchView::show_results(const std::vector<Track> &songs,
             auto *ci = new ClickableItem(static_cast<std::string>(artist.name), "", this);
             ci->set_item_id(static_cast<std::string>(artist.id));
             results_->addWidget(ci);
+            connect(ci, &ClickableItem::clicked, this, [this, artist]() {
+                emit artist_requested(static_cast<std::string>(artist.id));
+            });
         }
     }
 
@@ -187,6 +190,9 @@ void SearchView::show_results(const std::vector<Track> &songs,
             auto *ci = new ClickableItem(static_cast<std::string>(album.title), static_cast<std::string>(album.artist), this);
             ci->set_item_id(static_cast<std::string>(album.id));
             results_->addWidget(ci);
+            connect(ci, &ClickableItem::clicked, this, [this, album]() {
+                emit album_requested(static_cast<std::string>(album.id));
+            });
         }
     }
 

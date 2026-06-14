@@ -25,17 +25,58 @@ impl LibraryData {
     pub fn mock() -> Self {
         Self {
             songs: vec![
-                LibraryItem { id: "s1".into(), title: "Bohemian Rhapsody".into(), subtitle: "Queen".into(), item_type: "song".into() },
-                LibraryItem { id: "s2".into(), title: "Stairway to Heaven".into(), subtitle: "Led Zeppelin".into(), item_type: "song".into() },
-                LibraryItem { id: "s3".into(), title: "Hotel California".into(), subtitle: "Eagles".into(), item_type: "song".into() },
-                LibraryItem { id: "s4".into(), title: "Imagine".into(), subtitle: "John Lennon".into(), item_type: "song".into() },
-                LibraryItem { id: "s5".into(), title: "Smells Like Teen Spirit".into(), subtitle: "Nirvana".into(), item_type: "song".into() },
+                LibraryItem {
+                    id: "s1".into(),
+                    title: "Bohemian Rhapsody".into(),
+                    subtitle: "Queen".into(),
+                    item_type: "song".into(),
+                },
+                LibraryItem {
+                    id: "s2".into(),
+                    title: "Stairway to Heaven".into(),
+                    subtitle: "Led Zeppelin".into(),
+                    item_type: "song".into(),
+                },
+                LibraryItem {
+                    id: "s3".into(),
+                    title: "Hotel California".into(),
+                    subtitle: "Eagles".into(),
+                    item_type: "song".into(),
+                },
+                LibraryItem {
+                    id: "s4".into(),
+                    title: "Imagine".into(),
+                    subtitle: "John Lennon".into(),
+                    item_type: "song".into(),
+                },
+                LibraryItem {
+                    id: "s5".into(),
+                    title: "Smells Like Teen Spirit".into(),
+                    subtitle: "Nirvana".into(),
+                    item_type: "song".into(),
+                },
             ],
             playlists: vec![
-                PlaylistSummary { id: "p1".into(), name: "Favoritos".into(), song_count: 24 },
-                PlaylistSummary { id: "p2".into(), name: "Para el gym".into(), song_count: 18 },
-                PlaylistSummary { id: "p3".into(), name: "Relax".into(), song_count: 12 },
-                PlaylistSummary { id: "p4".into(), name: "Descubrimientos".into(), song_count: 8 },
+                PlaylistSummary {
+                    id: "p1".into(),
+                    name: "Favoritos".into(),
+                    song_count: 24,
+                },
+                PlaylistSummary {
+                    id: "p2".into(),
+                    name: "Para el gym".into(),
+                    song_count: 18,
+                },
+                PlaylistSummary {
+                    id: "p3".into(),
+                    name: "Relax".into(),
+                    song_count: 12,
+                },
+                PlaylistSummary {
+                    id: "p4".into(),
+                    name: "Descubrimientos".into(),
+                    song_count: 8,
+                },
             ],
         }
     }
@@ -59,6 +100,16 @@ pub struct Artist {
     pub name: String,
     pub thumbnail: String,
     pub subscriber_count: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ArtistDetail {
+    pub artist: Artist,
+    pub description: Option<String>,
+    pub top_songs: Vec<Track>,
+    pub albums: Vec<Album>,
+    pub singles: Vec<Album>,
+    pub related: Vec<Artist>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

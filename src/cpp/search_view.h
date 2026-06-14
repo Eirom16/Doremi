@@ -26,6 +26,8 @@ signals:
     void filter_changed(const std::string &filter);
     void play_requested(Track track);
     void search_requested(const std::string &query, const std::string &filter);
+    void album_requested(const std::string &browse_id);
+    void artist_requested(const std::string &browse_id);
     void add_favorite_requested(Track track);
     void download_requested(Track track);
     void add_to_queue_next_requested(Track track);

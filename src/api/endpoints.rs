@@ -220,6 +220,45 @@ pub async fn charts() -> Result<Vec<super::models::HomeSection>, String> {
     Ok(sections)
 }
 
+pub async fn album_detail(
+    browse_id: &str,
+) -> Result<(super::models::Album, Vec<super::models::Track>), String> {
+    let browse_id = browse_id.trim();
+    if !browse_id.starts_with("MPRE") {
+        return Err("Album browse ID must start with MPRE".to_string());
+    }
+    let key = cache_key(&format!("album:{browse_id}"));
+    if let Some(detail) = cached(&key) {
+        return Ok(detail);
+    }
+    let mut body = context();
+    body["browseId"] = serde_json::json!(browse_id);
+    let response = super::transport::post("browse", body).await?;
+    let detail = super::parsers::parse_album_detail(&response, browse_id)?;
+    cache(&key, &detail, HOME_CACHE_TTL_SECS);
+    Ok(detail)
+}
+
+pub async fn artist_detail(browse_id: &str) -> Result<super::models::ArtistDetail, String> {
+    let browse_id = browse_id
+        .trim()
+        .strip_prefix("MPLA")
+        .unwrap_or(browse_id.trim());
+    if browse_id.is_empty() {
+        return Err("Artist browse ID cannot be empty".to_string());
+    }
+    let key = cache_key(&format!("artist:{browse_id}"));
+    if let Some(detail) = cached(&key) {
+        return Ok(detail);
+    }
+    let mut body = context();
+    body["browseId"] = serde_json::json!(browse_id);
+    let response = super::transport::post("browse", body).await?;
+    let detail = super::parsers::parse_artist_detail(&response, browse_id)?;
+    cache(&key, &detail, HOME_CACHE_TTL_SECS);
+    Ok(detail)
+}
+
 pub async fn related_tracks(video_id: &str) -> Result<Vec<super::models::Track>, String> {
     if video_id.trim().is_empty() {
         return Ok(Vec::new());
