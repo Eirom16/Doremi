@@ -31,6 +31,8 @@ pub struct PlayerService {
     auto_queue_loading: Arc<AtomicBool>,
     preload_next: bool,
     prefetch_task: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>>,
+    crossfade_active: Arc<std::sync::atomic::AtomicBool>,
+    crossfade_start_time: Arc<Mutex<Option<Instant>>>,
 }
 
 impl PlayerService {
@@ -60,6 +62,8 @@ impl PlayerService {
             auto_queue_loading: Arc::new(AtomicBool::new(false)),
             preload_next,
             prefetch_task: Arc::new(Mutex::new(None)),
+            crossfade_active: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            crossfade_start_time: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -171,11 +175,22 @@ impl PlayerService {
     }
 
     pub fn stop(&self) {
+        if self.crossfade_active.swap(false, std::sync::atomic::Ordering::Relaxed) {
+            *self.crossfade_start_time.lock().unwrap() = None;
+            self.audio.complete_crossfade();
+        }
         self.audio.stop();
     }
 
+    fn should_normalize(&self) -> bool {
+        let dirs = crate::config::paths::AppDirs::global();
+        let settings = crate::config::settings::AppSettings::load(&dirs.settings_path());
+        settings.player.normalize_audio
+    }
+
     pub fn play_url(&self, url: &str) {
-        self.audio.play_url(url);
+        let normalize = self.should_normalize();
+        self.audio.play_url(url, normalize);
         drop(self.last_poll.lock().unwrap());
     }
 
@@ -192,6 +207,11 @@ impl PlayerService {
     }
 
     fn play_track_info(&self, t: TrackInfo) {
+        if self.crossfade_active.swap(false, std::sync::atomic::Ordering::Relaxed) {
+            *self.crossfade_start_time.lock().unwrap() = None;
+            self.audio.complete_crossfade();
+        }
+
         // Check if the track is downloaded locally
         let mut local_path = None;
         if !t.id.is_empty() {
@@ -211,7 +231,7 @@ impl PlayerService {
                     }
                 }
             }
-            self.audio.play_url(&path);
+            self.audio.play_url(&path, false);
             return;
         }
 
@@ -220,6 +240,8 @@ impl PlayerService {
             log::info!("Stream URL for {} is expired, forcing re-resolution", t.id);
             needs_resolution = true;
         }
+
+        let normalize = self.should_normalize();
 
         if needs_resolution {
             if t.id.is_empty() {
@@ -256,7 +278,7 @@ impl PlayerService {
 
                         if still_current {
                             log::info!("Playing resolved URL for {id}");
-                            audio.play_url(&resolved_url);
+                            audio.play_url(&resolved_url, normalize);
                         } else {
                             log::info!("Resolved URL for {id}, but user already switched tracks.");
                         }
@@ -272,7 +294,7 @@ impl PlayerService {
                 }
             });
         } else {
-            self.audio.play_url(&t.stream_url);
+            self.audio.play_url(&t.stream_url, normalize);
         }
     }
 
@@ -387,6 +409,9 @@ impl PlayerService {
         }
         *last = now;
 
+        let dirs = crate::config::paths::AppDirs::global();
+        let mut settings = crate::config::settings::AppSettings::load(&dirs.settings_path());
+
         // Check sleep timer
         let trigger_stop = {
             let mut timer = self.sleep_timer_end.lock().unwrap();
@@ -406,8 +431,6 @@ impl PlayerService {
             log::info!("Sleep timer expired. Stopping playback.");
             self.audio.stop();
             // Update settings to reset the sleep timer value
-            let dirs = crate::config::paths::AppDirs::global();
-            let mut settings = crate::config::settings::AppSettings::load(&dirs.settings_path());
             settings.player.sleep_timer_minutes = 0;
             let _ = settings.save(&dirs.settings_path());
             crate::bridge::bridge::show_notification("Temporizador de apagado finalizado.", "info");
@@ -415,8 +438,107 @@ impl PlayerService {
 
         self.audio.poll_position();
 
-        if self.audio.has_ended() {
-            self.next();
+        let mut crossfade_completed = false;
+        if self.crossfade_active.load(std::sync::atomic::Ordering::Relaxed) {
+            let mut elapsed_secs = 0.0;
+            let mut start_time_present = false;
+            {
+                if let Some(start) = *self.crossfade_start_time.lock().unwrap() {
+                    elapsed_secs = start.elapsed().as_secs_f64();
+                    start_time_present = true;
+                }
+            }
+
+            if start_time_present {
+                let crossfade_duration = settings.player.crossfade_duration_sec.max(1) as f64;
+                let progress = (elapsed_secs / crossfade_duration).min(1.0);
+                self.audio.set_fade_volumes(1.0 - progress, progress);
+
+                if progress >= 1.0 || self.audio.has_ended() {
+                    log::info!("Crossfade completed or active track ended. Swapping players.");
+                    self.audio.complete_crossfade();
+                    self.crossfade_active.store(false, std::sync::atomic::Ordering::Relaxed);
+                    *self.crossfade_start_time.lock().unwrap() = None;
+                    
+                    // Trigger integrations and UI updates for the new track
+                    if let Some(track) = self.current_track() {
+                        let mut last_id = self.last_track_id.lock().unwrap();
+                        *last_id = track.id.clone();
+                        crate::services::discord::update_presence(&track.title, &track.artist, &track.album, true);
+                        crate::services::lastfm::update_now_playing(&track.artist, &track.title, &track.album);
+                        let title = track.title.clone();
+                        let artist = track.artist.clone();
+                        tokio::spawn(async move {
+                            let lyrics_service = crate::services::lyrics::LyricsService::new();
+                            let _ = lyrics_service.fetch_lyrics(&title, &artist).await;
+                        });
+                    }
+
+                    self.schedule_prefetch();
+                    crossfade_completed = true;
+                }
+            }
+        }
+
+        if !crossfade_completed {
+            if self.audio.has_ended() {
+                self.next();
+            } else if settings.player.crossfade_enabled 
+                && self.audio.state().is_playing()
+                && !self.crossfade_active.load(std::sync::atomic::Ordering::Relaxed)
+            {
+                let remaining_ms = self.audio.duration_ms() - self.audio.position_ms();
+                let crossfade_ms = (settings.player.crossfade_duration_sec * 1000) as i64;
+                if remaining_ms > 0 && remaining_ms <= crossfade_ms {
+                    let next_track = self.queue.lock().ok().and_then(|q| q.next_candidate().cloned());
+                    if let Some(track) = next_track {
+                        log::info!("Initiating crossfade transition from current track to {}", track.title);
+                        let normalize = settings.player.normalize_audio;
+                        let queue = self.queue.clone();
+                        let audio = self.audio.clone();
+                        let crossfade_active = self.crossfade_active.clone();
+                        let crossfade_start_time = self.crossfade_start_time.clone();
+                        let id = track.id.clone();
+                        
+                        tokio::spawn(async move {
+                            let resolved_url = if track.stream_url.is_empty() {
+                                log::info!("Resolving stream URL for crossfade track {id}...");
+                                crate::player::resolver::StreamResolver::resolve(&id).await.ok()
+                            } else {
+                                Some(track.stream_url.clone())
+                            };
+
+                            if let Some(url) = resolved_url {
+                                let still_next = {
+                                    if let Ok(q) = queue.lock() {
+                                        q.next_candidate().map(|t| t.id == id).unwrap_or(false)
+                                    } else {
+                                        false
+                                    }
+                                };
+
+                                if still_next {
+                                    log::info!("Playing crossfade URL for next track {id}");
+                                    if let Ok(mut q) = queue.lock() {
+                                        if let Some(target) = q.all_tracks().iter().position(|t| t.id == id) {
+                                            if let Some(t) = q.track_mut(target) {
+                                                t.stream_url = url.clone();
+                                            }
+                                        }
+                                        let _ = q.next();
+                                    }
+                                    
+                                    audio.play_crossfade(&url, normalize);
+                                    crossfade_active.store(true, std::sync::atomic::Ordering::Relaxed);
+                                    *crossfade_start_time.lock().unwrap() = Some(std::time::Instant::now());
+                                    
+                                    sync_queue_to_ui(&queue);
+                                }
+                            }
+                        });
+                    }
+                }
+            }
         }
 
         // Check for playback error and handle retry
@@ -678,6 +800,12 @@ impl PlayerService {
             sync_queue_to_ui(&queue);
             persist_queue_snapshot(queue.clone());
 
+            let normalize = {
+                let dirs = crate::config::paths::AppDirs::global();
+                let settings = crate::config::settings::AppSettings::load(&dirs.settings_path());
+                settings.player.normalize_audio
+            };
+
             if let Some(mut track) = next_track {
                 if track.stream_url.is_empty() {
                     match crate::player::resolver::StreamResolver::resolve(&track.id).await {
@@ -698,7 +826,7 @@ impl PlayerService {
                         }
                     }
                 }
-                audio.play_url(&track.stream_url);
+                audio.play_url(&track.stream_url, normalize);
                 if preload_next {
                     schedule_prefetch_task(queue.clone(), prefetch_task);
                 }

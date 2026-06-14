@@ -179,15 +179,15 @@ El port se considera terminado cuando Doremi cubra los flujos reales de Pyrolist
 
 ### P1.4 Audio avanzado
 
-- [ ] Verificar ecualizador de 10 bandas en todos los builds VLC soportados.
-- [ ] Exponer preamp, cada banda, presets y reset desde Qt.
-- [ ] Implementar crossfade real entre dos pipelines; el fade de volumen simple no es crossfade.
-- [ ] Verificar gapless y documentar limitaciones de VLC.
-- [ ] Implementar normalizacion de volumen o retirar temporalmente el toggle.
-- [ ] Implementar skip silence o retirar temporalmente el toggle.
-- [ ] Aplicar cambios de audio sin reiniciar la pista cuando sea posible.
-- [ ] Evitar clipping al combinar preamp, normalizacion y EQ.
-- [ ] Añadir pruebas y mediciones de CPU para EQ/crossfade.
+- [x] Verificar ecualizador de 10 bandas en todos los builds VLC soportados.
+- [x] Exponer preamp, cada banda, presets y reset desde Qt.
+- [x] Implementar crossfade real entre dos pipelines; el fade de volumen simple no es crossfade.
+- [x] Verificar gapless y documentar limitaciones de VLC.
+- [x] Implementar normalizacion de volumen o retirar temporalmente el toggle.
+- [x] Implementar skip silence o retirar temporalmente el toggle.
+- [x] Aplicar cambios de audio sin reiniciar la pista cuando sea posible.
+- [x] Evitar clipping al combinar preamp, normalizacion y EQ.
+- [x] Añadir pruebas y mediciones de CPU para EQ/crossfade.
 
 ### P1.5 Controles del sistema
 

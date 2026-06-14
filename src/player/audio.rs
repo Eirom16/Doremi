@@ -6,13 +6,22 @@ use super::state::PlayState;
 const EXPECTED_EQ_BANDS: usize = 10;
 
 fn normalized_equalizer(preamp: f64, bands: &[f64], available_bands: usize) -> (f32, Vec<f32>) {
-    let preamp = preamp.clamp(-20.0, 20.0) as f32;
     let mut values = bands.iter()
         .take(available_bands)
         .map(|value| value.clamp(-20.0, 20.0) as f32)
         .collect::<Vec<_>>();
     values.resize(available_bands, 0.0);
-    (preamp, values)
+
+    // Subtractive equalization: reduce preamp by the maximum boost to avoid clipping
+    let max_boost = values.iter().copied().fold(0.0f32, |a, b| a.max(b));
+    let adjusted_preamp = if max_boost > 0.0 {
+        preamp as f32 - max_boost
+    } else {
+        preamp as f32
+    };
+    let adjusted_preamp = adjusted_preamp.clamp(-20.0, 20.0);
+
+    (adjusted_preamp, values)
 }
 
 #[derive(Clone)]
@@ -23,6 +32,7 @@ pub struct AudioEngine {
 struct AudioInner {
     instance: Option<Instance>,
     player: Option<MediaPlayer>,
+    secondary_player: Option<MediaPlayer>,
     state: PlayState,
     position_ms: i64,
     duration_ms: i64,
@@ -38,6 +48,12 @@ impl Drop for AudioInner {
                 sys::libvlc_audio_equalizer_release(eq);
             }
         }
+        if let Some(p) = self.player.take() {
+            p.stop();
+        }
+        if let Some(sp) = self.secondary_player.take() {
+            sp.stop();
+        }
     }
 }
 
@@ -50,6 +66,7 @@ impl AudioEngine {
         let inner = Arc::new(Mutex::new(AudioInner {
             instance: None,
             player: None,
+            secondary_player: None,
             state: PlayState::Stopped,
             position_ms: 0,
             duration_ms: 0,
@@ -115,7 +132,7 @@ impl AudioEngine {
         self.inner.lock().map(|i| i.volume).unwrap_or(50)
     }
 
-    pub fn play_url(&self, url: &str) {
+    pub fn play_url(&self, url: &str, normalize: bool) {
         // Lock 1: get instance reference to create Media
         let media = {
             let inner = match self.inner.lock() {
@@ -133,6 +150,13 @@ impl AudioEngine {
             Some(m) => m,
             None => return,
         };
+        if normalize {
+            unsafe {
+                if let Ok(option_cstr) = std::ffi::CString::new("audio-filter=normvol") {
+                    sys::libvlc_media_add_option(media.raw(), option_cstr.as_ptr());
+                }
+            }
+        }
         media.parse();
         let dur = media.duration().unwrap_or(0);
 
@@ -152,6 +176,82 @@ impl AudioEngine {
         }
     }
 
+    pub fn play_crossfade(&self, url: &str, normalize: bool) {
+        let media = {
+            let inner = match self.inner.lock() {
+                Ok(i) => i,
+                Err(_) => return,
+            };
+            let instance = match &inner.instance {
+                Some(i) => i,
+                None => return,
+            };
+            Media::new_location(instance, url)
+        };
+
+        let media = match media {
+            Some(m) => m,
+            None => return,
+        };
+        if normalize {
+            unsafe {
+                if let Ok(option_cstr) = std::ffi::CString::new("audio-filter=normvol") {
+                    sys::libvlc_media_add_option(media.raw(), option_cstr.as_ptr());
+                }
+            }
+        }
+        media.parse();
+
+        if let Ok(mut inner) = self.inner.lock() {
+            if let Some(instance) = &inner.instance {
+                if inner.secondary_player.is_none() {
+                    inner.secondary_player = MediaPlayer::new(instance);
+                }
+                if let Some(sec_player) = &inner.secondary_player {
+                    sec_player.set_media(&media);
+                    if let Some(eq) = inner.equalizer {
+                        unsafe {
+                            sys::libvlc_media_player_set_equalizer(sec_player.raw(), eq);
+                        }
+                    }
+                    let _ = sec_player.set_volume(0);
+                    let _ = sec_player.play();
+                }
+            }
+        }
+    }
+
+    pub fn set_fade_volumes(&self, primary_pct: f64, secondary_pct: f64) {
+        if let Ok(inner) = self.inner.lock() {
+            let target_vol = inner.volume as f64;
+            if let Some(p) = &inner.player {
+                let _ = p.set_volume((target_vol * primary_pct) as i32);
+            }
+            if let Some(sp) = &inner.secondary_player {
+                let _ = sp.set_volume((target_vol * secondary_pct) as i32);
+            }
+        }
+    }
+
+    pub fn complete_crossfade(&self) {
+        if let Ok(mut inner) = self.inner.lock() {
+            if let Some(p) = inner.player.take() {
+                p.stop();
+            }
+            inner.player = inner.secondary_player.take();
+            let target_vol = inner.volume;
+            if let Some(p) = &inner.player {
+                let _ = p.set_volume(target_vol);
+            }
+            if let Some(p) = &inner.player {
+                if let Some(media) = p.get_media() {
+                    inner.duration_ms = media.duration().unwrap_or(0);
+                }
+            }
+            inner.position_ms = 0;
+        }
+    }
+
     pub fn toggle_play_pause(&self) {
         let mut inner = match self.inner.lock() {
             Ok(i) => i,
@@ -167,7 +267,7 @@ impl AudioEngine {
                 let url = inner.stream_url.clone();
                 drop(inner);
                 if let Some(url) = url {
-                    self.play_url(&url);
+                    self.play_url(&url, false);
                 }
             }
             PlayState::Playing => {
@@ -332,5 +432,18 @@ mod tests {
 
         let (_, padded) = normalized_equalizer(0.0, &[1.0], 3);
         assert_eq!(padded, vec![1.0, 0.0, 0.0]);
+    }
+
+    #[test]
+    fn test_subtractive_equalizer_prevents_clipping() {
+        // Equalizer with positive boost should decrease preamp
+        let (preamp, bands) = normalized_equalizer(10.0, &[5.0, 2.0, -1.0], 3);
+        assert_eq!(preamp, 5.0); // 10.0 - 5.0 (max boost)
+        assert_eq!(bands, vec![5.0, 2.0, -1.0]);
+
+        // Equalizer with only cut/negative boost should not decrease preamp
+        let (preamp2, bands2) = normalized_equalizer(10.0, &[-5.0, -2.0, -10.0], 3);
+        assert_eq!(preamp2, 10.0); // max boost is <= 0.0, so no change
+        assert_eq!(bands2, vec![-5.0, -2.0, -10.0]);
     }
 }
