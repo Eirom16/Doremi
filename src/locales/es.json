@@ -177,5 +177,7 @@
     "subtitle_glow_effect": "Efecto de brillo",
     "align_left": "Izquierda",
     "align_center": "Centrado",
-    "align_right": "Derecha"
+    "align_right": "Derecha",
+    "activate_mpris": "Activar control multimedia (MPRIS)",
+    "stop_on_close": "Cerrar al hacer clic en 'X' (en lugar de minimizar)"
 }

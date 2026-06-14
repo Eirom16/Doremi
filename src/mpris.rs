@@ -5,8 +5,42 @@ use tokio;
 use zbus::connection;
 use zbus::interface;
 use zbus::zvariant::{OwnedObjectPath, OwnedValue, Value};
+use once_cell::sync::Lazy;
 
 use crate::player::PlayerService;
+
+static MPRIS_TX: Lazy<std::sync::Mutex<Option<tokio::sync::oneshot::Sender<()>>>> =
+    Lazy::new(|| std::sync::Mutex::new(None));
+
+pub fn stop_mpris() {
+    let mut lock = MPRIS_TX.lock().unwrap();
+    if let Some(tx) = lock.take() {
+        let _ = tx.send(());
+        log::info!("MPRIS service stopped");
+    }
+}
+
+pub fn start_mpris(player: Arc<PlayerService>) {
+    stop_mpris();
+
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    *MPRIS_TX.lock().unwrap() = Some(tx);
+
+    tokio::spawn(async move {
+        let service = MprisService::new(player);
+        if let Err(e) = service.start_with_shutdown(rx).await {
+            log::error!("MPRIS server failed: {e}");
+        }
+    });
+}
+
+pub fn spawn_mpris(player: Arc<PlayerService>) {
+    let dirs = crate::config::paths::AppDirs::global();
+    let settings = crate::config::settings::AppSettings::load(&dirs.settings_path());
+    if settings.integrations.mpris_enabled {
+        start_mpris(player);
+    }
+}
 
 pub struct MprisService {
     player: Arc<PlayerService>,
@@ -17,7 +51,7 @@ impl MprisService {
         Self { player }
     }
 
-    pub async fn start(self) -> zbus::Result<()> {
+    pub async fn start_with_shutdown(self, rx: tokio::sync::oneshot::Receiver<()>) -> zbus::Result<()> {
         let conn = connection::Builder::session()?
             .name("org.mpris.MediaPlayer2.doremi")?
             .build()
@@ -35,10 +69,77 @@ impl MprisService {
 
         log::info!("MPRIS server running on org.mpris.MediaPlayer2.doremi");
 
-        // Keep the connection alive
-        loop {
-            tokio::time::sleep(Duration::from_secs(60)).await;
-        }
+        let iface_ref = conn
+            .object_server()
+            .interface::<_, MprisPlayer>("/org/mpris/MediaPlayer2")
+            .await?;
+
+        let player = self.player.clone();
+        let (poll_tx, mut poll_rx) = tokio::sync::oneshot::channel::<()>();
+
+        let poll_task = tokio::spawn(async move {
+            let mut last_status = String::new();
+            let mut last_track_id = String::new();
+            let mut last_volume = -1.0;
+            let mut last_position = -1;
+
+            loop {
+                tokio::select! {
+                    _ = tokio::time::sleep(Duration::from_millis(500)) => {
+                        let emitter = iface_ref.signal_context();
+
+                        // 1. PlaybackStatus
+                        let is_playing = player.is_playing();
+                        let status = if is_playing { "Playing" } else { "Paused" };
+                        if status != last_status {
+                            last_status = status.to_string();
+                            let player_obj = iface_ref.get().await;
+                            let _ = player_obj.playback_status_changed(emitter).await;
+                        }
+
+                        // 2. Metadata
+                        let current_track_id = player.current_track()
+                            .map(|t| t.id.clone())
+                            .unwrap_or_default();
+                        if current_track_id != last_track_id {
+                            last_track_id = current_track_id;
+                            let player_obj = iface_ref.get().await;
+                            let _ = player_obj.metadata_changed(emitter).await;
+                        }
+
+                        // 3. Volume
+                        let volume = player.volume() as f64 / 100.0;
+                        if (volume - last_volume).abs() > 0.01 {
+                            last_volume = volume;
+                            let player_obj = iface_ref.get().await;
+                            let _ = player_obj.volume_changed(emitter).await;
+                        }
+
+                        // 4. Position & Seeked Signal
+                        let position = player.position_ms() * 1000; // microseconds
+                        if last_position != -1 {
+                            let expected_delta = if is_playing { 500 * 1000 } else { 0 };
+                            let actual_delta = (position - last_position).abs();
+                            if (actual_delta - expected_delta).abs() > 1_500_000 {
+                                let _ = MprisPlayer::seeked(emitter, position).await;
+                            }
+                        }
+                        last_position = position;
+                    }
+                    _ = &mut poll_rx => {
+                        break;
+                    }
+                }
+            }
+        });
+
+        // Keep the connection alive until shutdown signal
+        let _ = rx.await;
+
+        let _ = poll_tx.send(());
+        let _ = poll_task.await;
+
+        Ok(())
     }
 }
 
@@ -103,10 +204,12 @@ impl MprisRoot {
 
     fn raise(&mut self) {
         log::info!("MPRIS: raise");
+        crate::bridge::bridge::show_main_window();
     }
 
     fn quit(&mut self) {
         log::info!("MPRIS: quit");
+        crate::bridge::on_app_quit();
         std::process::exit(0);
     }
 }
@@ -194,6 +297,9 @@ impl MprisPlayer {
         self.player.clear_queue();
         self.player.play_url(uri);
     }
+
+    #[zbus(signal)]
+    async fn seeked(signal_context: &zbus::SignalContext<'_>, position: i64) -> zbus::Result<()>;
 
     // ── Properties ──
 
@@ -296,13 +402,4 @@ impl MprisPlayer {
     fn can_control(&self) -> bool {
         true
     }
-}
-
-pub fn spawn_mpris(player: Arc<PlayerService>) {
-    tokio::spawn(async move {
-        let service = MprisService::new(player);
-        if let Err(e) = service.start().await {
-            log::error!("MPRIS server failed: {e}");
-        }
-    });
 }

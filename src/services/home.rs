@@ -9,8 +9,8 @@ impl HomeService {
         Self { api: ApiClient::new() }
     }
 
-    pub fn load_home(&self) {
-        let sections = self.api.home_sections();
+    pub async fn load_home(&self) {
+        let sections = self.api.home_sections().await;
 
         crate::bridge::bridge::clear_home_sections();
         for section in &sections {

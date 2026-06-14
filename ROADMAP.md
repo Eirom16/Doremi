@@ -191,13 +191,13 @@ El port se considera terminado cuando Doremi cubra los flujos reales de Pyrolist
 
 ### P1.5 Controles del sistema
 
-- [ ] Emitir cambios MPRIS de propiedades y metadata, no solo responder getters.
-- [ ] Implementar correctamente `Raise`, `Quit`, `OpenUri`, `CanSeek` y `SetPosition`.
-- [ ] Respetar el toggle `mpris_enabled` al iniciar y detener el servicio.
-- [ ] Verificar media keys en GNOME, KDE y Wayland.
-- [ ] Completar acciones de tray: play/pause, anterior, siguiente, mostrar y salir.
-- [ ] Definir comportamiento de cierre: minimizar al tray o salir.
-- [ ] Añadir instancia unica y forwarding de argumentos/URLs.
+- [x] Emitir cambios MPRIS de propiedades y metadata, no solo responder getters.
+- [x] Implementar correctamente `Raise`, `Quit`, `OpenUri`, `CanSeek` y `SetPosition`.
+- [x] Respetar el toggle `mpris_enabled` al iniciar y detener el servicio.
+- [x] Verificar media keys en GNOME, KDE y Wayland.
+- [x] Completar acciones de tray: play/pause, anterior, siguiente, mostrar y salir.
+- [x] Definir comportamiento de cierre: minimizar al tray o salir.
+- [x] Añadir instancia unica y forwarding de argumentos/URLs.
 
 ## P2 - API de YouTube Music sin mocks
 
@@ -206,8 +206,8 @@ El port se considera terminado cuando Doremi cubra los flujos reales de Pyrolist
 - [x] Hecho - Eliminar resultados mock del flujo de produccion.
 - [x] Hecho - Mostrar estados vacio, offline y error reales en UI.
 - [ ] Separar transporte HTTP, autenticacion, endpoints y parsing.
-- [ ] Reutilizar `reqwest::Client`; no crear uno por request.
-- [ ] Usar API async en servicios y evitar `reqwest::blocking`.
+- [x] Hecho - Reutilizar `reqwest::Client`; no crear uno por request.
+- [x] Hecho - Usar API async en servicios y evitar `reqwest::blocking`.
 - [ ] Añadir headers/contexto por locale, region y sesion.
 - [ ] Manejar continuations y paginacion.
 - [ ] Añadir cache con TTL e invalidacion por usuario/locale.
@@ -217,7 +217,7 @@ El port se considera terminado cuando Doremi cubra los flujos reales de Pyrolist
 
 ### P2.2 Endpoints necesarios
 
-- [ ] Search con filtros all/songs/videos/albums/artists/playlists.
+- [x] Hecho - Search con filtros all/songs/videos/albums/artists/playlists.
 - [ ] Search suggestions y busquedas recientes.
 - [ ] Home autenticado y anonimo.
 - [ ] Trending/charts reales por region.

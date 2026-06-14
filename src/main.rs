@@ -20,6 +20,42 @@ fn main() {
     i18n::set_language("es");
     log::info!("Starting Doremi v{}", doremi_core::VERSION);
 
+    // 1. Single Instance Check & Port Forwarding
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    match std::net::TcpListener::bind("127.0.0.1:18420") {
+        Ok(listener) => {
+            // Primary instance. Spawn thread to listen for forwarded arguments.
+            std::thread::spawn(move || {
+                use std::io::Read;
+                for stream in listener.incoming() {
+                    if let Ok(mut stream) = stream {
+                        let mut buffer = Vec::new();
+                        stream.set_read_timeout(Some(std::time::Duration::from_secs(2))).ok();
+                        if stream.read_to_end(&mut buffer).is_ok() {
+                            if let Ok(text) = String::from_utf8(buffer) {
+                                let received_args: Vec<String> = text.split('\n')
+                                    .map(|s| s.to_string())
+                                    .filter(|s| !s.is_empty())
+                                    .collect();
+                                doremi_core::bridge::handle_forwarded_args(received_args);
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        Err(_) => {
+            // Secondary instance. Forward arguments and exit.
+            use std::io::Write;
+            if let Ok(mut stream) = std::net::TcpStream::connect("127.0.0.1:18420") {
+                let payload = args.join("\n");
+                let _ = stream.write_all(payload.as_bytes());
+            }
+            log::info!("Another instance is running. Forwarded arguments to primary instance. Exiting.");
+            return;
+        }
+    }
+
     // Global Panic Hook for Clean Shutdown
     std::panic::set_hook(Box::new(|panic_info| {
         let panic_msg = if let Some(s) = panic_info.payload().downcast_ref::<&str>() {

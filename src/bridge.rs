@@ -112,7 +112,7 @@ pub mod bridge {
         fn on_previous_triggered();
         fn on_shuffle_toggled(on: bool);
         fn on_repeat_cycled();
-        fn on_search_submitted(query: &str);
+        fn on_search_submitted(query: &str, filter: &str);
         fn on_volume_change(delta: i32);
         fn on_volume_set(volume: i32);
         fn on_seek_relative(delta_ms: i32);
@@ -196,6 +196,8 @@ pub mod bridge {
         fn set_settings_subtitle_line_spacing(spacing: f64);
         fn set_settings_subtitle_auto_scroll(on: bool);
         fn set_settings_subtitle_glow_effect(on: bool);
+        fn set_settings_stop_on_close(stop: bool);
+        fn set_settings_mpris_enabled(on: bool);
 
         // Data service functions
         fn set_search_results(songs: Vec<Track>, artists: Vec<Artist>, albums: Vec<Album>);
@@ -254,23 +256,20 @@ pub fn on_repeat_cycled() {
     with_player(|p| p.cycle_repeat());
 }
 
-pub fn on_search_submitted(query: &str) {
-    log::info!("Search: {query}");
+pub fn on_search_submitted(query: &str, filter: &str) {
+    log::info!("Search: {query} with filter: {filter}");
     let query = query.to_string();
+    let filter = filter.to_string();
     tokio::spawn(async move {
-        let results = tokio::task::spawn_blocking(move || {
-            let _ = crate::db::repo::SearchHistoryRepo::record(&query, "all");
-            if let Some(search) = SEARCH.get() {
-                Some(search.search(&query))
-            } else {
-                None
-            }
-        }).await;
+        let q_clone = query.clone();
+        let f_clone = filter.clone();
+        tokio::task::spawn_blocking(move || {
+            let _ = crate::db::repo::SearchHistoryRepo::record(&q_clone, &f_clone);
+        }).await.ok();
 
-        if let Ok(Some(res)) = results {
-            if let Some(search) = SEARCH.get() {
-                search.push_to_ui(&res);
-            }
+        if let Some(search) = SEARCH.get() {
+            let res = search.search(&query, &filter).await;
+            search.push_to_ui(&res);
         }
     });
 }
@@ -298,6 +297,21 @@ pub fn on_window_close_requested() {
             p.toggle_play_pause();
         }
     });
+}
+
+pub fn handle_forwarded_args(args: Vec<String>) {
+    log::info!("Received forwarded arguments: {:?}", args);
+    bridge::show_main_window();
+    for arg in args {
+        if arg.starts_with("http://") || arg.starts_with("https://") {
+            log::info!("Playing forwarded URL: {}", arg);
+            if let Some(player) = PLAYER.get() {
+                player.clear_queue();
+                player.play_url(&arg);
+            }
+            break;
+        }
+    }
 }
 
 pub fn on_app_quit() {
@@ -665,6 +679,16 @@ pub fn apply_settings_impl() {
 
     bridge::set_settings_discord_rpc(settings.integrations.discord_rpc_enabled);
     bridge::set_settings_lastfm_enabled(settings.integrations.lastfm_enabled);
+    bridge::set_settings_mpris_enabled(settings.integrations.mpris_enabled);
+    bridge::set_settings_stop_on_close(settings.player.stop_on_close);
+
+    if settings.integrations.mpris_enabled {
+        if let Some(player) = PLAYER.get() {
+            crate::mpris::start_mpris(player.clone());
+        }
+    } else {
+        crate::mpris::stop_mpris();
+    }
 
     let lastfm_authenticated = !settings.integrations.lastfm_session_key.is_empty();
     bridge::set_settings_lastfm_session(
@@ -806,6 +830,23 @@ pub fn on_setting_changed(key: &str, value: &str) {
         "subtitle_glow_effect" => {
             settings.subtitles.glow_effect = value == "true";
             bridge::set_settings_subtitle_glow_effect(value == "true");
+        }
+        "stop_on_close" => {
+            let stop = value == "true";
+            settings.player.stop_on_close = stop;
+            bridge::set_settings_stop_on_close(stop);
+        }
+        "mpris_enabled" => {
+            let enabled = value == "true";
+            settings.integrations.mpris_enabled = enabled;
+            bridge::set_settings_mpris_enabled(enabled);
+            if enabled {
+                if let Some(player) = PLAYER.get() {
+                    crate::mpris::start_mpris(player.clone());
+                }
+            } else {
+                crate::mpris::stop_mpris();
+            }
         }
         _ => log::warn!("Unknown setting key: {key}"),
     }
@@ -1135,7 +1176,9 @@ pub fn on_youtube_login_success(headers_json: &str, name: &str, avatar_url: &str
 
     // Reload home data
     let home = crate::services::home::HomeService::new();
-    home.load_home();
+    tokio::spawn(async move {
+        home.load_home().await;
+    });
 }
 
 pub fn on_youtube_logout() {
@@ -1153,7 +1196,9 @@ pub fn on_youtube_logout() {
 
     // Reload home data
     let home = crate::services::home::HomeService::new();
-    home.load_home();
+    tokio::spawn(async move {
+        home.load_home().await;
+    });
 }
 
 pub fn is_youtube_authenticated() -> bool {

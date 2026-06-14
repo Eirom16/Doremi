@@ -84,12 +84,25 @@ impl DoremiApp {
         let theme = &self.settings.appearance.theme_mode;
         let font_size = self.settings.appearance.font_size;
 
+        let args: Vec<String> = std::env::args().skip(1).collect();
+        let mut startup_url = None;
+        for arg in &args {
+            if arg.starts_with("http://") || arg.starts_with("https://") {
+                startup_url = Some(arg.clone());
+                break;
+            }
+        }
+
         create_main_window("Doremi", theme, accent, font_size);
         apply_theme(theme, accent);
         set_window_title("Doremi");
         show_main_window();
         if restored_queue {
             player.refresh_queue_ui();
+        }
+        if let Some(url) = startup_url {
+            player.clear_queue();
+            player.play_url(&url);
         }
 
         // Check auth on startup
@@ -123,9 +136,7 @@ impl DoremiApp {
         // Load home, library and history data in background task
         tokio::spawn(async move {
             let home = HomeService::new();
-            tokio::task::spawn_blocking(move || {
-                home.load_home();
-            }).await.ok();
+            home.load_home().await;
 
             tokio::task::spawn_blocking(move || {
                 // Load recently played from DB → add "Seguir escuchando" section

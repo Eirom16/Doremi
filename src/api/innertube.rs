@@ -5,8 +5,8 @@ use std::time::Duration;
 
 const API_KEY: &str = "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8";
 const BASE_URL: &str = "https://music.youtube.com/youtubei/v1";
-static HTTP_CLIENT: Lazy<reqwest::blocking::Client> = Lazy::new(|| {
-    reqwest::blocking::Client::builder()
+static HTTP_CLIENT: Lazy<reqwest::Client> = Lazy::new(|| {
+    reqwest::Client::builder()
         .timeout(Duration::from_secs(10))
         .build()
         .unwrap_or_default()
@@ -36,7 +36,7 @@ fn get_auth_headers() -> Option<serde_json::Map<String, serde_json::Value>> {
         .cloned()
 }
 
-fn post(endpoint: &str, body: Value) -> Result<Value, String> {
+async fn post(endpoint: &str, body: Value) -> Result<Value, String> {
     let url = format!("{BASE_URL}/{endpoint}?key={API_KEY}");
     let mut request = HTTP_CLIENT.post(&url)
         .header("Content-Type", "application/json");
@@ -54,9 +54,10 @@ fn post(endpoint: &str, body: Value) -> Result<Value, String> {
     let resp = request
         .json(&body)
         .send()
+        .await
         .map_err(|e| format!("HTTP error: {e}"))?;
     let status = resp.status();
-    let text = resp.text().map_err(|e| format!("Read error: {e}"))?;
+    let text = resp.text().await.map_err(|e| format!("Read error: {e}"))?;
     if !status.is_success() {
         return Err(format!("API status {status}: {text}"));
     }
@@ -168,7 +169,7 @@ fn parse_related_tracks(json: &Value, seed_video_id: &str) -> Vec<super::models:
     tracks
 }
 
-pub fn related_tracks(video_id: &str) -> Result<Vec<super::models::Track>, String> {
+pub async fn related_tracks(video_id: &str) -> Result<Vec<super::models::Track>, String> {
     if video_id.trim().is_empty() {
         return Ok(Vec::new());
     }
@@ -177,14 +178,27 @@ pub fn related_tracks(video_id: &str) -> Result<Vec<super::models::Track>, Strin
     body["playlistId"] = serde_json::json!(format!("RDAMVM{video_id}"));
     body["isAudioOnly"] = serde_json::json!(true);
     body["params"] = serde_json::json!("wAEB");
-    let json = post("next", body)?;
+    let json = post("next", body).await?;
     Ok(parse_related_tracks(&json, video_id))
 }
 
-pub fn search(query: &str, _filter: &str) -> Result<super::models::SearchResults, String> {
+pub async fn search(query: &str, filter: &str) -> Result<super::models::SearchResults, String> {
     let mut body = client_context("es", "MX");
     body["query"] = serde_json::json!(query);
-    let json = post("search", body)?;
+
+    let params = match filter {
+        "songs" => Some("EgWKAQIIAWoFCAQQgAE="),
+        "videos" => Some("EgWKAQIIARoFCAQQgAE="),
+        "albums" => Some("EgWKAQIIRRoFCAQQgAE="),
+        "artists" => Some("EgWKAQIIBRoFCAQQgAE="),
+        "playlists" => Some("EgWKAQIIBxoFCAQQgAE="),
+        _ => None,
+    };
+    if let Some(p) = params {
+        body["params"] = serde_json::json!(p);
+    }
+
+    let json = post("search", body).await?;
 
     let mut songs = Vec::new();
     let mut albums = Vec::new();
@@ -205,7 +219,7 @@ pub fn search(query: &str, _filter: &str) -> Result<super::models::SearchResults
 
                     let Some(items) = data["contents"].as_array() else { continue; };
 
-                    let category = if section_title.contains("canción") || section_title.contains("song") {
+                    let category = if section_title.contains("canción") || section_title.contains("cancion") || section_title.contains("song") {
                         "songs"
                     } else if section_title.contains("video") {
                         "videos"
@@ -330,10 +344,10 @@ pub fn search(query: &str, _filter: &str) -> Result<super::models::SearchResults
     })
 }
 
-pub fn home_sections() -> Result<Vec<super::models::HomeSection>, String> {
+pub async fn home_sections() -> Result<Vec<super::models::HomeSection>, String> {
     let mut body = client_context("es", "MX");
     body["browseId"] = serde_json::json!("FEmusic_home");
-    let json = post("browse", body)?;
+    let json = post("browse", body).await?;
 
     let mut sections = Vec::new();
 

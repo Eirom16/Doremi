@@ -76,7 +76,7 @@ public:
     WelcomeView* welcome_view() const { return welcome_view_; }
     ThemeTransitionOverlay* theme_transition() const { return theme_transition_; }
 
-
+    void set_stop_on_close(bool stop) { stop_on_close_ = stop; }
     void setup_tray();
 
 signals:
@@ -114,6 +114,8 @@ private:
     WelcomeView *welcome_view_;
 
     QSystemTrayIcon *tray_icon_;
+    QAction *play_action_ = nullptr;
+    bool stop_on_close_ = false;
 
     QTimer *player_timer_;
     ThemeTransitionOverlay *theme_transition_;
@@ -159,6 +161,8 @@ void set_settings_sleep_timer(int32_t minutes);
 void set_settings_discord_rpc(bool on);
 void set_settings_lastfm_enabled(bool on);
 void set_settings_lastfm_session(bool authenticated, rust::Str username, rust::Str apiKey, rust::Str apiSecret);
+void set_settings_stop_on_close(bool stop);
+void set_settings_mpris_enabled(bool on);
 void set_track_lyrics(rust::Str plain, rust::Str synced);
 void set_settings_subtitle_alignment(rust::Str align);
 void set_settings_subtitle_font_size(int32_t size);

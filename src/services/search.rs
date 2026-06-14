@@ -10,8 +10,8 @@ impl SearchService {
         Self { api: ApiClient::new() }
     }
 
-    pub fn search(&self, query: &str) -> SearchResults {
-        self.api.search(query, "songs")
+    pub async fn search(&self, query: &str, filter: &str) -> SearchResults {
+        self.api.search(query, filter).await
     }
 
     pub fn push_to_ui(&self, results: &SearchResults) {

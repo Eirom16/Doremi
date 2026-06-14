@@ -25,7 +25,7 @@ public:
 signals:
     void filter_changed(const std::string &filter);
     void play_requested(Track track);
-    void search_requested(const std::string &query);
+    void search_requested(const std::string &query, const std::string &filter);
     void add_favorite_requested(Track track);
     void download_requested(Track track);
     void add_to_queue_next_requested(Track track);
@@ -35,6 +35,7 @@ private:
     QVBoxLayout *results_;
     QHBoxLayout *filters_;
     std::vector<QPushButton *> filter_btns_;
+    std::string current_query_;
     void set_active_filter(const std::string &filter);
     void show_recent_searches(const std::vector<std::string> &queries);
     void show_results(const std::vector<Track> &songs,

@@ -203,7 +203,7 @@ void DoremiMainWindow::connect_signals() {
     QObject::connect(title_bar_, &TitleBar::search_submitted, this, [this](const std::string &q) {
         search_view_->set_query(q);
         stack_->setCurrentIndex(2);
-        on_search_submitted(q);
+        on_search_submitted(q, "all");
     });
 
 
@@ -266,8 +266,8 @@ void DoremiMainWindow::connect_signals() {
             on_search_item_clicked(track);
         });
     QObject::connect(search_view_, &SearchView::search_requested, this,
-        [](const std::string &query) {
-            on_search_submitted(query);
+        [](const std::string &query, const std::string &filter) {
+            on_search_submitted(query, filter);
         });
     QObject::connect(search_view_, &SearchView::add_favorite_requested, this,
         [](Track track) {
@@ -357,7 +357,10 @@ void DoremiMainWindow::connect_signals() {
 
 
 void DoremiMainWindow::closeEvent(QCloseEvent *event) {
-    if (tray_icon_ && tray_icon_->isVisible()) {
+    if (stop_on_close_) {
+        on_app_quit();
+        event->accept();
+    } else if (tray_icon_ && tray_icon_->isVisible()) {
         hide();
         event->ignore();
     } else {
@@ -461,6 +464,9 @@ void DoremiMainWindow::set_playback_playing(bool playing) {
     if (now_playing_view_) {
         now_playing_view_->setPlaying(playing);
     }
+    if (play_action_) {
+        play_action_->setText(playing ? "⏸ Pausa" : "▶ Reproducir");
+    }
 }
 
 void DoremiMainWindow::resizeEvent(QResizeEvent *event) {
@@ -532,14 +538,14 @@ void DoremiMainWindow::setup_tray() {
     tray_icon_->setToolTip("Doremi");
 
     auto *menu = new QMenu(this);
-    auto *play_action = menu->addAction("▶ Reproducir/Pausa");
+    play_action_ = menu->addAction("▶ Reproducir");
     auto *next_action = menu->addAction("⏭ Siguiente");
     auto *prev_action = menu->addAction("⏮ Anterior");
     menu->addSeparator();
     auto *show_action = menu->addAction("Mostrar ventana");
     auto *quit_action = menu->addAction("Salir");
 
-    QObject::connect(play_action, &QAction::triggered, this, [this]() { emit play_pause_triggered(); });
+    QObject::connect(play_action_, &QAction::triggered, this, [this]() { emit play_pause_triggered(); });
     QObject::connect(next_action, &QAction::triggered, this, [this]() { emit next_triggered(); });
     QObject::connect(prev_action, &QAction::triggered, this, [this]() { emit previous_triggered(); });
     QObject::connect(show_action, &QAction::triggered, this, [this]() { show(); raise(); activateWindow(); });
@@ -894,6 +900,18 @@ void set_settings_lastfm_session(bool authenticated, rust::Str username, rust::S
             window.settings_view()->set_settings_lastfm_session(
                 authenticated, username_copy, api_key_copy, api_secret_copy);
         }
+    });
+}
+
+void set_settings_stop_on_close(bool stop) {
+    mutate_main_window("set_settings_stop_on_close", [stop](DoremiMainWindow &window) {
+        window.set_stop_on_close(stop);
+    });
+}
+
+void set_settings_mpris_enabled(bool on) {
+    mutate_main_window("set_settings_mpris_enabled", [on](DoremiMainWindow &window) {
+        if (window.settings_view()) window.settings_view()->set_settings_mpris_enabled(on);
     });
 }
 

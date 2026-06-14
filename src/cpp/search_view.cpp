@@ -55,7 +55,23 @@ SearchView::SearchView(QWidget *parent)
         btn->setStyleSheet(btnStyle);
         filters_->addWidget(btn);
         filter_btns_.push_back(btn);
-        connect(btn, &QPushButton::clicked, this, [this, name]() { emit filter_changed(name); });
+        connect(btn, &QPushButton::clicked, this, [this, btn, name]() {
+            for (auto *other : filter_btns_) {
+                if (other != btn) {
+                    other->setChecked(false);
+                }
+            }
+            std::string filter = "all";
+            if (btn->isChecked()) {
+                std::string label = name;
+                if (label == "Canciones") filter = "songs";
+                else if (label == "Videos") filter = "videos";
+                else if (label == "Álbumes") filter = "albums";
+                else if (label == "Artistas") filter = "artists";
+                else if (label == "Playlists") filter = "playlists";
+            }
+            emit search_requested(current_query_, filter);
+        });
     }
     filters_->addStretch(1);
     root->addLayout(filters_);
@@ -84,7 +100,11 @@ SearchView::SearchView(QWidget *parent)
 }
 
 void SearchView::set_query(const std::string &query) {
+    current_query_ = query;
     header_->setText("Resultados para \"" + QString::fromStdString(query) + "\"");
+    for (auto *btn : filter_btns_) {
+        btn->setChecked(false);
+    }
 }
 
 static void clear_layout(QVBoxLayout *lay) {
@@ -233,7 +253,7 @@ void SearchView::show_recent_searches(const std::vector<std::string> &queries) {
         btn->setStyleSheet(btnStyle);
         results_->addWidget(btn);
         connect(btn, &QPushButton::clicked, this, [this, q]() {
-            emit search_requested(q);
+            emit search_requested(q, "all");
         });
     }
     results_->addStretch(1);

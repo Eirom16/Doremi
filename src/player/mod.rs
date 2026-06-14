@@ -763,19 +763,12 @@ impl PlayerService {
         let preload_next = self.preload_next;
         tokio::spawn(async move {
             let seed_id = seed.id.clone();
-            let result = tokio::task::spawn_blocking(move || {
-                crate::api::innertube::related_tracks(&seed_id)
-            }).await;
+            let result = crate::api::innertube::related_tracks(&seed_id).await;
 
             let related = match result {
-                Ok(Ok(tracks)) => tracks,
-                Ok(Err(error)) => {
-                    log::warn!("Could not build auto queue for {}: {error}", seed.id);
-                    loading.store(false, Ordering::Release);
-                    return;
-                }
+                Ok(tracks) => tracks,
                 Err(error) => {
-                    log::warn!("Auto queue worker failed for {}: {error}", seed.id);
+                    log::warn!("Could not build auto queue for {}: {error}", seed.id);
                     loading.store(false, Ordering::Release);
                     return;
                 }

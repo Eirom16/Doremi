@@ -177,5 +177,7 @@
     "subtitle_glow_effect": "Glow effect",
     "align_left": "Left",
     "align_center": "Center",
-    "align_right": "Right"
+    "align_right": "Right",
+    "activate_mpris": "Enable media controls (MPRIS)",
+    "stop_on_close": "Close on click 'X' (instead of minimizing)"
 }

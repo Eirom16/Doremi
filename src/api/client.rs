@@ -6,7 +6,7 @@ pub struct ApiClient;
 impl ApiClient {
     pub fn new() -> Self { Self }
 
-    pub fn search(&self, query: &str, filter: &str) -> SearchResults {
+    pub async fn search(&self, query: &str, filter: &str) -> SearchResults {
         if query.trim().is_empty() {
             return SearchResults {
                 query: query.to_string(),
@@ -17,7 +17,7 @@ impl ApiClient {
                 playlists: vec![],
             };
         }
-        match super::innertube::search(query, filter) {
+        match super::innertube::search(query, filter).await {
             Ok(results) => {
                 log::info!("Search (real): '{query}' — {} songs, {} albums, {} artists",
                     results.songs.len(), results.albums.len(), results.artists.len());
@@ -41,8 +41,8 @@ impl ApiClient {
         }
     }
 
-    pub fn home_sections(&self) -> Vec<HomeSection> {
-        match super::innertube::home_sections() {
+    pub async fn home_sections(&self) -> Vec<HomeSection> {
+        match super::innertube::home_sections().await {
             Ok(sections) => {
                 log::info!("Home feed (real): {} sections", sections.len());
                 sections
@@ -77,7 +77,6 @@ impl ApiClient {
         }
         url
     }
-
 }
 
 impl Default for ApiClient {
@@ -88,10 +87,10 @@ impl Default for ApiClient {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_real_search() {
+    #[tokio::test]
+    async fn test_real_search() {
         let client = ApiClient::new();
-        let results = client.search("Michael Jackson", "all");
+        let results = client.search("Michael Jackson", "all").await;
         assert!(!results.songs.is_empty(), "Should return real search results");
         assert!(
             results.songs.iter().any(|s| {
@@ -101,5 +100,10 @@ mod tests {
             "Expected Michael Jackson in search results, got: {:?}",
             results.songs
         );
+
+        let song_results = client.search("Thriller", "songs").await;
+        assert!(!song_results.songs.is_empty(), "Should return songs when filtering by songs");
+        assert!(song_results.albums.is_empty(), "Should not return albums when filtering by songs");
+        assert!(song_results.artists.is_empty(), "Should not return artists when filtering by songs");
     }
 }

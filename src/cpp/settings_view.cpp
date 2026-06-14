@@ -101,6 +101,9 @@ SettingsView::SettingsView(QWidget *parent)
     crossfade_cb_ = new AnimatedToggle(inner);
     content->addWidget(check_row(std::string(doremi_tr("crossfade_songs")), crossfade_cb_));
 
+    stop_on_close_cb_ = new AnimatedToggle(inner);
+    content->addWidget(check_row(std::string(doremi_tr("stop_on_close")), stop_on_close_cb_));
+
     sleep_timer_cmb_ = new QComboBox(inner);
     sleep_timer_cmb_->addItems({
         QString::fromStdString(std::string(doremi_tr("sleep_disabled"))),
@@ -187,6 +190,9 @@ SettingsView::SettingsView(QWidget *parent)
 
     lastfm_cb_ = new AnimatedToggle(inner);
     content->addWidget(check_row(std::string(doremi_tr("activate_lastfm")), lastfm_cb_));
+
+    mpris_cb_ = new AnimatedToggle(inner);
+    content->addWidget(check_row(std::string(doremi_tr("activate_mpris")), mpris_cb_));
 
     // Last.fm Auth container (styled as a premium card)
     lastfm_auth_widget_ = new QWidget(inner);
@@ -558,6 +564,12 @@ SettingsView::SettingsView(QWidget *parent)
         lastfm_auth_widget_->setVisible(v);
         emit setting_changed("lastfm_enabled", v ? "true" : "false");
     });
+    QObject::connect(mpris_cb_, &AnimatedToggle::toggled, this, [this](bool v) {
+        emit setting_changed("mpris_enabled", v ? "true" : "false");
+    });
+    QObject::connect(stop_on_close_cb_, &AnimatedToggle::toggled, this, [this](bool v) {
+        emit setting_changed("stop_on_close", v ? "true" : "false");
+    });
     QObject::connect(lastfm_auth_btn_, &QPushButton::clicked, this, [this]() {
         if (lastfm_auth_btn_->text() == "Conectar Cuenta") {
             std::string apiKey = Ffi::to_std_string(lastfm_api_key_input_->text());
@@ -862,6 +874,18 @@ void SettingsView::set_settings_lastfm_session(bool authenticated, const std::st
         lastfm_auth_btn_->setText(QString::fromStdString(std::string(doremi_tr("lastfm_btn_connect"))));
         lastfm_auth_btn_->setVariant(RippleButton::Variant::Primary);
     }
+}
+
+void SettingsView::set_settings_stop_on_close(bool stop) {
+    stop_on_close_cb_->blockSignals(true);
+    stop_on_close_cb_->setChecked(stop);
+    stop_on_close_cb_->blockSignals(false);
+}
+
+void SettingsView::set_settings_mpris_enabled(bool on) {
+    mpris_cb_->blockSignals(true);
+    mpris_cb_->setChecked(on);
+    mpris_cb_->blockSignals(false);
 }
 
 bool SettingsView::discord_rpc_enabled() const { return discord_rpc_cb_->isChecked(); }

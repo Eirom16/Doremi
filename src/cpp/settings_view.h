@@ -31,6 +31,8 @@ public:
     void set_sleep_timer(int32_t minutes);
     void set_settings_discord_rpc(bool on);
     void set_settings_lastfm_enabled(bool on);
+    void set_settings_stop_on_close(bool stop);
+    void set_settings_mpris_enabled(bool on);
     void set_settings_lastfm_session(bool authenticated, const std::string &username, const std::string &apiKey, const std::string &apiSecret);
 
     void set_subtitle_alignment(const std::string &alignment);
@@ -75,6 +77,8 @@ private:
 
     AnimatedToggle *discord_rpc_cb_;
     AnimatedToggle *lastfm_cb_;
+    AnimatedToggle *mpris_cb_;
+    AnimatedToggle *stop_on_close_cb_;
 
     QWidget *lastfm_auth_widget_;
     QLineEdit *lastfm_api_key_input_;
