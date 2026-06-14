@@ -1,0 +1,25 @@
+{
+  "contents": [
+    {
+      "searchSuggestionsSectionRenderer": {
+        "contents": [
+          {
+            "searchSuggestionRenderer": {
+              "suggestion": { "runs": [{ "text": "anonymous suggestion one" }] }
+            }
+          },
+          {
+            "searchSuggestionRenderer": {
+              "suggestion": { "runs": [{ "text": "anonymous suggestion two" }] }
+            }
+          },
+          {
+            "searchSuggestionRenderer": {
+              "suggestion": { "runs": [{ "text": "anonymous suggestion one" }] }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,7 +1,7 @@
+use crate::db::repo::{DownloadTrack, DownloadsRepo};
+use once_cell::sync::Lazy;
 use std::sync::Arc;
 use tokio::sync::{mpsc, Semaphore};
-use once_cell::sync::Lazy;
-use crate::db::repo::{DownloadsRepo, DownloadTrack};
 
 #[derive(Debug, Clone)]
 pub struct DownloadTask {
@@ -42,7 +42,7 @@ impl DownloadManager {
         let _ = self.sender.send(task);
         crate::bridge::bridge::show_notification(
             &format!("Descarga añadida a la cola: {}", title),
-            "info"
+            "info",
         );
     }
 
@@ -71,7 +71,7 @@ impl DownloadManager {
                                 Self::refresh_downloads_ui();
                                 crate::bridge::bridge::show_notification(
                                     &format!("Descarga completada: {}", task.title),
-                                    "info"
+                                    "info",
                                 );
                             }
                         }
@@ -79,7 +79,7 @@ impl DownloadManager {
                             log::error!("Download failed for {}: {}", task.title, e);
                             crate::bridge::bridge::show_notification(
                                 &format!("Error al descargar: {}", task.title),
-                                "error"
+                                "error",
                             );
                         }
                     }
@@ -90,7 +90,9 @@ impl DownloadManager {
     }
 
     async fn download_track_impl(task: &DownloadTask) -> Result<DownloadTrack, String> {
-        let out_dir = crate::config::paths::AppDirs::global().cache_dir().join("downloads");
+        let out_dir = crate::config::paths::AppDirs::global()
+            .cache_dir()
+            .join("downloads");
         std::fs::create_dir_all(&out_dir)
             .map_err(|e| format!("Failed to create downloads folder: {e}"))?;
 
@@ -109,17 +111,21 @@ impl DownloadManager {
         let out_tmpl_str = out_tmpl.to_str().ok_or("Invalid output path")?;
 
         let mut args = vec![
-            "-f", "bestaudio/best",
+            "-f",
+            "bestaudio/best",
             "--no-playlist",
             "--no-warnings",
-            "-o", out_tmpl_str,
+            "-o",
+            out_tmpl_str,
         ];
 
         if has_ffmpeg {
             args.extend([
                 "--extract-audio",
-                "--audio-format", "mp3",
-                "--audio-quality", "192K",
+                "--audio-format",
+                "mp3",
+                "--audio-quality",
+                "192K",
             ]);
         }
 
@@ -188,7 +194,8 @@ impl DownloadManager {
         if let Ok(downloads) = DownloadsRepo::all() {
             let titles: Vec<String> = downloads.iter().map(|d| d.title.clone()).collect();
             let artists: Vec<String> = downloads.iter().map(|d| d.artist.clone()).collect();
-            let thumbnails: Vec<String> = downloads.iter().map(|d| d.thumbnail_url.clone()).collect();
+            let thumbnails: Vec<String> =
+                downloads.iter().map(|d| d.thumbnail_url.clone()).collect();
             crate::bridge::bridge::set_downloads_list(titles, artists, thumbnails);
         }
     }

@@ -31,6 +31,12 @@ TitleBar::TitleBar(QWidget *parent)
     search_input_ = new QLineEdit(this);
     search_input_->setPlaceholderText("Buscar canciones, artistas, álbumes...");
     search_input_->setFont(DesignTokens::getFont("body", 13));
+    search_suggestions_model_ = new QStringListModel(this);
+    search_completer_ = new QCompleter(search_suggestions_model_, this);
+    search_completer_->setCaseSensitivity(Qt::CaseInsensitive);
+    search_completer_->setCompletionMode(QCompleter::PopupCompletion);
+    search_completer_->setMaxVisibleItems(8);
+    search_input_->setCompleter(search_completer_);
     
     search_input_->addAction(IconProvider::getIcon("search", c.text_secondary, 18), QLineEdit::LeadingPosition);
     
@@ -63,6 +69,9 @@ TitleBar::TitleBar(QWidget *parent)
     connect(search_input_, &QLineEdit::returnPressed, this, [this]() {
         emit search_submitted(search_input_->text().toStdString());
     });
+    connect(search_input_, &QLineEdit::textEdited, this, [this](const QString &text) {
+        emit search_text_changed(text.toStdString());
+    });
 
     setStyleSheet(QString("background-color: %1; border-bottom: 1px solid %2;")
         .arg(c.bg_surface.name())
@@ -73,6 +82,14 @@ TitleBar::TitleBar(QWidget *parent)
 
 void TitleBar::set_search_text(const std::string &text) {
     search_input_->setText(QString::fromStdString(text));
+}
+
+void TitleBar::set_search_suggestions(const std::vector<std::string> &suggestions) {
+    QStringList values;
+    for (const auto &suggestion : suggestions) {
+        values.push_back(QString::fromStdString(suggestion));
+    }
+    search_suggestions_model_->setStringList(values);
 }
 
 std::string TitleBar::search_text() const {

@@ -1,0 +1,18 @@
+{
+  "continuationContents": {
+    "sectionListContinuation": {
+      "contents": [
+        {
+          "musicCarouselShelfRenderer": {
+            "header": {
+              "musicCarouselShelfBasicHeaderRenderer": {
+                "title": { "runs": [{ "text": "Anonymous recommendations" }] }
+              }
+            },
+            "contents": []
+          }
+        }
+      ]
+    }
+  }
+}

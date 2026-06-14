@@ -1,9 +1,9 @@
+use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
-use futures::StreamExt;
 
 const GITHUB_API_URL: &str = "https://api.github.com/repos/Eirom16/pyrolist/releases/latest";
 const USER_AGENT: &str = "Doremi-Updater/2.0.0 (Linux)";
@@ -82,7 +82,8 @@ fn parse_version(tag: &str) -> Vec<u32> {
 pub async fn check_for_updates() -> Option<ReleaseInfo> {
     log::info!("Checking for updates from: {GITHUB_API_URL}");
     let client = reqwest::Client::new();
-    let res = client.get(GITHUB_API_URL)
+    let res = client
+        .get(GITHUB_API_URL)
         .header("User-Agent", USER_AGENT)
         .header("Accept", "application/vnd.github+json")
         .send()
@@ -112,7 +113,9 @@ pub async fn check_for_updates() -> Option<ReleaseInfo> {
                     if let Some(asset) = release.assets.iter().find(|a| a.name.ends_with(suffix)) {
                         return Some(ReleaseInfo {
                             version: release.tag_name.clone(),
-                            notes: release.body.unwrap_or_else(|| "Sin notas de versión.".to_string()),
+                            notes: release
+                                .body
+                                .unwrap_or_else(|| "Sin notas de versión.".to_string()),
                             url: release.html_url.clone(),
                             asset_url: asset.browser_download_url.clone(),
                             asset_name: asset.name.clone(),
@@ -130,11 +133,7 @@ pub async fn check_for_updates() -> Option<ReleaseInfo> {
 }
 
 // Progress callback interface for download
-pub async fn download_update_package<F>(
-    url: &str,
-    name: &str,
-    mut progress: F,
-) -> Option<PathBuf>
+pub async fn download_update_package<F>(url: &str, name: &str, mut progress: F) -> Option<PathBuf>
 where
     F: FnMut(f64, &str),
 {
@@ -145,7 +144,8 @@ where
     );
 
     let client = reqwest::Client::new();
-    let res = client.get(url)
+    let res = client
+        .get(url)
         .header("User-Agent", USER_AGENT)
         .send()
         .await;
@@ -215,7 +215,7 @@ pub async fn install_update_async(package_path: &Path, password: Option<String>)
         };
 
         log::info!("Installing package via sudo -S using {pkg_mgr}");
-        
+
         let mut child = match tokio::process::Command::new("sudo")
             .args(&install_args)
             .stdin(std::process::Stdio::piped())
@@ -255,7 +255,7 @@ pub async fn install_update_async(package_path: &Path, password: Option<String>)
         };
 
         log::info!("Installing package via pkexec using {pkg_mgr}");
-        
+
         match Command::new(cmd[0]).args(&cmd[1..]).spawn() {
             Ok(_) => true,
             Err(e) => {
@@ -272,7 +272,12 @@ pub async fn install_update_async(package_path: &Path, password: Option<String>)
                 for term in &["konsole", "gnome-terminal", "xterm", "alacritty"] {
                     if is_command_available(term) {
                         let _ = Command::new(term)
-                            .args(["-e", "bash", "-c", &format!("{}; read -p 'Presiona Enter para cerrar'", term_cmd)])
+                            .args([
+                                "-e",
+                                "bash",
+                                "-c",
+                                &format!("{}; read -p 'Presiona Enter para cerrar'", term_cmd),
+                            ])
                             .spawn();
                         return true;
                     }

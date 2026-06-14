@@ -205,22 +205,22 @@ El port se considera terminado cuando Doremi cubra los flujos reales de Pyrolist
 
 - [x] Hecho - Eliminar resultados mock del flujo de produccion.
 - [x] Hecho - Mostrar estados vacio, offline y error reales en UI.
-- [ ] Separar transporte HTTP, autenticacion, endpoints y parsing.
+- [x] Separar transporte HTTP, autenticacion, endpoints y parsing.
 - [x] Hecho - Reutilizar `reqwest::Client`; no crear uno por request.
 - [x] Hecho - Usar API async en servicios y evitar `reqwest::blocking`.
-- [ ] Añadir headers/contexto por locale, region y sesion.
-- [ ] Manejar continuations y paginacion.
-- [ ] Añadir cache con TTL e invalidacion por usuario/locale.
-- [ ] Conservar fixtures JSON anonimizados para tests de parsers.
-- [ ] Detectar cambios de schema con errores descriptivos.
-- [ ] Añadir rate limiting y backoff.
+- [x] Añadir headers/contexto por locale, region y sesion.
+- [x] Manejar continuations y paginacion.
+- [x] Añadir cache con TTL e invalidacion por usuario/locale.
+- [x] Conservar fixtures JSON anonimizados para tests de parsers.
+- [x] Detectar cambios de schema con errores descriptivos.
+- [x] Añadir rate limiting y backoff.
 
 ### P2.2 Endpoints necesarios
 
 - [x] Hecho - Search con filtros all/songs/videos/albums/artists/playlists.
-- [ ] Search suggestions y busquedas recientes.
-- [ ] Home autenticado y anonimo.
-- [ ] Trending/charts reales por region.
+- [x] Search suggestions y busquedas recientes.
+- [x] Home autenticado y anonimo.
+- [x] Trending/charts reales por region.
 - [ ] Album detail y tracks.
 - [ ] Artist detail, top songs, albums, singles y related.
 - [ ] Playlist detail, continuations y disponibilidad.

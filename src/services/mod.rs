@@ -1,7 +1,8 @@
-pub mod search;
-pub mod home;
-pub mod download;
-pub mod lyrics;
 pub mod discord;
+pub mod download;
+pub mod home;
 pub mod lastfm;
+pub mod lyrics;
+pub mod search;
+pub mod trending;
 pub mod updater;

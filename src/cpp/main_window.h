@@ -147,6 +147,7 @@ void set_library_playlists(rust::Vec<Playlist> playlists);
 void set_library_albums(rust::Vec<Album> albums);
 void set_library_artists(rust::Vec<Artist> artists);
 void set_search_history(rust::Vec<rust::String> queries);
+void set_search_suggestions(rust::Vec<rust::String> suggestions);
 void apply_settings_to_ui();
 void set_settings_theme(rust::Str mode);
 void set_settings_accent(rust::Str color);

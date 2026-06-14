@@ -4,7 +4,9 @@ use super::models::*;
 pub struct ApiClient;
 
 impl ApiClient {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 
     pub async fn search(&self, query: &str, filter: &str) -> SearchResults {
         if query.trim().is_empty() {
@@ -19,8 +21,12 @@ impl ApiClient {
         }
         match super::innertube::search(query, filter).await {
             Ok(results) => {
-                log::info!("Search (real): '{query}' — {} songs, {} albums, {} artists",
-                    results.songs.len(), results.albums.len(), results.artists.len());
+                log::info!(
+                    "Search (real): '{query}' — {} songs, {} albums, {} artists",
+                    results.songs.len(),
+                    results.albums.len(),
+                    results.artists.len()
+                );
                 results
             }
             Err(e) => {
@@ -41,6 +47,16 @@ impl ApiClient {
         }
     }
 
+    pub async fn search_suggestions(&self, query: &str) -> Vec<String> {
+        match super::innertube::search_suggestions(query).await {
+            Ok(suggestions) => suggestions,
+            Err(error) => {
+                log::debug!("Search suggestions failed: {error}");
+                Vec::new()
+            }
+        }
+    }
+
     pub async fn home_sections(&self) -> Vec<HomeSection> {
         match super::innertube::home_sections().await {
             Ok(sections) => {
@@ -54,6 +70,20 @@ impl ApiClient {
                     "error",
                 );
                 vec![]
+            }
+        }
+    }
+
+    pub async fn charts(&self) -> Vec<HomeSection> {
+        match super::innertube::charts().await {
+            Ok(sections) => sections,
+            Err(error) => {
+                log::error!("Charts API failed: {error}");
+                crate::bridge::bridge::show_notification(
+                    &format!("Error al cargar tendencias: {error}"),
+                    "error",
+                );
+                Vec::new()
             }
         }
     }
@@ -80,7 +110,9 @@ impl ApiClient {
 }
 
 impl Default for ApiClient {
-    fn default() -> Self { Self }
+    fn default() -> Self {
+        Self
+    }
 }
 
 #[cfg(test)]
@@ -91,19 +123,33 @@ mod tests {
     async fn test_real_search() {
         let client = ApiClient::new();
         let results = client.search("Michael Jackson", "all").await;
-        assert!(!results.songs.is_empty(), "Should return real search results");
+        assert!(
+            !results.songs.is_empty(),
+            "Should return real search results"
+        );
         assert!(
             results.songs.iter().any(|s| {
                 s.title.to_lowercase().contains("michael")
-                    || s.artists.iter().any(|a| a.to_lowercase().contains("michael"))
+                    || s.artists
+                        .iter()
+                        .any(|a| a.to_lowercase().contains("michael"))
             }),
             "Expected Michael Jackson in search results, got: {:?}",
             results.songs
         );
 
         let song_results = client.search("Thriller", "songs").await;
-        assert!(!song_results.songs.is_empty(), "Should return songs when filtering by songs");
-        assert!(song_results.albums.is_empty(), "Should not return albums when filtering by songs");
-        assert!(song_results.artists.is_empty(), "Should not return artists when filtering by songs");
+        assert!(
+            !song_results.songs.is_empty(),
+            "Should return songs when filtering by songs"
+        );
+        assert!(
+            song_results.albums.is_empty(),
+            "Should not return albums when filtering by songs"
+        );
+        assert!(
+            song_results.artists.is_empty(),
+            "Should not return artists when filtering by songs"
+        );
     }
 }

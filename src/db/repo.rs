@@ -109,7 +109,8 @@ impl FavoritesRepo {
                 "SELECT COUNT(*) FROM favorite_tracks WHERE id = ?1",
                 params![track_id],
                 |r| r.get::<_, i64>(0),
-            ).map(|c| c > 0)
+            )
+            .map(|c| c > 0)
         })
     }
 
@@ -125,14 +126,20 @@ impl FavoritesRepo {
     }
 
     pub fn remove_track(track_id: &str) -> SqlResult<()> {
-        with_db(|conn| conn.execute("DELETE FROM favorite_tracks WHERE id = ?1", params![track_id]).map(|_| ()))
+        with_db(|conn| {
+            conn.execute(
+                "DELETE FROM favorite_tracks WHERE id = ?1",
+                params![track_id],
+            )
+            .map(|_| ())
+        })
     }
 
     pub fn all_tracks() -> SqlResult<Vec<FavoriteTrack>> {
         with_db(|conn| {
             let mut stmt = conn.prepare(
                 "SELECT id, title, artist, album, album_id, duration_ms, thumbnail, added_at
-                 FROM favorite_tracks ORDER BY added_at DESC"
+                 FROM favorite_tracks ORDER BY added_at DESC",
             )?;
             let rows = stmt.query_map([], |r| {
                 Ok(FavoriteTrack {
@@ -155,13 +162,26 @@ impl FavoritesRepo {
             conn.execute(
                 "INSERT OR IGNORE INTO favorite_albums (id, title, artist, year, thumbnail)
                  VALUES (?1, ?2, ?3, ?4, ?5)",
-                params![album.id, album.title, album.artist, album.year, album.thumbnail],
-            ).map(|_| ())
+                params![
+                    album.id,
+                    album.title,
+                    album.artist,
+                    album.year,
+                    album.thumbnail
+                ],
+            )
+            .map(|_| ())
         })
     }
 
     pub fn remove_album(album_id: &str) -> SqlResult<()> {
-        with_db(|conn| conn.execute("DELETE FROM favorite_albums WHERE id = ?1", params![album_id]).map(|_| ()))
+        with_db(|conn| {
+            conn.execute(
+                "DELETE FROM favorite_albums WHERE id = ?1",
+                params![album_id],
+            )
+            .map(|_| ())
+        })
     }
 
     pub fn all_albums() -> SqlResult<Vec<FavoriteAlbum>> {
@@ -188,21 +208,33 @@ impl FavoritesRepo {
             conn.execute(
                 "INSERT OR IGNORE INTO favorite_artists (id, name, thumbnail) VALUES (?1, ?2, ?3)",
                 params![artist.id, artist.name, artist.thumbnail],
-            ).map(|_| ())
+            )
+            .map(|_| ())
         })
     }
 
     pub fn remove_artist(artist_id: &str) -> SqlResult<()> {
-        with_db(|conn| conn.execute("DELETE FROM favorite_artists WHERE id = ?1", params![artist_id]).map(|_| ()))
+        with_db(|conn| {
+            conn.execute(
+                "DELETE FROM favorite_artists WHERE id = ?1",
+                params![artist_id],
+            )
+            .map(|_| ())
+        })
     }
 
     pub fn all_artists() -> SqlResult<Vec<FavoriteArtist>> {
         with_db(|conn| {
             let mut stmt = conn.prepare(
-                "SELECT id, name, thumbnail, added_at FROM favorite_artists ORDER BY added_at DESC"
+                "SELECT id, name, thumbnail, added_at FROM favorite_artists ORDER BY added_at DESC",
             )?;
             let rows = stmt.query_map([], |r| {
-                Ok(FavoriteArtist { id: r.get(0)?, name: r.get(1)?, thumbnail: r.get(2)?, added_at: r.get(3)? })
+                Ok(FavoriteArtist {
+                    id: r.get(0)?,
+                    name: r.get(1)?,
+                    thumbnail: r.get(2)?,
+                    added_at: r.get(3)?,
+                })
             })?;
             rows.collect()
         })
@@ -224,7 +256,10 @@ impl PlaylistRepo {
     }
 
     pub fn delete(playlist_id: &str) -> SqlResult<()> {
-        with_db(|conn| conn.execute("DELETE FROM playlists WHERE id = ?1", params![playlist_id]).map(|_| ()))
+        with_db(|conn| {
+            conn.execute("DELETE FROM playlists WHERE id = ?1", params![playlist_id])
+                .map(|_| ())
+        })
     }
 
     pub fn rename(playlist_id: &str, name: &str) -> SqlResult<()> {
@@ -232,7 +267,8 @@ impl PlaylistRepo {
             conn.execute(
                 "UPDATE playlists SET name = ?1, updated_at = datetime('now') WHERE id = ?2",
                 params![name, playlist_id],
-            ).map(|_| ())
+            )
+            .map(|_| ())
         })
     }
 
@@ -271,7 +307,8 @@ impl PlaylistRepo {
             conn.execute(
                 "DELETE FROM playlist_tracks WHERE playlist_id = ?1 AND track_id = ?2",
                 params![playlist_id, track_id],
-            ).map(|_| ())
+            )
+            .map(|_| ())
         })
     }
 
@@ -302,7 +339,14 @@ impl PlaylistRepo {
 pub struct RecentlyPlayedRepo;
 
 impl RecentlyPlayedRepo {
-    pub fn record(track_id: &str, title: &str, artist: &str, album: &str, duration_ms: i64, thumbnail: &str) -> SqlResult<()> {
+    pub fn record(
+        track_id: &str,
+        title: &str,
+        artist: &str,
+        album: &str,
+        duration_ms: i64,
+        thumbnail: &str,
+    ) -> SqlResult<()> {
         with_db(|conn| {
             conn.execute(
                 "INSERT INTO recently_played (track_id, title, artist, album, duration_ms, thumbnail)
@@ -316,7 +360,7 @@ impl RecentlyPlayedRepo {
         with_db(|conn| {
             let mut stmt = conn.prepare(
                 "SELECT id, track_id, title, artist, album, duration_ms, thumbnail, played_at
-                 FROM recently_played ORDER BY played_at DESC LIMIT ?1"
+                 FROM recently_played ORDER BY played_at DESC LIMIT ?1",
             )?;
             let rows = stmt.query_map(params![limit], |r| {
                 Ok(RecentTrack {
@@ -345,9 +389,14 @@ impl SearchHistoryRepo {
     pub fn record(query: &str, filter: &str) -> SqlResult<()> {
         with_db(|conn| {
             conn.execute(
+                "DELETE FROM search_history WHERE lower(query) = lower(?1)",
+                params![query],
+            )?;
+            conn.execute(
                 "INSERT INTO search_history (query, filter) VALUES (?1, ?2)",
                 params![query, filter],
-            ).map(|_| ())
+            )
+            .map(|_| ())
         })
     }
 
@@ -357,7 +406,12 @@ impl SearchHistoryRepo {
                 "SELECT id, query, filter, searched_at FROM search_history ORDER BY searched_at DESC LIMIT ?1"
             )?;
             let rows = stmt.query_map(params![limit], |r| {
-                Ok(SearchEntry { id: r.get(0)?, query: r.get(1)?, filter: r.get(2)?, searched_at: r.get(3)? })
+                Ok(SearchEntry {
+                    id: r.get(0)?,
+                    query: r.get(1)?,
+                    filter: r.get(2)?,
+                    searched_at: r.get(3)?,
+                })
             })?;
             rows.collect()
         })
@@ -407,7 +461,8 @@ impl DownloadsRepo {
                 "SELECT COUNT(*) FROM downloads WHERE video_id = ?1",
                 params![video_id],
                 |r| r.get::<_, i64>(0),
-            ).map(|c| c > 0)
+            )
+            .map(|c| c > 0)
         })
     }
 
@@ -419,26 +474,35 @@ impl DownloadsRepo {
                     parent_playlist_id, parent_playlist_title, parent_playlist_thumbnail_url
                  ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
                 params![
-                    track.video_id, track.title, track.artist, track.album, track.file_path,
-                    track.thumbnail_url, track.duration_ms, track.parent_playlist_id,
-                    track.parent_playlist_title, track.parent_playlist_thumbnail_url
+                    track.video_id,
+                    track.title,
+                    track.artist,
+                    track.album,
+                    track.file_path,
+                    track.thumbnail_url,
+                    track.duration_ms,
+                    track.parent_playlist_id,
+                    track.parent_playlist_title,
+                    track.parent_playlist_thumbnail_url
                 ],
-            ).map(|_| ())
+            )
+            .map(|_| ())
         })
     }
 
     pub fn remove(video_id: &str) -> SqlResult<()> {
         with_db(|conn| {
-            conn.execute("DELETE FROM downloads WHERE video_id = ?1", params![video_id]).map(|_| ())
+            conn.execute(
+                "DELETE FROM downloads WHERE video_id = ?1",
+                params![video_id],
+            )
+            .map(|_| ())
         })
     }
 
     pub fn clear_all() -> SqlResult<()> {
-        with_db(|conn| {
-            conn.execute("DELETE FROM downloads", []).map(|_| ())
-        })
+        with_db(|conn| conn.execute("DELETE FROM downloads", []).map(|_| ()))
     }
-
 
     pub fn all() -> SqlResult<Vec<DownloadTrack>> {
         with_db(|conn| {
@@ -501,14 +565,23 @@ mod tests {
             conn.execute(
                 "INSERT INTO favorite_tracks (id, title, artist, album) VALUES (?1, ?2, ?3, ?4)",
                 params!["t1", "Test Song", "Test Artist", "Test Album"],
-            ).unwrap();
-            let count: i64 = conn.query_row(
-                "SELECT COUNT(*) FROM favorite_tracks WHERE id = ?1", params!["t1"], |r| r.get(0)
-            ).unwrap();
+            )
+            .unwrap();
+            let count: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM favorite_tracks WHERE id = ?1",
+                    params!["t1"],
+                    |r| r.get(0),
+                )
+                .unwrap();
             assert_eq!(count, 1);
-            let title: String = conn.query_row(
-                "SELECT title FROM favorite_tracks WHERE id = ?1", params!["t1"], |r| r.get(0)
-            ).unwrap();
+            let title: String = conn
+                .query_row(
+                    "SELECT title FROM favorite_tracks WHERE id = ?1",
+                    params!["t1"],
+                    |r| r.get(0),
+                )
+                .unwrap();
             assert_eq!(title, "Test Song");
         });
     }
@@ -517,19 +590,27 @@ mod tests {
     fn test_playlist_sql() {
         with_test_conn(|conn| {
             conn.execute(
-                "INSERT INTO playlists (id, name) VALUES ('p1', 'My Playlist')", []
-            ).unwrap();
-            let name: String = conn.query_row(
-                "SELECT name FROM playlists WHERE id = 'p1'", [], |r| r.get(0)
-            ).unwrap();
+                "INSERT INTO playlists (id, name) VALUES ('p1', 'My Playlist')",
+                [],
+            )
+            .unwrap();
+            let name: String = conn
+                .query_row("SELECT name FROM playlists WHERE id = 'p1'", [], |r| {
+                    r.get(0)
+                })
+                .unwrap();
             assert_eq!(name, "My Playlist");
 
             conn.execute(
                 "INSERT INTO playlist_tracks (playlist_id, track_id, position, title, artist) VALUES ('p1', 't1', 0, 'Song', 'Artist')", []
             ).unwrap();
-            let count: i64 = conn.query_row(
-                "SELECT COUNT(*) FROM playlist_tracks WHERE playlist_id = 'p1'", [], |r| r.get(0)
-            ).unwrap();
+            let count: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM playlist_tracks WHERE playlist_id = 'p1'",
+                    [],
+                    |r| r.get(0),
+                )
+                .unwrap();
             assert_eq!(count, 1);
         });
     }
@@ -540,9 +621,9 @@ mod tests {
             conn.execute(
                 "INSERT INTO recently_played (track_id, title, artist) VALUES ('t1', 'Song', 'Artist')", []
             ).unwrap();
-            let count: i64 = conn.query_row(
-                "SELECT COUNT(*) FROM recently_played", [], |r| r.get(0)
-            ).unwrap();
+            let count: i64 = conn
+                .query_row("SELECT COUNT(*) FROM recently_played", [], |r| r.get(0))
+                .unwrap();
             assert_eq!(count, 1);
         });
     }
@@ -550,11 +631,19 @@ mod tests {
     #[test]
     fn test_search_history_sql() {
         with_test_conn(|conn| {
-            conn.execute("INSERT INTO search_history (query, filter) VALUES ('hello', 'songs')", []).unwrap();
-            conn.execute("INSERT INTO search_history (query, filter) VALUES ('world', 'all')", []).unwrap();
-            let count: i64 = conn.query_row(
-                "SELECT COUNT(*) FROM search_history", [], |r| r.get(0)
-            ).unwrap();
+            conn.execute(
+                "INSERT INTO search_history (query, filter) VALUES ('hello', 'songs')",
+                [],
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO search_history (query, filter) VALUES ('world', 'all')",
+                [],
+            )
+            .unwrap();
+            let count: i64 = conn
+                .query_row("SELECT COUNT(*) FROM search_history", [], |r| r.get(0))
+                .unwrap();
             assert_eq!(count, 2);
         });
     }
@@ -566,18 +655,22 @@ mod tests {
                 "INSERT INTO downloads (video_id, title, artist, file_path)
                  VALUES ('video-a', 'Same Song', 'Same Artist', '/tmp/a.m4a')",
                 [],
-            ).unwrap();
+            )
+            .unwrap();
             conn.execute(
                 "INSERT INTO downloads (video_id, title, artist, file_path)
                  VALUES ('video-b', 'Same Song', 'Same Artist', '/tmp/b.m4a')",
                 [],
-            ).unwrap();
+            )
+            .unwrap();
 
-            let path: String = conn.query_row(
-                "SELECT file_path FROM downloads WHERE video_id = ?1",
-                params!["video-b"],
-                |row| row.get(0),
-            ).unwrap();
+            let path: String = conn
+                .query_row(
+                    "SELECT file_path FROM downloads WHERE video_id = ?1",
+                    params!["video-b"],
+                    |row| row.get(0),
+                )
+                .unwrap();
 
             assert_eq!(path, "/tmp/b.m4a");
         });

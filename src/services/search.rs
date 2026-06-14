@@ -7,15 +7,23 @@ pub struct SearchService {
 
 impl SearchService {
     pub fn new() -> Self {
-        Self { api: ApiClient::new() }
+        Self {
+            api: ApiClient::new(),
+        }
     }
 
     pub async fn search(&self, query: &str, filter: &str) -> SearchResults {
         self.api.search(query, filter).await
     }
 
+    pub async fn suggestions(&self, query: &str) -> Vec<String> {
+        self.api.search_suggestions(query).await
+    }
+
     pub fn push_to_ui(&self, results: &SearchResults) {
-        let songs: Vec<crate::bridge::bridge::Track> = results.songs.iter()
+        let songs: Vec<crate::bridge::bridge::Track> = results
+            .songs
+            .iter()
             .map(|t| crate::bridge::bridge::Track {
                 id: t.id.clone(),
                 title: t.title.clone(),
@@ -25,7 +33,9 @@ impl SearchService {
                 thumbnail: t.thumbnail.clone(),
             })
             .collect();
-        let artists: Vec<crate::bridge::bridge::Artist> = results.artists.iter()
+        let artists: Vec<crate::bridge::bridge::Artist> = results
+            .artists
+            .iter()
             .map(|a| crate::bridge::bridge::Artist {
                 id: a.id.clone(),
                 name: a.name.clone(),
@@ -34,7 +44,9 @@ impl SearchService {
                 subscribers: a.subscriber_count.clone().unwrap_or_default(),
             })
             .collect();
-        let albums: Vec<crate::bridge::bridge::Album> = results.albums.iter()
+        let albums: Vec<crate::bridge::bridge::Album> = results
+            .albums
+            .iter()
             .map(|a| crate::bridge::bridge::Album {
                 id: a.id.clone(),
                 title: a.title.clone(),

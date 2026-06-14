@@ -1,0 +1,23 @@
+{
+  "continuationContents": {
+    "musicShelfContinuation": {
+      "contents": [
+        {
+          "musicResponsiveListItemRenderer": {
+            "playlistItemData": { "videoId": "video-anonymous-2" },
+            "flexColumns": [
+              {
+                "musicResponsiveListItemFlexColumnRenderer": {
+                  "text": { "runs": [{ "text": "Anonymous song" }] }
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "continuations": [
+        { "nextContinuationData": { "continuation": "token-anonymous-next" } }
+      ]
+    }
+  }
+}

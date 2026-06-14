@@ -4,12 +4,13 @@ use crate::bridge;
 use crate::bridge::bridge::*;
 use crate::config::paths::AppDirs;
 use crate::config::settings::AppSettings;
-use crate::db::Database;
-use crate::player::PlayerService;
-use crate::player::vlc_check;
-use crate::services::search::SearchService;
-use crate::services::home::HomeService;
 use crate::db::repo::{FavoritesRepo, PlaylistRepo, SearchHistoryRepo};
+use crate::db::Database;
+use crate::player::vlc_check;
+use crate::player::PlayerService;
+use crate::services::home::HomeService;
+use crate::services::search::SearchService;
+use crate::services::trending::TrendingService;
 
 pub struct DoremiApp {
     settings: AppSettings,
@@ -38,7 +39,10 @@ impl DoremiApp {
         // Run Pyrolist -> Doremi migration
         match crate::utils::migration::run_migration() {
             Ok(Some(summary)) => {
-                log::info!("Migration from Pyrolist completed successfully: {:?}", summary);
+                log::info!(
+                    "Migration from Pyrolist completed successfully: {:?}",
+                    summary
+                );
             }
             Ok(None) => {
                 log::info!("No legacy Pyrolist data found for migration");
@@ -58,6 +62,7 @@ impl DoremiApp {
         log::info!("Doremi v{} initialized", crate::VERSION);
         log::info!("Theme: {}", self.settings.appearance.theme_mode);
         log::info!("Language: {}", self.settings.language);
+        crate::api::endpoints::configure(&self.settings.language, &self.settings.network.region);
 
         if let Err(error) = bridge::verify_contract() {
             log::error!("Cannot start Doremi: {error}");
@@ -68,8 +73,8 @@ impl DoremiApp {
         let player = Arc::new(PlayerService::new_with_preload(
             self.settings.network.preload_next,
         ));
-        let restored_queue = self.settings.player.resume_on_startup
-            && player.restore_queue_session();
+        let restored_queue =
+            self.settings.player.resume_on_startup && player.restore_queue_session();
         bridge::init_player(player.clone());
         log::info!("Player service initialized");
 
@@ -137,12 +142,14 @@ impl DoremiApp {
         tokio::spawn(async move {
             let home = HomeService::new();
             home.load_home().await;
+            TrendingService::new().load().await;
 
             tokio::task::spawn_blocking(move || {
                 // Load recently played from DB → add "Seguir escuchando" section
                 if let Ok(recent) = crate::db::repo::RecentlyPlayedRepo::recent(12) {
                     if !recent.is_empty() {
-                        let items: Vec<String> = recent.iter()
+                        let items: Vec<String> = recent
+                            .iter()
                             .map(|r| format!("{} — {}", r.title, r.artist))
                             .collect();
                         add_home_section("Seguir escuchando", items);
@@ -152,7 +159,8 @@ impl DoremiApp {
                 // Load library data from DB
                 // Songs (favorites)
                 if let Ok(tracks) = FavoritesRepo::all_tracks() {
-                    let songs: Vec<crate::bridge::bridge::Track> = tracks.iter()
+                    let songs: Vec<crate::bridge::bridge::Track> = tracks
+                        .iter()
                         .map(|t| crate::bridge::bridge::Track {
                             id: t.id.clone(),
                             title: t.title.clone(),
@@ -160,14 +168,19 @@ impl DoremiApp {
                             album: t.album.clone(),
                             duration_ms: t.duration_ms,
                             thumbnail: t.thumbnail.clone(),
-                        }).collect();
+                        })
+                        .collect();
                     set_library_songs(songs);
                 }
                 // Playlists
                 if let Ok(playlists) = PlaylistRepo::all() {
-                    let p_list: Vec<crate::bridge::bridge::Playlist> = playlists.iter()
+                    let p_list: Vec<crate::bridge::bridge::Playlist> = playlists
+                        .iter()
                         .map(|p| {
-                            let count = PlaylistRepo::tracks(&p.id).ok().map(|t| t.len() as i32).unwrap_or(0);
+                            let count = PlaylistRepo::tracks(&p.id)
+                                .ok()
+                                .map(|t| t.len() as i32)
+                                .unwrap_or(0);
                             crate::bridge::bridge::Playlist {
                                 id: p.id.clone(),
                                 name: p.name.clone(),
@@ -181,7 +194,8 @@ impl DoremiApp {
                 }
                 // Albums
                 if let Ok(albums) = FavoritesRepo::all_albums() {
-                    let a_list: Vec<crate::bridge::bridge::Album> = albums.iter()
+                    let a_list: Vec<crate::bridge::bridge::Album> = albums
+                        .iter()
                         .map(|a| crate::bridge::bridge::Album {
                             id: a.id.clone(),
                             title: a.title.clone(),
@@ -189,19 +203,22 @@ impl DoremiApp {
                             year: a.year.map(|y| y.to_string()).unwrap_or_default(),
                             thumbnail: a.thumbnail.clone(),
                             track_count: 0,
-                        }).collect();
+                        })
+                        .collect();
                     set_library_albums(a_list);
                 }
                 // Artists
                 if let Ok(artists) = FavoritesRepo::all_artists() {
-                    let art_list: Vec<crate::bridge::bridge::Artist> = artists.iter()
+                    let art_list: Vec<crate::bridge::bridge::Artist> = artists
+                        .iter()
                         .map(|a| crate::bridge::bridge::Artist {
                             id: a.id.clone(),
                             name: a.name.clone(),
                             thumbnail: a.thumbnail.clone(),
                             description: String::new(),
                             subscribers: String::new(),
-                        }).collect();
+                        })
+                        .collect();
                     set_library_artists(art_list);
                 }
 
@@ -210,32 +227,10 @@ impl DoremiApp {
                     let queries: Vec<String> = history.iter().map(|h| h.query.clone()).collect();
                     set_search_history(queries);
                 }
-            }).await.ok();
+            })
+            .await
+            .ok();
         });
-
-        // Load trending data (mock)
-        {
-            let titles: Vec<String> = vec![
-                "Blinding Lights".to_string(),
-                "Shape of You".to_string(),
-                "Dance Monkey".to_string(),
-                "Someone Like You".to_string(),
-                "Bohemian Rhapsody".to_string(),
-                "Rolling in the Deep".to_string(),
-            ];
-            let subtitles: Vec<String> = vec![
-                "The Weeknd".to_string(),
-                "Ed Sheeran".to_string(),
-                "Tones and I".to_string(),
-                "Adele".to_string(),
-                "Queen".to_string(),
-                "Adele".to_string(),
-            ];
-            let thumbnails: Vec<String> = titles.iter().map(|t| {
-                crate::bridge::bridge::get_or_create_thumbnail(t, 0)
-            }).collect();
-            crate::bridge::bridge::set_trending_items(titles, subtitles, thumbnails);
-        }
 
         // Load downloads data from database
         crate::services::download::DownloadManager::refresh_downloads_ui();

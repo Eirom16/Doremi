@@ -1,7 +1,7 @@
+use crate::db::with_db;
 use rusqlite::params;
 use serde::Serialize;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use crate::db::with_db;
 
 pub struct CacheEntry<T> {
     pub data: T,
@@ -24,11 +24,18 @@ impl ResponseCache {
             Ok((response, cached_at, expires_at)) => {
                 if let Some(exp) = &expires_at {
                     if is_expired(exp) {
-                        let _ = conn.execute("DELETE FROM response_cache WHERE cache_key = ?1", params![key]);
+                        let _ = conn.execute(
+                            "DELETE FROM response_cache WHERE cache_key = ?1",
+                            params![key],
+                        );
                         return None;
                     }
                 }
-                serde_json::from_str(&response).ok().map(|data| CacheEntry { data, cached_at, expires_at })
+                serde_json::from_str(&response).ok().map(|data| CacheEntry {
+                    data,
+                    cached_at,
+                    expires_at,
+                })
             }
             Err(_) => None,
         }
@@ -50,7 +57,24 @@ impl ResponseCache {
     }
 
     pub fn invalidate(key: &str) -> rusqlite::Result<()> {
-        with_db(|conn| conn.execute("DELETE FROM response_cache WHERE cache_key = ?1", params![key]).map(|_| ()))
+        with_db(|conn| {
+            conn.execute(
+                "DELETE FROM response_cache WHERE cache_key = ?1",
+                params![key],
+            )
+            .map(|_| ())
+        })
+    }
+
+    pub fn invalidate_prefix(prefix: &str) -> rusqlite::Result<()> {
+        with_db(|conn| {
+            let pattern = format!("{}%", prefix.replace('%', "\\%").replace('_', "\\_"));
+            conn.execute(
+                "DELETE FROM response_cache WHERE cache_key LIKE ?1 ESCAPE '\\'",
+                params![pattern],
+            )
+            .map(|_| ())
+        })
     }
 
     pub fn clear_all() -> rusqlite::Result<()> {
@@ -59,7 +83,10 @@ impl ResponseCache {
 
     pub fn clear_expired() -> rusqlite::Result<()> {
         with_db(|conn| {
-            let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
+            let now = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs();
             conn.execute("DELETE FROM response_cache WHERE expires_at IS NOT NULL AND CAST(expires_at AS INTEGER) < ?1", params![now as i64])
                 .map(|_| ())
         })
@@ -68,7 +95,10 @@ impl ResponseCache {
 
 fn is_expired(expires_at: &str) -> bool {
     if let Ok(exp_secs) = expires_at.parse::<u64>() {
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
         return now > exp_secs;
     }
     false
@@ -77,9 +107,9 @@ fn is_expired(expires_at: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::Database;
     use crate::db::init_connection;
     use crate::db::take_connection;
+    use crate::db::Database;
 
     fn setup_test_db() {
         take_connection();
@@ -105,6 +135,16 @@ mod tests {
         assert!(ResponseCache::get::<String>("k1").is_some());
         ResponseCache::invalidate("k1").unwrap();
         assert!(ResponseCache::get::<String>("k1").is_none());
+    }
+
+    #[test]
+    fn test_cache_invalidate_prefix() {
+        setup_test_db();
+        ResponseCache::set("ytm:user:home", &"home", None).unwrap();
+        ResponseCache::set("lyrics:song", &"lyrics", None).unwrap();
+        ResponseCache::invalidate_prefix("ytm:").unwrap();
+        assert!(ResponseCache::get::<String>("ytm:user:home").is_none());
+        assert!(ResponseCache::get::<String>("lyrics:song").is_some());
     }
 
     #[test]

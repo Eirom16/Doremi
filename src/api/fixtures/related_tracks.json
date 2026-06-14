@@ -1,0 +1,24 @@
+{
+  "contents": [
+    {
+      "playlistPanelVideoRenderer": {
+        "videoId": "video-anonymous-seed",
+        "title": { "simpleText": "Anonymous seed" }
+      }
+    },
+    {
+      "playlistPanelVideoRenderer": {
+        "videoId": "video-anonymous-next",
+        "title": { "simpleText": "Anonymous next track" },
+        "longBylineText": { "runs": [{ "text": "Anonymous artist" }] },
+        "lengthText": { "simpleText": "3:21" }
+      }
+    },
+    {
+      "playlistPanelVideoRenderer": {
+        "videoId": "video-anonymous-next",
+        "title": { "simpleText": "Anonymous duplicate" }
+      }
+    }
+  ]
+}

@@ -30,30 +30,53 @@ impl LyricsService {
         }
     }
 
-    pub async fn fetch_lyrics(&self, title: &str, artist: &str) -> Result<Option<LyricsResponse>, String> {
+    pub async fn fetch_lyrics(
+        &self,
+        title: &str,
+        artist: &str,
+    ) -> Result<Option<LyricsResponse>, String> {
         // Clean metadata like Pyrolist did
         let clean_title = Self::clean_title(title);
         let clean_artist = Self::clean_artist(artist);
-        let cache_key = format!("lyrics:{}:{}", clean_artist.to_lowercase(), clean_title.to_lowercase());
+        let cache_key = format!(
+            "lyrics:{}:{}",
+            clean_artist.to_lowercase(),
+            clean_title.to_lowercase()
+        );
 
-        if let Some(entry) = crate::db::cache::ResponseCache::get::<Option<LyricsResponse>>(&cache_key) {
+        if let Some(entry) =
+            crate::db::cache::ResponseCache::get::<Option<LyricsResponse>>(&cache_key)
+        {
             return Ok(entry.data);
         }
 
-        log::info!("Fetching lyrics for '{}' by '{}'...", clean_title, clean_artist);
+        log::info!(
+            "Fetching lyrics for '{}' by '{}'...",
+            clean_title,
+            clean_artist
+        );
 
         let url = "https://lrclib.net/api/get";
         let query = [("title", &clean_title), ("artist", &clean_artist)];
-        
-        let resp = self.client.get(url)
+
+        let resp = self
+            .client
+            .get(url)
             .query(&query)
-            .header("User-Agent", "Doremi Music Player v2.0.0 (https://github.com/eirom/doremi)")
+            .header(
+                "User-Agent",
+                "Doremi Music Player v2.0.0 (https://github.com/eirom/doremi)",
+            )
             .send()
             .await
             .map_err(|e| format!("Request error: {e}"))?;
 
         if resp.status() == 404 {
-            log::info!("No lyrics found for '{}' by '{}'", clean_title, clean_artist);
+            log::info!(
+                "No lyrics found for '{}' by '{}'",
+                clean_title,
+                clean_artist
+            );
             let _ = crate::db::cache::ResponseCache::set::<Option<LyricsResponse>>(
                 &cache_key,
                 &None,
@@ -66,7 +89,8 @@ impl LyricsService {
             return Err(format!("LrcLib returned status: {}", resp.status()));
         }
 
-        let lyrics: LyricsResponse = resp.json()
+        let lyrics: LyricsResponse = resp
+            .json()
             .await
             .map_err(|e| format!("JSON parse error: {e}"))?;
 
@@ -92,7 +116,7 @@ impl LyricsService {
             r"(?i)\s*[\(\[][Hh][Dd][\)\]]",
             r"(?i)\s*[\(\[][4]k[\)\]]",
             r"(?i)\s*[\(\[][Ff]eat\.\s+.*?[\)\]]",
-            r"(?i)\s*[\(\[][Ff]t\.\s+.*?[\)\]]"
+            r"(?i)\s*[\(\[][Ff]t\.\s+.*?[\)\]]",
         ];
         for re_str in regexes {
             if let Ok(re) = regex::Regex::new(re_str) {

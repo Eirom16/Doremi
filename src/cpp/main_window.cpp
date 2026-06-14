@@ -205,10 +205,14 @@ void DoremiMainWindow::connect_signals() {
         stack_->setCurrentIndex(2);
         on_search_submitted(q, "all");
     });
+    QObject::connect(title_bar_, &TitleBar::search_text_changed, this, [](const std::string &q) {
+        on_search_suggestions_requested(q);
+    });
 
 
     QObject::connect(nav_sidebar_, &NavSidebar::route_changed, this, [this](const std::string &r) {
         navigate_to(r);
+        if (r == "search") on_search_history_requested();
     });
 
     QObject::connect(player_bar_, &PlayerBar::play_pause_clicked, this, [this]() { emit play_pause_triggered(); });
@@ -746,6 +750,15 @@ void set_search_history(rust::Vec<rust::String> queries) {
     for (auto &x : queries) q.push_back(Ffi::to_std_string(x));
     mutate_main_window("set_search_history", [q = std::move(q)](DoremiMainWindow &window) {
         if (window.search_view()) window.search_view()->set_recent_searches(q);
+    });
+}
+
+void set_search_suggestions(rust::Vec<rust::String> suggestions) {
+    std::vector<std::string> values;
+    values.reserve(suggestions.size());
+    for (const auto &suggestion : suggestions) values.push_back(static_cast<std::string>(suggestion));
+    mutate_main_window("set_search_suggestions", [values = std::move(values)](DoremiMainWindow &window) {
+        if (window.title_bar()) window.title_bar()->set_search_suggestions(values);
     });
 }
 

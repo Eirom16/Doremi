@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
-use std::path::Path;
 use std::io::Write;
+use std::path::Path;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppearanceSettings {
@@ -18,11 +18,21 @@ pub struct AppearanceSettings {
     pub font_size: i32,
 }
 
-fn default_theme_mode() -> String { "dark".to_string() }
-fn default_accent_color() -> String { "#7C4DFF".to_string() }
-fn default_true() -> bool { true }
-fn default_false() -> bool { false }
-fn default_font_size() -> i32 { 13 }
+fn default_theme_mode() -> String {
+    "dark".to_string()
+}
+fn default_accent_color() -> String {
+    "#7C4DFF".to_string()
+}
+fn default_true() -> bool {
+    true
+}
+fn default_false() -> bool {
+    false
+}
+fn default_font_size() -> i32 {
+    13
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PlayerSettings {
@@ -46,9 +56,15 @@ pub struct PlayerSettings {
     pub sleep_timer_minutes: i32,
 }
 
-fn default_volume() -> i32 { 80 }
-fn default_crossfade_duration() -> i32 { 5 }
-fn default_sleep_timer() -> i32 { 0 }
+fn default_volume() -> i32 {
+    80
+}
+fn default_crossfade_duration() -> i32 {
+    5
+}
+fn default_sleep_timer() -> i32 {
+    0
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EqualizerSettings {
@@ -62,8 +78,12 @@ pub struct EqualizerSettings {
     pub preset_name: String,
 }
 
-fn default_eq_bands() -> Vec<f64> { vec![0.0; 10] }
-fn default_eq_preset() -> String { "Flat".to_string() }
+fn default_eq_bands() -> Vec<f64> {
+    vec![0.0; 10]
+}
+fn default_eq_preset() -> String {
+    "Flat".to_string()
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NetworkSettings {
@@ -72,9 +92,16 @@ pub struct NetworkSettings {
     pub stream_quality: String,
     #[serde(default = "default_true")]
     pub preload_next: bool,
+    #[serde(default = "default_region")]
+    pub region: String,
 }
 
-fn default_stream_quality() -> String { "best".to_string() }
+fn default_stream_quality() -> String {
+    "best".to_string()
+}
+fn default_region() -> String {
+    "US".to_string()
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct IntegrationsSettings {
@@ -116,12 +143,24 @@ pub struct SubtitleSettings {
     pub text_color_inactive: String,
 }
 
-fn default_alignment() -> String { "center".to_string() }
-fn default_subtitle_font_size() -> i32 { 22 }
-fn default_line_spacing() -> f64 { 1.5 }
-fn default_animation_style() -> String { "glow".to_string() }
-fn default_text_color_active() -> String { "#FFFFFF".to_string() }
-fn default_text_color_inactive() -> String { "#6E6E77".to_string() }
+fn default_alignment() -> String {
+    "center".to_string()
+}
+fn default_subtitle_font_size() -> i32 {
+    22
+}
+fn default_line_spacing() -> f64 {
+    1.5
+}
+fn default_animation_style() -> String {
+    "glow".to_string()
+}
+fn default_text_color_active() -> String {
+    "#FFFFFF".to_string()
+}
+fn default_text_color_inactive() -> String {
+    "#6E6E77".to_string()
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppSettings {
@@ -146,7 +185,9 @@ pub struct AppSettings {
     pub last_video_id: Option<String>,
 }
 
-fn default_language() -> String { "es".to_string() }
+fn default_language() -> String {
+    "es".to_string()
+}
 
 impl Default for AppSettings {
     fn default() -> Self {
@@ -211,6 +252,7 @@ impl Default for NetworkSettings {
             proxy_url: None,
             stream_quality: "best".to_string(),
             preload_next: true,
+            region: default_region(),
         }
     }
 }
@@ -236,12 +278,10 @@ impl AppSettings {
         let mut settings = Self::default();
         if path.exists() {
             match std::fs::read_to_string(path) {
-                Ok(content) => {
-                    match toml::from_str(&content) {
-                        Ok(parsed) => settings = parsed,
-                        Err(e) => log::warn!("Failed to parse settings: {e}"),
-                    }
-                }
+                Ok(content) => match toml::from_str(&content) {
+                    Ok(parsed) => settings = parsed,
+                    Err(e) => log::warn!("Failed to parse settings: {e}"),
+                },
                 Err(e) => log::warn!("Failed to read settings file: {e}"),
             }
         }
@@ -271,7 +311,9 @@ impl AppSettings {
         }
 
         if !settings.google_client_secret.is_empty() {
-            match crate::utils::secure_storage::save_google_client_secret(&settings.google_client_secret) {
+            match crate::utils::secure_storage::save_google_client_secret(
+                &settings.google_client_secret,
+            ) {
                 Ok(()) => {
                     settings.google_client_secret.clear();
                     if let Err(e) = settings.save(path) {

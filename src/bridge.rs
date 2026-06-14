@@ -1,7 +1,7 @@
-use once_cell::sync::OnceCell;
-use std::sync::Arc;
 use crate::player::PlayerService;
 use crate::services::search::SearchService;
+use once_cell::sync::OnceCell;
+use std::sync::Arc;
 
 static PLAYER: OnceCell<Arc<PlayerService>> = OnceCell::new();
 static SEARCH: OnceCell<SearchService> = OnceCell::new();
@@ -37,10 +37,7 @@ pub fn verify_contract() -> Result<(), String> {
     } else {
         Err(format!(
             "incompatible Rust/C++ bridge contract: Rust requires {}.{}, C++ provides {}.{}",
-            CONTRACT_MAJOR,
-            CONTRACT_MINOR,
-            cpp_major,
-            cpp_minor
+            CONTRACT_MAJOR, CONTRACT_MINOR, cpp_major, cpp_minor
         ))
     }
 }
@@ -113,6 +110,8 @@ pub mod bridge {
         fn on_shuffle_toggled(on: bool);
         fn on_repeat_cycled();
         fn on_search_submitted(query: &str, filter: &str);
+        fn on_search_suggestions_requested(query: &str);
+        fn on_search_history_requested();
         fn on_volume_change(delta: i32);
         fn on_volume_set(volume: i32);
         fn on_seek_relative(delta_ms: i32);
@@ -128,7 +127,12 @@ pub mod bridge {
         fn on_download_requested(track: Track);
         fn on_add_to_queue_next(track: Track);
         fn on_add_to_queue_end(track: Track);
-        fn on_lastfm_auth_requested(api_key: &str, api_secret: &str, username: &str, password: &str);
+        fn on_lastfm_auth_requested(
+            api_key: &str,
+            api_secret: &str,
+            username: &str,
+            password: &str,
+        );
         fn on_lastfm_disconnect_requested();
         fn on_queue_item_clicked(index: i32);
         fn on_queue_item_removed(index: i32);
@@ -157,8 +161,7 @@ pub mod bridge {
         include!("main_window.h");
         fn bridge_contract_major() -> u16;
         fn bridge_contract_minor() -> u16;
-        fn create_main_window(app_name: &str, theme_mode: &str,
-                              accent_color: &str, font_size: i32);
+        fn create_main_window(app_name: &str, theme_mode: &str, accent_color: &str, font_size: i32);
         fn show_main_window();
         fn navigate_to(route: &str);
         fn show_notification(message: &str, kind: &str);
@@ -176,6 +179,7 @@ pub mod bridge {
         fn set_library_albums(albums: Vec<Album>);
         fn set_library_artists(artists: Vec<Artist>);
         fn set_search_history(queries: Vec<String>);
+        fn set_search_suggestions(suggestions: Vec<String>);
         fn apply_settings_to_ui();
         fn set_settings_theme(mode: &str);
         fn set_settings_accent(color: &str);
@@ -189,7 +193,12 @@ pub mod bridge {
         fn set_settings_sleep_timer(minutes: i32);
         fn set_settings_discord_rpc(on: bool);
         fn set_settings_lastfm_enabled(on: bool);
-        fn set_settings_lastfm_session(authenticated: bool, username: &str, api_key: &str, api_secret: &str);
+        fn set_settings_lastfm_session(
+            authenticated: bool,
+            username: &str,
+            api_key: &str,
+            api_secret: &str,
+        );
         fn set_track_lyrics(plain: &str, synced: &str);
         fn set_settings_subtitle_alignment(align: &str);
         fn set_settings_subtitle_font_size(size: i32);
@@ -220,7 +229,14 @@ pub mod bridge {
 
         fn set_playlist_detail(playlist: Playlist, tracks: Vec<Track>);
         fn update_youtube_auth_state(authenticated: bool, name: &str, avatar_url: &str);
-        fn set_update_available(version: &str, notes: &str, url: &str, asset_url: &str, asset_name: &str, asset_size: i64);
+        fn set_update_available(
+            version: &str,
+            notes: &str,
+            url: &str,
+            asset_url: &str,
+            asset_name: &str,
+            asset_size: i64,
+        );
         fn set_no_update_available();
         fn set_update_download_progress(percent: f64, message: &str);
         fn set_update_download_finished(package_path: &str);
@@ -228,7 +244,6 @@ pub mod bridge {
         fn set_update_install_finished(success: bool);
     }
 }
-
 
 // Rust callback implementations (called from C++)
 pub fn on_play_pause_triggered() {
@@ -257,6 +272,9 @@ pub fn on_repeat_cycled() {
 }
 
 pub fn on_search_submitted(query: &str, filter: &str) {
+    if query.trim().is_empty() {
+        return;
+    }
     log::info!("Search: {query} with filter: {filter}");
     let query = query.to_string();
     let filter = filter.to_string();
@@ -265,13 +283,45 @@ pub fn on_search_submitted(query: &str, filter: &str) {
         let f_clone = filter.clone();
         tokio::task::spawn_blocking(move || {
             let _ = crate::db::repo::SearchHistoryRepo::record(&q_clone, &f_clone);
-        }).await.ok();
+        })
+        .await
+        .ok();
+
+        push_search_history_to_ui().await;
 
         if let Some(search) = SEARCH.get() {
             let res = search.search(&query, &filter).await;
             search.push_to_ui(&res);
         }
     });
+}
+
+pub fn on_search_suggestions_requested(query: &str) {
+    let query = query.to_string();
+    tokio::spawn(async move {
+        let suggestions = match SEARCH.get() {
+            Some(search) => search.suggestions(&query).await,
+            None => Vec::new(),
+        };
+        crate::bridge::bridge::set_search_suggestions(suggestions);
+    });
+}
+
+async fn push_search_history_to_ui() {
+    let queries = tokio::task::spawn_blocking(|| {
+        crate::db::repo::SearchHistoryRepo::recent(20)
+            .unwrap_or_default()
+            .into_iter()
+            .map(|entry| entry.query)
+            .collect::<Vec<_>>()
+    })
+    .await
+    .unwrap_or_default();
+    crate::bridge::bridge::set_search_history(queries);
+}
+
+pub fn on_search_history_requested() {
+    tokio::spawn(push_search_history_to_ui());
 }
 
 pub fn on_volume_change(delta: i32) {
@@ -361,7 +411,8 @@ pub fn on_library_tab_changed(tab_key: &str) {
             match tab {
                 LibraryTab::Songs => {
                     if let Ok(tracks) = FavoritesRepo::all_tracks() {
-                        let songs: Vec<crate::bridge::bridge::Track> = tracks.iter()
+                        let songs: Vec<crate::bridge::bridge::Track> = tracks
+                            .iter()
                             .map(|t| crate::bridge::bridge::Track {
                                 id: t.id.clone(),
                                 title: t.title.clone(),
@@ -369,13 +420,15 @@ pub fn on_library_tab_changed(tab_key: &str) {
                                 album: t.album.clone(),
                                 duration_ms: t.duration_ms,
                                 thumbnail: t.thumbnail.clone(),
-                            }).collect();
+                            })
+                            .collect();
                         crate::bridge::bridge::set_library_songs(songs);
                     }
                 }
                 LibraryTab::Albums => {
                     if let Ok(albums) = FavoritesRepo::all_albums() {
-                        let a_list: Vec<crate::bridge::bridge::Album> = albums.iter()
+                        let a_list: Vec<crate::bridge::bridge::Album> = albums
+                            .iter()
                             .map(|a| crate::bridge::bridge::Album {
                                 id: a.id.clone(),
                                 title: a.title.clone(),
@@ -383,28 +436,35 @@ pub fn on_library_tab_changed(tab_key: &str) {
                                 year: a.year.map(|y| y.to_string()).unwrap_or_default(),
                                 thumbnail: a.thumbnail.clone(),
                                 track_count: 0,
-                            }).collect();
+                            })
+                            .collect();
                         crate::bridge::bridge::set_library_albums(a_list);
                     }
                 }
                 LibraryTab::Artists => {
                     if let Ok(artists) = FavoritesRepo::all_artists() {
-                        let art_list: Vec<crate::bridge::bridge::Artist> = artists.iter()
+                        let art_list: Vec<crate::bridge::bridge::Artist> = artists
+                            .iter()
                             .map(|a| crate::bridge::bridge::Artist {
                                 id: a.id.clone(),
                                 name: a.name.clone(),
                                 thumbnail: a.thumbnail.clone(),
                                 description: String::new(),
                                 subscribers: String::new(),
-                            }).collect();
+                            })
+                            .collect();
                         crate::bridge::bridge::set_library_artists(art_list);
                     }
                 }
                 LibraryTab::Playlists => {
                     if let Ok(playlists) = PlaylistRepo::all() {
-                        let p_list: Vec<crate::bridge::bridge::Playlist> = playlists.iter()
+                        let p_list: Vec<crate::bridge::bridge::Playlist> = playlists
+                            .iter()
                             .map(|p| {
-                                let count = PlaylistRepo::tracks(&p.id).ok().map(|t| t.len() as i32).unwrap_or(0);
+                                let count = PlaylistRepo::tracks(&p.id)
+                                    .ok()
+                                    .map(|t| t.len() as i32)
+                                    .unwrap_or(0);
                                 crate::bridge::bridge::Playlist {
                                     id: p.id.clone(),
                                     name: p.name.clone(),
@@ -412,20 +472,22 @@ pub fn on_library_tab_changed(tab_key: &str) {
                                     thumbnail: p.artwork.clone(),
                                     track_count: count,
                                 }
-                            }).collect();
+                            })
+                            .collect();
                         crate::bridge::bridge::set_library_playlists(p_list);
                     }
                 }
             }
-        }).await.ok();
+        })
+        .await
+        .ok();
     });
 }
 
 #[cfg(test)]
 mod contract_tests {
     use super::{
-        is_contract_compatible, versions_are_compatible, LibraryTab, CONTRACT_MAJOR,
-        CONTRACT_MINOR,
+        is_contract_compatible, versions_are_compatible, LibraryTab, CONTRACT_MAJOR, CONTRACT_MINOR,
     };
 
     #[test]
@@ -441,7 +503,10 @@ mod contract_tests {
         assert_eq!(LibraryTab::from_key("songs"), Some(LibraryTab::Songs));
         assert_eq!(LibraryTab::from_key("albums"), Some(LibraryTab::Albums));
         assert_eq!(LibraryTab::from_key("artists"), Some(LibraryTab::Artists));
-        assert_eq!(LibraryTab::from_key("playlists"), Some(LibraryTab::Playlists));
+        assert_eq!(
+            LibraryTab::from_key("playlists"),
+            Some(LibraryTab::Playlists)
+        );
         assert_eq!(LibraryTab::from_key("Canciones"), None);
         assert_eq!(LibraryTab::from_key("Songs"), None);
         assert_eq!(LibraryTab::from_key(""), None);
@@ -451,15 +516,15 @@ mod contract_tests {
     where
         F: FnOnce() -> R,
     {
-        use rusqlite::Connection;
         use crate::db::{init_connection, take_connection, Database};
-        
+        use rusqlite::Connection;
+
         let conn = Connection::open_in_memory().unwrap();
         Database::run_migrations(&conn).unwrap();
         init_connection(conn);
-        
+
         let res = f();
-        
+
         let _ = take_connection(); // Clean up
         res
     }
@@ -476,9 +541,9 @@ mod contract_tests {
                 duration_ms: 240000,
                 thumbnail: "https://example.com/🚀.png".to_string(),
             };
-            
+
             super::on_add_favorite_impl(track);
-            
+
             let saved = FavoritesRepo::all_tracks().unwrap();
             assert_eq!(saved.len(), 1);
             assert_eq!(saved[0].id, "fav_unicode_🚀_日本語");
@@ -501,7 +566,7 @@ mod contract_tests {
                 thumbnail: "".to_string(),
             };
             super::on_add_favorite_impl(track_empty_id);
-            
+
             // 2. Caso de título vacío
             let track_empty_title = super::bridge::Track {
                 id: "some_valid_id".to_string(),
@@ -514,7 +579,10 @@ mod contract_tests {
             super::on_add_favorite_impl(track_empty_title);
 
             let saved = FavoritesRepo::all_tracks().unwrap();
-            assert!(saved.is_empty(), "Track con ID o título vacío no debe ser insertado");
+            assert!(
+                saved.is_empty(),
+                "Track con ID o título vacío no debe ser insertado"
+            );
         });
     }
 
@@ -531,7 +599,7 @@ mod contract_tests {
                 thumbnail: format!("https://example.com/thumb_{i}.png"),
             });
         }
-        
+
         assert_eq!(tracks.len(), 10000);
         assert_eq!(tracks[9999].id, "id_9999");
     }
@@ -549,7 +617,9 @@ pub fn on_remove_favorite(track_id: &str) {
     tokio::spawn(async move {
         tokio::task::spawn_blocking(move || {
             on_remove_favorite_impl(&track_id);
-        }).await.ok();
+        })
+        .await
+        .ok();
     });
 }
 
@@ -581,7 +651,9 @@ pub fn on_add_favorite(track: bridge::Track) {
     tokio::spawn(async move {
         tokio::task::spawn_blocking(move || {
             on_add_favorite_impl(track);
-        }).await.ok();
+        })
+        .await
+        .ok();
     });
 }
 
@@ -592,15 +664,24 @@ pub fn on_download_requested(track: bridge::Track) {
             &track.id,
             &track.title,
             &track.artist,
-            ""
+            "",
         );
     } else {
-        log::warn!("Cannot download: no track id provided for {} — {}", track.title, track.artist);
+        log::warn!(
+            "Cannot download: no track id provided for {} — {}",
+            track.title,
+            track.artist
+        );
     }
 }
 
 pub fn on_search_item_clicked(track: bridge::Track) {
-    log::info!("Search item clicked: {} — {} (id: {})", track.title, track.artist, track.id);
+    log::info!(
+        "Search item clicked: {} — {} (id: {})",
+        track.title,
+        track.artist,
+        track.id
+    );
     with_player(|p| p.play_track_dto(track));
 }
 
@@ -663,7 +744,10 @@ pub fn apply_settings_impl() {
     bridge::set_settings_crossfade(settings.player.crossfade_enabled);
     bridge::set_settings_equalizer_enabled(settings.equalizer.enabled);
     bridge::set_settings_equalizer_preset(&settings.equalizer.preset_name);
-    bridge::set_settings_equalizer_values(settings.equalizer.preamp, settings.equalizer.bands.clone());
+    bridge::set_settings_equalizer_values(
+        settings.equalizer.preamp,
+        settings.equalizer.bands.clone(),
+    );
     bridge::set_settings_sleep_timer(settings.player.sleep_timer_minutes);
 
     // Apply subtitles settings
@@ -734,6 +818,7 @@ pub fn on_setting_changed(key: &str, value: &str) {
         "language" => {
             settings.language = value.to_string();
             crate::utils::i18n::set_language(value);
+            crate::api::endpoints::configure(value, &settings.network.region);
         }
         "normalize_audio" => settings.player.normalize_audio = value == "true",
         "crossfade_enabled" => settings.player.crossfade_enabled = value == "true",
@@ -770,11 +855,13 @@ pub fn on_setting_changed(key: &str, value: &str) {
             }
         }
         "equalizer_bands" => {
-            let parsed_bands: Vec<f64> = value.split(',')
+            let parsed_bands: Vec<f64> = value
+                .split(',')
                 .filter_map(|s| s.parse::<f64>().ok())
                 .collect();
             if !parsed_bands.is_empty() {
-                settings.equalizer.bands = parsed_bands.into_iter()
+                settings.equalizer.bands = parsed_bands
+                    .into_iter()
                     .take(10)
                     .map(|value| value.clamp(-20.0, 20.0))
                     .collect();
@@ -865,26 +952,25 @@ pub fn on_lastfm_auth_requested(api_key: &str, api_secret: &str, username: &str,
 
     tokio::spawn(async move {
         bridge::show_notification("Conectando con Last.fm...", "info");
-        let auth_result = crate::services::lastfm::authenticate(
-            &api_key,
-            &api_secret,
-            &username,
-            &password,
-        ).await;
+        let auth_result =
+            crate::services::lastfm::authenticate(&api_key, &api_secret, &username, &password)
+                .await;
         password.zeroize();
 
         match auth_result {
             Ok(session_key) => {
                 log::info!("Last.fm auth successful");
                 let dirs = crate::config::paths::AppDirs::global();
-                let mut settings = crate::config::settings::AppSettings::load(&dirs.settings_path());
+                let mut settings =
+                    crate::config::settings::AppSettings::load(&dirs.settings_path());
 
                 let credentials = crate::utils::secure_storage::LastFmCredentials {
                     api_key: api_key.clone(),
                     api_secret: api_secret.to_string(),
                     session_key,
                 };
-                if let Err(e) = crate::utils::secure_storage::save_lastfm_credentials(&credentials) {
+                if let Err(e) = crate::utils::secure_storage::save_lastfm_credentials(&credentials)
+                {
                     log::error!("Failed to store Last.fm credentials securely: {e}");
                     bridge::show_notification(
                         "No se pudo acceder al llavero del sistema; la cuenta no fue guardada",
@@ -987,21 +1073,28 @@ pub fn on_stats_requested() {
                     let val: Option<i64> = r.get(0)?;
                     Ok(val.unwrap_or(0))
                 })
-            }).unwrap_or(0);
+            })
+            .unwrap_or(0);
 
             let total_plays = crate::db::with_db(|conn| {
                 conn.query_row("SELECT COUNT(*) FROM recently_played", [], |r| {
                     let val: i32 = r.get(0)?;
                     Ok(val)
                 })
-            }).unwrap_or(0);
+            })
+            .unwrap_or(0);
 
             let unique_artists = crate::db::with_db(|conn| {
-                conn.query_row("SELECT COUNT(DISTINCT artist) FROM recently_played", [], |r| {
-                    let val: i32 = r.get(0)?;
-                    Ok(val)
-                })
-            }).unwrap_or(0);
+                conn.query_row(
+                    "SELECT COUNT(DISTINCT artist) FROM recently_played",
+                    [],
+                    |r| {
+                        let val: i32 = r.get(0)?;
+                        Ok(val)
+                    },
+                )
+            })
+            .unwrap_or(0);
 
             // Weekly activity: last 7 days daily counts
             let mut weekly_activity = vec![0; 7];
@@ -1012,7 +1105,7 @@ pub fn on_stats_requested() {
                      WHERE played_at >= datetime('now', '-7 days')
                      GROUP BY play_day
                      ORDER BY play_day DESC
-                     LIMIT 7"
+                     LIMIT 7",
                 )?;
                 let rows = stmt.query_map([], |r| {
                     let day_str: String = r.get(0)?;
@@ -1041,7 +1134,7 @@ pub fn on_stats_requested() {
                      FROM recently_played
                      GROUP BY track_id, title, artist
                      ORDER BY cnt DESC
-                     LIMIT 5"
+                     LIMIT 5",
                 )?;
                 let rows = stmt.query_map([], |r| {
                     let id: String = r.get(0)?;
@@ -1086,7 +1179,8 @@ pub fn on_stats_requested() {
                 weekly_activity,
                 top_tracks,
             }
-        }).await;
+        })
+        .await;
 
         if let Ok(stats) = stats_res {
             crate::bridge::bridge::set_stats_data(stats);
@@ -1106,7 +1200,7 @@ pub fn on_history_requested() {
                     "SELECT track_id, title, artist, duration_ms, thumbnail, played_at
                      FROM recently_played
                      ORDER BY played_at DESC
-                     LIMIT 50"
+                     LIMIT 50",
                 )?;
                 let rows = stmt.query_map([], |r| {
                     let track_id: String = r.get(0)?;
@@ -1115,7 +1209,14 @@ pub fn on_history_requested() {
                     let duration_ms: i64 = r.get(3)?;
                     let thumbnail: String = r.get(4)?;
                     let played_at_str: String = r.get(5)?;
-                    Ok((track_id, title, artist, duration_ms, thumbnail, played_at_str))
+                    Ok((
+                        track_id,
+                        title,
+                        artist,
+                        duration_ms,
+                        thumbnail,
+                        played_at_str,
+                    ))
                 })?;
                 let list: Result<Vec<_>, rusqlite::Error> = rows.collect();
                 list
@@ -1137,7 +1238,8 @@ pub fn on_history_requested() {
                 }
             }
             (history, played_at)
-        }).await;
+        })
+        .await;
 
         if let Ok((history, played_at)) = history_res {
             crate::bridge::bridge::set_history_data(history, played_at);
@@ -1157,6 +1259,7 @@ pub fn on_youtube_login_success(headers_json: &str, name: &str, avatar_url: &str
         );
         return;
     }
+    crate::api::endpoints::invalidate_cache();
 
     // Save profile
     let profile_path = config_dir.join("user_profile.json");
@@ -1184,12 +1287,13 @@ pub fn on_youtube_login_success(headers_json: &str, name: &str, avatar_url: &str
 pub fn on_youtube_logout() {
     log::info!("YouTube Music logout requested");
     let config_dir = crate::config::paths::AppDirs::global().config_dir();
-    
+
     let profile_path = config_dir.join("user_profile.json");
 
     if let Err(e) = crate::utils::secure_storage::delete_youtube_headers() {
         log::warn!("Failed to delete YouTube credentials: {e}");
     }
+    crate::api::endpoints::invalidate_cache();
     let _ = std::fs::remove_file(profile_path);
 
     crate::bridge::bridge::update_youtube_auth_state(false, "", "");
@@ -1239,12 +1343,15 @@ pub fn on_download_update_requested(asset_url: &str, asset_name: &str) {
     tokio::spawn(async move {
         let path = crate::services::updater::download_update_package(&url, &name, |pct, msg| {
             crate::bridge::bridge::set_update_download_progress(pct, msg);
-        }).await;
+        })
+        .await;
 
         if let Some(p) = path {
             crate::bridge::bridge::set_update_download_finished(&p.to_string_lossy());
         } else {
-            crate::bridge::bridge::set_update_download_failed("Error al descargar la actualización.");
+            crate::bridge::bridge::set_update_download_failed(
+                "Error al descargar la actualización.",
+            );
         }
     });
 }
@@ -1255,7 +1362,11 @@ pub fn on_validate_sudo_password(password: &str) -> bool {
 
 pub fn on_install_update_requested(package_path: &str, password: &str) {
     let package_path = package_path.to_string();
-    let pwd = if password.is_empty() { None } else { Some(password.to_string()) };
+    let pwd = if password.is_empty() {
+        None
+    } else {
+        Some(password.to_string())
+    };
     log::info!("Install update requested: {package_path}");
 
     tokio::spawn(async move {

@@ -1,6 +1,6 @@
-use std::sync::Mutex;
-use once_cell::sync::Lazy;
 use discord_rich_presence::{activity, DiscordIpc, DiscordIpcClient};
+use once_cell::sync::Lazy;
+use std::sync::Mutex;
 
 static DISCORD_CLIENT: Lazy<Mutex<Option<DiscordIpcClient>>> = Lazy::new(|| Mutex::new(None));
 static ENABLED: Lazy<Mutex<bool>> = Lazy::new(|| Mutex::new(false));
@@ -34,7 +34,7 @@ fn update_presence_internal(
     is_playing: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut client_guard = DISCORD_CLIENT.lock().unwrap();
-    
+
     // Lazy initialization & connection
     if client_guard.is_none() {
         log::info!("Connecting to Discord RPC...");
@@ -53,7 +53,7 @@ fn update_presence_internal(
 
         let details = title.to_string();
         let album_name = if album.is_empty() { "Doremi" } else { album };
-        
+
         let small_img = if is_playing { "play" } else { "pause" };
         let small_txt = if is_playing { "Playing" } else { "Paused" };
 
@@ -91,8 +91,9 @@ pub fn update_presence(title: &str, artist: &str, album: &str, is_playing: bool)
             tokio::task::spawn_blocking(move || {
                 update_presence_internal(&title, &artist, &album, is_playing)
                     .map_err(|e| e.to_string())
-            })
-        ).await;
+            }),
+        )
+        .await;
 
         match join_res {
             Ok(Ok(Ok(()))) => {
