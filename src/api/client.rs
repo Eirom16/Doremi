@@ -177,6 +177,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_real_search() {
+        let _ = env_logger::builder().is_test(true).try_init();
         let client = ApiClient::new();
         let results = client.search("Michael Jackson", "all").await;
         assert!(

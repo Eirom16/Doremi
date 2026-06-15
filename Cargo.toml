@@ -39,6 +39,7 @@ discord-rich-presence = "1.1.0"
 md5 = "0.8.0"
 zip = "0.6"
 zeroize = "1"
+sha1 = "0.10.6"
 
 
 [build-dependencies]

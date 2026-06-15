@@ -18,6 +18,8 @@
 #include <QCryptographicHash>
 #include <QStandardPaths>
 #include <QDir>
+#include <QWebEngineProfile>
+#include <QWebEngineCookieStore>
 
 #include "main_window.h"
 #include "title_bar.h"
@@ -1132,5 +1134,13 @@ void update_youtube_auth_state(bool authenticated, rust::Str name, rust::Str ava
             window.nav_sidebar()->update_profile(authenticated, name_copy, avatar_copy);
         }
         if (window.welcome_view()) window.welcome_view()->update_theme();
+        if (!authenticated) {
+            auto *profile = QWebEngineProfile::defaultProfile();
+            if (profile) {
+                profile->cookieStore()->deleteAllCookies();
+                profile->clearHttpCache();
+            }
+        }
     });
 }
+

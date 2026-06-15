@@ -456,6 +456,7 @@ pub(crate) fn parse_library_artists(json: &Value) -> Result<ParsedPage<Vec<Artis
 fn search_sections(json: &Value) -> Option<&Vec<Value>> {
     json.pointer("/contents/tabbedSearchResultsRenderer/tabs/0/tabRenderer/content/sectionListRenderer/contents")
         .or_else(|| json.pointer("/continuationContents/musicShelfContinuation/contents"))
+        .or_else(|| json.pointer("/continuationContents/sectionListContinuation/contents"))
         .and_then(Value::as_array)
 }
 

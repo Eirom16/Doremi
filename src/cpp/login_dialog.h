@@ -30,6 +30,7 @@ private slots:
     void on_load_finished(bool ok);
     void poll_login();
     void on_login_result(const QString &result_str);
+    void on_url_changed(const QUrl &url);
 
 private:
     void save_cookies_and_close(const QString &avatar_url, const QString &user_name);

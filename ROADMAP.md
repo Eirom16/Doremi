@@ -237,10 +237,10 @@ El port se considera terminado cuando Doremi cubra los flujos reales de Pyrolist
 - [ ] Endurecer captura de cookies en WebEngine.
 - [ ] Limitar navegacion a dominios esperados durante login.
 - [ ] Detectar exito, cancelacion, expiracion y challenge.
-- [ ] Construir headers SAPISIDHASH correctamente cuando aplique.
+- [x] Hecho - Construir headers SAPISIDHASH correctamente cuando aplique.
 - [ ] Renovar sesion sin pedir login mientras sea posible.
 - [ ] Detectar sesion revocada y degradar limpiamente a modo anonimo.
-- [ ] Limpiar perfil/cookies WebEngine al cerrar sesion.
+- [x] Hecho - Limpiar perfil/cookies WebEngine al cerrar sesion.
 - [ ] Añadir tests de serializacion segura de sesion.
 
 ## P3 - Paridad de pantallas y flujos

@@ -81,6 +81,7 @@ WebLoginDialog::WebLoginDialog(QWidget *parent)
 
     connect(cookie_store_, &QWebEngineCookieStore::cookieAdded, this, &WebLoginDialog::on_cookie_added);
     connect(view_, &QWebEngineView::loadFinished, this, &WebLoginDialog::on_load_finished);
+    connect(view_, &QWebEngineView::urlChanged, this, &WebLoginDialog::on_url_changed);
 
     layout_->addWidget(view_);
 
@@ -183,3 +184,22 @@ void WebLoginDialog::save_cookies_and_close(const QString &avatar_url, const QSt
     emit login_successful(avatar_url, user_name);
     accept();
 }
+
+void WebLoginDialog::on_url_changed(const QUrl &url) {
+    QString host = url.host().toLower();
+    if (host.isEmpty()) return;
+
+    // Check if the host is allowed (must end with .google.com or .youtube.com, or contains .google. / .youtube.)
+    bool is_allowed = host.endsWith("google.com") || 
+                      host.endsWith("youtube.com") || 
+                      host.contains(".google.") || 
+                      host.contains(".youtube.") ||
+                      host == "accounts.google" ||
+                      host == "music.youtube";
+
+    if (!is_allowed) {
+        // Block navigation by redirecting back to music.youtube.com
+        view_->load(QUrl("https://music.youtube.com"));
+    }
+}
+
