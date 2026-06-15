@@ -654,11 +654,18 @@ pub fn on_remove_favorite_impl(track_id: &str) {
 pub fn on_remove_favorite(track_id: &str) {
     let track_id = track_id.to_string();
     tokio::spawn(async move {
+        let local_id = track_id.clone();
         tokio::task::spawn_blocking(move || {
-            on_remove_favorite_impl(&track_id);
+            on_remove_favorite_impl(&local_id);
         })
         .await
         .ok();
+        if let Err(error) =
+            crate::api::innertube::rate_song(&track_id, crate::api::models::LikeStatus::Indifferent)
+                .await
+        {
+            log::debug!("Remote unlike was not applied for {track_id}: {error}");
+        }
     });
 }
 
@@ -687,12 +694,18 @@ pub fn on_add_favorite_impl(track: bridge::Track) {
 }
 
 pub fn on_add_favorite(track: bridge::Track) {
+    let track_id = track.id.clone();
     tokio::spawn(async move {
         tokio::task::spawn_blocking(move || {
             on_add_favorite_impl(track);
         })
         .await
         .ok();
+        if let Err(error) =
+            crate::api::innertube::rate_song(&track_id, crate::api::models::LikeStatus::Like).await
+        {
+            log::debug!("Remote like was not applied for {track_id}: {error}");
+        }
     });
 }
 
@@ -1227,60 +1240,91 @@ pub fn on_stats_requested() {
     });
 }
 
+fn load_local_history() -> (Vec<bridge::Track>, Vec<String>) {
+    let mut history = Vec::new();
+    let mut played_at = Vec::new();
+    if let Ok(results) = crate::db::with_db(|conn| {
+        let mut stmt = conn.prepare(
+            "SELECT track_id, title, artist, duration_ms, thumbnail, played_at
+             FROM recently_played
+             ORDER BY played_at DESC
+             LIMIT 50",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, i64>(3)?,
+                row.get::<_, String>(4)?,
+                row.get::<_, String>(5)?,
+            ))
+        })?;
+        rows.collect::<Result<Vec<_>, rusqlite::Error>>()
+    }) {
+        for (id, title, artist, duration_ms, thumbnail, played) in results {
+            history.push(bridge::Track {
+                id,
+                title,
+                artist,
+                album: String::new(),
+                duration_ms,
+                thumbnail,
+            });
+            played_at.push(played);
+        }
+    }
+    (history, played_at)
+}
+
+fn remote_played_at(label: &str, index: usize) -> String {
+    let label = label.to_lowercase();
+    let days = if label.contains("today") || label.contains("hoy") {
+        0
+    } else if label.contains("yesterday") || label.contains("ayer") {
+        1
+    } else if label.contains("week") || label.contains("semana") {
+        3
+    } else if label.contains("month") || label.contains("mes") {
+        14
+    } else {
+        30
+    };
+    (chrono::Local::now() - chrono::Duration::days(days) - chrono::Duration::seconds(index as i64))
+        .format("%Y-%m-%d %H:%M:%S")
+        .to_string()
+}
+
 pub fn on_history_requested() {
     log::info!("History requested");
     tokio::spawn(async move {
-        let history_res = tokio::task::spawn_blocking(move || {
-            let mut history = Vec::new();
-            let mut played_at = Vec::new();
-
-            if let Ok(results) = crate::db::with_db(|conn| {
-                let mut stmt = conn.prepare(
-                    "SELECT track_id, title, artist, duration_ms, thumbnail, played_at
-                     FROM recently_played
-                     ORDER BY played_at DESC
-                     LIMIT 50",
-                )?;
-                let rows = stmt.query_map([], |r| {
-                    let track_id: String = r.get(0)?;
-                    let title: String = r.get(1)?;
-                    let artist: String = r.get(2)?;
-                    let duration_ms: i64 = r.get(3)?;
-                    let thumbnail: String = r.get(4)?;
-                    let played_at_str: String = r.get(5)?;
-                    Ok((
-                        track_id,
-                        title,
-                        artist,
-                        duration_ms,
-                        thumbnail,
-                        played_at_str,
-                    ))
-                })?;
-                let list: Result<Vec<_>, rusqlite::Error> = rows.collect();
-                list
-            }) {
-                for row in results {
-                    let (track_id, title, artist, duration_ms, mut thumbnail, played_at_str) = row;
-                    if thumbnail.is_empty() {
-                        thumbnail = crate::bridge::bridge::get_or_create_thumbnail(&title, 0);
+        if crate::api::auth::is_authenticated() {
+            match crate::api::innertube::remote_history().await {
+                Ok(items) => {
+                    let mut history = Vec::with_capacity(items.len());
+                    let mut played_at = Vec::with_capacity(items.len());
+                    for (index, item) in items.into_iter().enumerate() {
+                        played_at.push(remote_played_at(&item.played, index));
+                        history.push(bridge::Track {
+                            id: item.track.id,
+                            title: item.track.title,
+                            artist: item.track.artists.join(", "),
+                            album: item.track.album.unwrap_or_default(),
+                            duration_ms: item.track.duration_ms,
+                            thumbnail: item.track.thumbnail,
+                        });
                     }
-                    history.push(crate::bridge::bridge::Track {
-                        id: track_id,
-                        title,
-                        artist,
-                        album: String::new(),
-                        duration_ms,
-                        thumbnail,
-                    });
-                    played_at.push(played_at_str);
+                    crate::bridge::bridge::set_history_data(history, played_at);
+                    return;
+                }
+                Err(error) => {
+                    log::warn!("Could not load remote YouTube Music history: {error}");
                 }
             }
-            (history, played_at)
-        })
-        .await;
+        }
 
-        if let Ok((history, played_at)) = history_res {
+        let local = tokio::task::spawn_blocking(load_local_history).await;
+        if let Ok((history, played_at)) = local {
             crate::bridge::bridge::set_history_data(history, played_at);
         }
     });

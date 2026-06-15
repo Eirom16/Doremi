@@ -351,6 +351,281 @@ pub async fn related_tracks(video_id: &str) -> Result<Vec<super::models::Track>,
     Ok(tracks)
 }
 
+fn rating_endpoint(status: super::models::LikeStatus) -> &'static str {
+    match status {
+        super::models::LikeStatus::Like => "like/like",
+        super::models::LikeStatus::Dislike => "like/dislike",
+        super::models::LikeStatus::Indifferent => "like/removelike",
+    }
+}
+
+pub async fn rate_song(video_id: &str, status: super::models::LikeStatus) -> Result<(), String> {
+    let video_id = video_id.trim();
+    if video_id.is_empty() {
+        return Err("Video ID cannot be empty".to_string());
+    }
+    if !super::auth::is_authenticated() {
+        return Err("YouTube Music authentication is required to rate songs".to_string());
+    }
+    let mut body = context();
+    body["target"] = serde_json::json!({"videoId": video_id});
+    super::transport::post(rating_endpoint(status), body).await?;
+    invalidate_cache();
+    Ok(())
+}
+
+pub async fn song_like_status(video_id: &str) -> Result<super::models::LikeStatus, String> {
+    let video_id = video_id.trim();
+    if video_id.is_empty() {
+        return Err("Video ID cannot be empty".to_string());
+    }
+    if !super::auth::is_authenticated() {
+        return Ok(super::models::LikeStatus::Indifferent);
+    }
+    let mut body = context();
+    body["videoId"] = serde_json::json!(video_id);
+    body["isAudioOnly"] = serde_json::json!(true);
+    let response = super::transport::post("next", body).await?;
+    super::parsers::parse_like_status(&response)
+}
+
+fn require_authenticated(operation: &str) -> Result<(), String> {
+    if super::auth::is_authenticated() {
+        Ok(())
+    } else {
+        Err(format!(
+            "YouTube Music authentication is required to {operation}"
+        ))
+    }
+}
+
+fn normalize_playlist_id(playlist_id: &str) -> Result<&str, String> {
+    let playlist_id = playlist_id
+        .trim()
+        .strip_prefix("VL")
+        .unwrap_or(playlist_id.trim());
+    if playlist_id.is_empty() {
+        Err("Playlist ID cannot be empty".to_string())
+    } else {
+        Ok(playlist_id)
+    }
+}
+
+fn validate_playlist_title(title: &str) -> Result<&str, String> {
+    let title = title.trim();
+    if title.is_empty() {
+        Err("Playlist title cannot be empty".to_string())
+    } else if title.contains(['<', '>']) {
+        Err("Playlist title cannot contain '<' or '>'".to_string())
+    } else {
+        Ok(title)
+    }
+}
+
+fn validate_privacy(privacy: &str) -> Result<&str, String> {
+    match privacy.trim().to_uppercase().as_str() {
+        "PUBLIC" => Ok("PUBLIC"),
+        "PRIVATE" => Ok("PRIVATE"),
+        "UNLISTED" => Ok("UNLISTED"),
+        _ => Err("Playlist privacy must be PUBLIC, PRIVATE, or UNLISTED".to_string()),
+    }
+}
+
+pub async fn create_playlist(
+    title: &str,
+    description: &str,
+    privacy: &str,
+) -> Result<String, String> {
+    require_authenticated("create playlists")?;
+    let title = validate_playlist_title(title)?;
+    let privacy = validate_privacy(privacy)?;
+    let mut body = context();
+    body["title"] = serde_json::json!(title);
+    body["description"] = serde_json::json!(description.trim());
+    body["privacyStatus"] = serde_json::json!(privacy);
+    let response = super::transport::post("playlist/create", body).await?;
+    let playlist_id = response["playlistId"]
+        .as_str()
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| "Playlist creation response did not include playlistId".to_string())?;
+    invalidate_cache();
+    Ok(playlist_id.to_string())
+}
+
+pub async fn edit_playlist(
+    playlist_id: &str,
+    title: Option<&str>,
+    description: Option<&str>,
+    privacy: Option<&str>,
+) -> Result<(), String> {
+    require_authenticated("edit playlists")?;
+    let playlist_id = normalize_playlist_id(playlist_id)?;
+    let mut actions = Vec::new();
+    if let Some(title) = title {
+        actions.push(serde_json::json!({
+            "action": "ACTION_SET_PLAYLIST_NAME",
+            "playlistName": validate_playlist_title(title)?
+        }));
+    }
+    if let Some(description) = description {
+        actions.push(serde_json::json!({
+            "action": "ACTION_SET_PLAYLIST_DESCRIPTION",
+            "playlistDescription": description.trim()
+        }));
+    }
+    if let Some(privacy) = privacy {
+        actions.push(serde_json::json!({
+            "action": "ACTION_SET_PLAYLIST_PRIVACY",
+            "playlistPrivacy": validate_privacy(privacy)?
+        }));
+    }
+    if actions.is_empty() {
+        return Err("Playlist edit requires at least one change".to_string());
+    }
+    let mut body = context();
+    body["playlistId"] = serde_json::json!(playlist_id);
+    body["actions"] = serde_json::json!(actions);
+    let response = super::transport::post("browse/edit_playlist", body).await?;
+    require_succeeded("edit playlist", &response)?;
+    invalidate_cache();
+    Ok(())
+}
+
+pub async fn delete_playlist(playlist_id: &str) -> Result<(), String> {
+    require_authenticated("delete playlists")?;
+    let mut body = context();
+    body["playlistId"] = serde_json::json!(normalize_playlist_id(playlist_id)?);
+    let response = super::transport::post("playlist/delete", body).await?;
+    require_succeeded("delete playlist", &response)?;
+    invalidate_cache();
+    Ok(())
+}
+
+fn add_video_actions(video_ids: &[String], skip_duplicates: bool) -> Result<Vec<Value>, String> {
+    let mut actions = Vec::new();
+    for video_id in video_ids {
+        let video_id = video_id.trim();
+        if video_id.is_empty() {
+            return Err("Video IDs cannot be empty".to_string());
+        }
+        let mut action = serde_json::json!({
+            "action": "ACTION_ADD_VIDEO",
+            "addedVideoId": video_id
+        });
+        if skip_duplicates {
+            action["dedupeOption"] = serde_json::json!("DEDUPE_OPTION_SKIP");
+        }
+        actions.push(action);
+    }
+    if actions.is_empty() {
+        Err("At least one video ID is required".to_string())
+    } else {
+        Ok(actions)
+    }
+}
+
+pub async fn add_playlist_items(
+    playlist_id: &str,
+    video_ids: &[String],
+    skip_duplicates: bool,
+) -> Result<Vec<super::models::PlaylistItemRef>, String> {
+    require_authenticated("add songs to playlists")?;
+    let mut body = context();
+    body["playlistId"] = serde_json::json!(normalize_playlist_id(playlist_id)?);
+    body["actions"] = serde_json::json!(add_video_actions(video_ids, skip_duplicates)?);
+    let response = super::transport::post("browse/edit_playlist", body).await?;
+    require_succeeded("add playlist items", &response)?;
+    let added = response["playlistEditResults"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|result| result.get("playlistEditVideoAddedResultData"))
+        .filter_map(|result| {
+            Some(super::models::PlaylistItemRef {
+                video_id: result["videoId"].as_str()?.to_string(),
+                set_video_id: result["setVideoId"].as_str()?.to_string(),
+            })
+        })
+        .collect();
+    invalidate_cache();
+    Ok(added)
+}
+
+fn remove_video_actions(items: &[super::models::PlaylistItemRef]) -> Result<Vec<Value>, String> {
+    if items.is_empty() {
+        return Err("At least one playlist item is required".to_string());
+    }
+    items
+        .iter()
+        .map(|item| {
+            if item.video_id.trim().is_empty() || item.set_video_id.trim().is_empty() {
+                return Err("Playlist items require both videoId and setVideoId".to_string());
+            }
+            Ok(serde_json::json!({
+                "action": "ACTION_REMOVE_VIDEO",
+                "removedVideoId": item.video_id.trim(),
+                "setVideoId": item.set_video_id.trim()
+            }))
+        })
+        .collect()
+}
+
+pub async fn remove_playlist_items(
+    playlist_id: &str,
+    items: &[super::models::PlaylistItemRef],
+) -> Result<(), String> {
+    require_authenticated("remove songs from playlists")?;
+    let actions = remove_video_actions(items)?;
+    let mut body = context();
+    body["playlistId"] = serde_json::json!(normalize_playlist_id(playlist_id)?);
+    body["actions"] = serde_json::json!(actions);
+    let response = super::transport::post("browse/edit_playlist", body).await?;
+    require_succeeded("remove playlist items", &response)?;
+    invalidate_cache();
+    Ok(())
+}
+
+pub async fn remote_history() -> Result<Vec<super::models::RemoteHistoryItem>, String> {
+    require_authenticated("read remote history")?;
+    let key = cache_key("history");
+    if let Some(history) = cached(&key) {
+        return Ok(history);
+    }
+    let mut body = context();
+    body["browseId"] = serde_json::json!("FEmusic_history");
+    let response = super::transport::post("browse", body).await?;
+    let history = super::parsers::parse_remote_history(&response)?;
+    cache(&key, &history, 60);
+    Ok(history)
+}
+
+pub async fn remove_remote_history_items(feedback_tokens: &[String]) -> Result<(), String> {
+    require_authenticated("remove remote history items")?;
+    let feedback_tokens = feedback_tokens
+        .iter()
+        .map(|token| token.trim())
+        .filter(|token| !token.is_empty())
+        .collect::<Vec<_>>();
+    if feedback_tokens.is_empty() {
+        return Err("At least one history feedback token is required".to_string());
+    }
+    let mut body = context();
+    body["feedbackTokens"] = serde_json::json!(feedback_tokens);
+    super::transport::post("feedback", body).await?;
+    invalidate_cache();
+    Ok(())
+}
+
+fn require_succeeded(operation: &str, response: &Value) -> Result<(), String> {
+    match response["status"].as_str() {
+        Some("STATUS_SUCCEEDED") => Ok(()),
+        Some(status) => Err(format!("Innertube failed to {operation}: {status}")),
+        None => Err(format!(
+            "Innertube {operation} response did not include status"
+        )),
+    }
+}
+
 pub async fn library_playlists() -> Result<Vec<super::models::Playlist>, String> {
     let key = cache_key("library:playlists");
     if let Some(playlists) = cached(&key) {
@@ -474,7 +749,8 @@ pub async fn library_artists() -> Result<Vec<super::models::Artist>, String> {
     let track_artists_fut = fetch_artists("FEmusic_library_corpus_track_artists");
     let corpus_artists_fut = fetch_artists("FEmusic_library_corpus_artists");
 
-    let (track_artists_res, corpus_artists_res) = tokio::join!(track_artists_fut, corpus_artists_fut);
+    let (track_artists_res, corpus_artists_res) =
+        tokio::join!(track_artists_fut, corpus_artists_fut);
 
     let mut merged = Vec::new();
     let mut seen_ids = HashSet::new();
@@ -607,5 +883,54 @@ mod tests {
                 .and_then(Value::as_str),
             Some("DO")
         );
+    }
+
+    #[test]
+    fn like_status_maps_to_innertube_endpoints() {
+        use super::super::models::LikeStatus;
+        assert_eq!(rating_endpoint(LikeStatus::Like), "like/like");
+        assert_eq!(rating_endpoint(LikeStatus::Dislike), "like/dislike");
+        assert_eq!(rating_endpoint(LikeStatus::Indifferent), "like/removelike");
+    }
+
+    #[test]
+    fn playlist_mutation_inputs_are_validated_and_normalized() {
+        assert_eq!(normalize_playlist_id("VLPL123").unwrap(), "PL123");
+        assert_eq!(normalize_playlist_id(" PL123 ").unwrap(), "PL123");
+        assert!(normalize_playlist_id("VL").is_err());
+        assert!(validate_playlist_title("<invalid>").is_err());
+        assert_eq!(validate_privacy("private").unwrap(), "PRIVATE");
+        assert!(validate_privacy("friends").is_err());
+        assert!(require_succeeded(
+            "edit playlist",
+            &serde_json::json!({"status": "STATUS_SUCCEEDED"})
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn playlist_item_actions_require_stable_remote_ids() {
+        let actions = add_video_actions(&["video-1".to_string()], true).unwrap();
+        assert_eq!(actions[0]["action"], "ACTION_ADD_VIDEO");
+        assert_eq!(actions[0]["dedupeOption"], "DEDUPE_OPTION_SKIP");
+        assert!(add_video_actions(&[], false).is_err());
+
+        let invalid = super::super::models::PlaylistItemRef {
+            video_id: "video-1".to_string(),
+            set_video_id: String::new(),
+        };
+        assert!(remove_video_actions(&[invalid]).is_err());
+        assert!(remove_video_actions(&[]).is_err());
+    }
+
+    #[test]
+    fn remote_history_requires_feedback_tokens_for_removal() {
+        let tokens = [String::new(), "  ".to_string()];
+        let filtered = tokens
+            .iter()
+            .map(|token| token.trim())
+            .filter(|token| !token.is_empty())
+            .collect::<Vec<_>>();
+        assert!(filtered.is_empty());
     }
 }

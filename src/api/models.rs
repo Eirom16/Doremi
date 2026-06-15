@@ -1,5 +1,13 @@
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum LikeStatus {
+    Like,
+    Dislike,
+    Indifferent,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LibraryItem {
     pub id: String,
@@ -138,6 +146,19 @@ pub struct PlaylistDetail {
     pub privacy: String,
     pub tracks: Vec<Track>,
     pub unavailable_count: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlaylistItemRef {
+    pub video_id: String,
+    pub set_video_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RemoteHistoryItem {
+    pub track: Track,
+    pub played: String,
+    pub feedback_token: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

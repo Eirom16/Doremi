@@ -226,9 +226,9 @@ El port se considera terminado cuando Doremi cubra los flujos reales de Pyrolist
 - [x] Hecho - Playlist detail, continuations y disponibilidad.
 - [x] Hecho - Related/radio/watch playlist para autoplay.
 - [x] Hecho - Library songs, albums, artists, playlists y subscriptions.
-- [ ] Like/unlike y estado de like.
-- [ ] Crear, editar, borrar playlists.
-- [ ] Añadir y eliminar canciones de playlists.
+- [x] Like/unlike y estado de like.
+- [x] Crear, editar, borrar playlists.
+- [x] Añadir y eliminar canciones de playlists.
 - [ ] Historial remoto cuando la cuenta lo permita.
 - [ ] Perfil y estado de autenticacion.
 

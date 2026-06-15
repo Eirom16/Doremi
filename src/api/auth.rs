@@ -15,6 +15,10 @@ pub fn cache_scope() -> String {
         .unwrap_or_else(|| "anonymous".to_string())
 }
 
+pub fn is_authenticated() -> bool {
+    stored_headers().is_some()
+}
+
 pub fn request_headers() -> HeaderMap {
     let mut headers = HeaderMap::new();
     let stored = stored_headers();

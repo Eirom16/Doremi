@@ -1,0 +1,65 @@
+{
+  "contents": {
+    "singleColumnBrowseResultsRenderer": {
+      "tabs": [
+        {
+          "tabRenderer": {
+            "content": {
+              "sectionListRenderer": {
+                "contents": [
+                  {
+                    "musicShelfRenderer": {
+                      "title": {"runs": [{"text": "Hoy"}]},
+                      "contents": [
+                        {
+                          "musicResponsiveListItemRenderer": {
+                            "playlistItemData": {"videoId": "history-video-1"},
+                            "flexColumns": [
+                              {"musicResponsiveListItemFlexColumnRenderer": {"text": {"runs": [{"text": "Anonymous history track"}]}}},
+                              {"musicResponsiveListItemFlexColumnRenderer": {"text": {"runs": [{"text": "Anonymous artist"}]}}},
+                              {"musicResponsiveListItemFlexColumnRenderer": {"text": {"runs": [{"text": "Anonymous album"}]}}}
+                            ],
+                            "fixedColumns": [
+                              {"musicResponsiveListItemFixedColumnRenderer": {"text": {"simpleText": "3:21"}}}
+                            ],
+                            "menu": {
+                              "menuRenderer": {
+                                "items": [
+                                  {"menuServiceItemRenderer": {"serviceEndpoint": {"feedbackEndpoint": {"feedbackToken": "feedback-1"}}}}
+                                ]
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "musicShelfRenderer": {
+                      "title": {"runs": [{"text": "Esta semana"}]},
+                      "contents": [
+                        {
+                          "musicResponsiveListItemRenderer": {
+                            "playlistItemData": {"videoId": "history-video-2"},
+                            "flexColumns": [
+                              {"musicResponsiveListItemFlexColumnRenderer": {"text": {"runs": [{"text": "Second history track"}]}}},
+                              {"musicResponsiveListItemFlexColumnRenderer": {"text": {"runs": [{"text": "Second artist"}]}}},
+                              {"musicResponsiveListItemFlexColumnRenderer": {"text": {"runs": []}}}
+                            ],
+                            "fixedColumns": [
+                              {"musicResponsiveListItemFixedColumnRenderer": {"text": {"simpleText": "4:02"}}}
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
