@@ -66,6 +66,7 @@ impl SearchService {
                 year: a.year.map(|y| y.to_string()).unwrap_or_default(),
                 thumbnail: a.thumbnail.clone(),
                 track_count: a.track_count.unwrap_or(0),
+                artist_id: a.artist_id.clone().unwrap_or_default(),
             })
             .collect();
         let playlists: Vec<crate::bridge::bridge::Playlist> = results
@@ -80,7 +81,71 @@ impl SearchService {
             })
             .collect();
 
-        crate::bridge::bridge::set_search_results(songs, videos, artists, albums, playlists);
+        let (top_result, has_top_result) = match &results.top_result {
+            Some(item) => {
+                let ffi_top = match item {
+                    crate::api::models::TopResultItem::Track(t) => {
+                        crate::bridge::bridge::TopResult {
+                            id: t.id.clone(),
+                            title: t.title.clone(),
+                            subtitle: t.artists.join(", "),
+                            thumbnail: t.thumbnail.clone(),
+                            item_type: "song".to_string(),
+                        }
+                    }
+                    crate::api::models::TopResultItem::Artist(a) => {
+                        crate::bridge::bridge::TopResult {
+                            id: a.id.clone(),
+                            title: a.name.clone(),
+                            subtitle: a.subscriber_count.clone().unwrap_or_default(),
+                            thumbnail: a.thumbnail.clone(),
+                            item_type: "artist".to_string(),
+                        }
+                    }
+                    crate::api::models::TopResultItem::Album(al) => {
+                        crate::bridge::bridge::TopResult {
+                            id: al.id.clone(),
+                            title: al.title.clone(),
+                            subtitle: al.artists.join(", "),
+                            thumbnail: al.thumbnail.clone(),
+                            item_type: "album".to_string(),
+                        }
+                    }
+                    crate::api::models::TopResultItem::Playlist(p) => {
+                        crate::bridge::bridge::TopResult {
+                            id: p.id.clone(),
+                            title: p.title.clone(),
+                            subtitle: p.owner.clone().unwrap_or_default(),
+                            thumbnail: p.thumbnail.clone(),
+                            item_type: "playlist".to_string(),
+                        }
+                    }
+                };
+                (ffi_top, true)
+            }
+            None => {
+                (
+                    crate::bridge::bridge::TopResult {
+                        id: String::new(),
+                        title: String::new(),
+                        subtitle: String::new(),
+                        thumbnail: String::new(),
+                        item_type: String::new(),
+                    },
+                    false,
+                )
+            }
+        };
+
+        crate::bridge::bridge::set_search_results(
+            top_result,
+            has_top_result,
+            songs,
+            videos,
+            artists,
+            albums,
+            playlists,
+        );
     }
 }
 

@@ -862,6 +862,7 @@ mod tests {
         };
         let mut target = SearchResults {
             query: "q".into(),
+            top_result: None,
             songs: vec![track("one")],
             videos: Vec::new(),
             albums: Vec::new(),
@@ -870,6 +871,7 @@ mod tests {
         };
         let incoming = SearchResults {
             query: "q".into(),
+            top_result: None,
             songs: vec![track("one"), track("two")],
             videos: Vec::new(),
             albums: Vec::new(),

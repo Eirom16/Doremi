@@ -562,145 +562,175 @@ mod tests {
 
     fn with_test_conn<F, R>(f: F) -> R
     where
-        F: FnOnce(&rusqlite::Connection) -> R,
+        F: FnOnce() -> R,
     {
         use crate::db::{init_connection, take_connection};
         let conn = rusqlite::Connection::open_in_memory().unwrap();
         Database::run_migrations(&conn).unwrap();
         init_connection(conn);
-        let res = crate::db::with_db(|c| Ok(f(c))).unwrap();
+        let res = f();
         let _ = take_connection();
         res
     }
 
     #[test]
     fn test_favorites_track_sql() {
-        with_test_conn(|conn| {
-            conn.execute(
-                "INSERT INTO favorite_tracks (id, title, artist, album) VALUES (?1, ?2, ?3, ?4)",
-                params!["t1", "Test Song", "Test Artist", "Test Album"],
-            )
+        with_test_conn(|| {
+            crate::db::with_db(|conn| {
+                conn.execute(
+                    "INSERT INTO favorite_tracks (id, title, artist, album) VALUES (?1, ?2, ?3, ?4)",
+                    params!["t1", "Test Song", "Test Artist", "Test Album"],
+                )
+                .unwrap();
+                let count: i64 = conn
+                    .query_row(
+                        "SELECT COUNT(*) FROM favorite_tracks WHERE id = ?1",
+                        params!["t1"],
+                        |r| r.get(0),
+                    )
+                    .unwrap();
+                assert_eq!(count, 1);
+                let title: String = conn
+                    .query_row(
+                        "SELECT title FROM favorite_tracks WHERE id = ?1",
+                        params!["t1"],
+                        |r| r.get(0),
+                    )
+                    .unwrap();
+                assert_eq!(title, "Test Song");
+                Ok(())
+            })
             .unwrap();
-            let count: i64 = conn
-                .query_row(
-                    "SELECT COUNT(*) FROM favorite_tracks WHERE id = ?1",
-                    params!["t1"],
-                    |r| r.get(0),
-                )
-                .unwrap();
-            assert_eq!(count, 1);
-            let title: String = conn
-                .query_row(
-                    "SELECT title FROM favorite_tracks WHERE id = ?1",
-                    params!["t1"],
-                    |r| r.get(0),
-                )
-                .unwrap();
-            assert_eq!(title, "Test Song");
         });
     }
 
     #[test]
     fn test_playlist_sql() {
-        with_test_conn(|conn| {
-            conn.execute(
-                "INSERT INTO playlists (id, name) VALUES ('p1', 'My Playlist')",
-                [],
-            )
-            .unwrap();
-            let name: String = conn
-                .query_row("SELECT name FROM playlists WHERE id = 'p1'", [], |r| {
-                    r.get(0)
-                })
-                .unwrap();
-            assert_eq!(name, "My Playlist");
-
-            conn.execute(
-                "INSERT INTO playlist_tracks (playlist_id, track_id, position, title, artist) VALUES ('p1', 't1', 0, 'Song', 'Artist')", []
-            ).unwrap();
-            let count: i64 = conn
-                .query_row(
-                    "SELECT COUNT(*) FROM playlist_tracks WHERE playlist_id = 'p1'",
+        with_test_conn(|| {
+            crate::db::with_db(|conn| {
+                conn.execute(
+                    "INSERT INTO playlists (id, name) VALUES ('p1', 'My Playlist')",
                     [],
-                    |r| r.get(0),
                 )
                 .unwrap();
-            assert_eq!(count, 1);
+                let name: String = conn
+                    .query_row("SELECT name FROM playlists WHERE id = 'p1'", [], |r| {
+                        r.get(0)
+                    })
+                    .unwrap();
+                assert_eq!(name, "My Playlist");
+
+                conn.execute(
+                    "INSERT INTO playlist_tracks (playlist_id, track_id, position, title, artist) VALUES ('p1', 't1', 0, 'Song', 'Artist')", []
+                ).unwrap();
+                let count: i64 = conn
+                    .query_row(
+                        "SELECT COUNT(*) FROM playlist_tracks WHERE playlist_id = 'p1'",
+                        [],
+                        |r| r.get(0),
+                    )
+                    .unwrap();
+                assert_eq!(count, 1);
+                Ok(())
+            })
+            .unwrap();
         });
     }
 
     #[test]
     fn test_recently_played_sql() {
-        with_test_conn(|conn| {
-            conn.execute(
-                "INSERT INTO recently_played (track_id, title, artist) VALUES ('t1', 'Song', 'Artist')", []
-            ).unwrap();
-            let count: i64 = conn
-                .query_row("SELECT COUNT(*) FROM recently_played", [], |r| r.get(0))
-                .unwrap();
-            assert_eq!(count, 1);
+        with_test_conn(|| {
+            crate::db::with_db(|conn| {
+                conn.execute(
+                    "INSERT INTO recently_played (track_id, title, artist) VALUES ('t1', 'Song', 'Artist')", []
+                ).unwrap();
+                let count: i64 = conn
+                    .query_row("SELECT COUNT(*) FROM recently_played", [], |r| r.get(0))
+                    .unwrap();
+                assert_eq!(count, 1);
+                Ok(())
+            })
+            .unwrap();
         });
     }
 
     #[test]
     fn test_search_history_sql() {
-        with_test_conn(|conn| {
-            conn.execute(
-                "INSERT INTO search_history (query, filter) VALUES ('hello', 'songs')",
-                [],
-            )
-            .unwrap();
-            conn.execute(
-                "INSERT INTO search_history (query, filter) VALUES ('world', 'all')",
-                [],
-            )
-            .unwrap();
-            let count: i64 = conn
-                .query_row("SELECT COUNT(*) FROM search_history", [], |r| r.get(0))
+        with_test_conn(|| {
+            crate::db::with_db(|conn| {
+                conn.execute(
+                    "INSERT INTO search_history (query, filter) VALUES ('hello', 'songs')",
+                    [],
+                )
                 .unwrap();
-            assert_eq!(count, 2);
+                conn.execute(
+                    "INSERT INTO search_history (query, filter) VALUES ('world', 'all')",
+                    [],
+                )
+                .unwrap();
+                let count: i64 = conn
+                    .query_row("SELECT COUNT(*) FROM search_history", [], |r| r.get(0))
+                    .unwrap();
+                assert_eq!(count, 2);
+                Ok(())
+            })
+            .unwrap();
 
             // Test delete_entry (case-insensitive)
             SearchHistoryRepo::delete_entry("HELLO").unwrap();
-            let count2: i64 = conn
-                .query_row("SELECT COUNT(*) FROM search_history", [], |r| r.get(0))
-                .unwrap();
-            assert_eq!(count2, 1);
+            
+            crate::db::with_db(|conn| {
+                let count2: i64 = conn
+                    .query_row("SELECT COUNT(*) FROM search_history", [], |r| r.get(0))
+                    .unwrap();
+                assert_eq!(count2, 1);
+                Ok(())
+            })
+            .unwrap();
 
             // Test clear
             SearchHistoryRepo::clear().unwrap();
-            let count3: i64 = conn
-                .query_row("SELECT COUNT(*) FROM search_history", [], |r| r.get(0))
-                .unwrap();
-            assert_eq!(count3, 0);
+
+            crate::db::with_db(|conn| {
+                let count3: i64 = conn
+                    .query_row("SELECT COUNT(*) FROM search_history", [], |r| r.get(0))
+                    .unwrap();
+                assert_eq!(count3, 0);
+                Ok(())
+            })
+            .unwrap();
         });
     }
 
     #[test]
     fn downloads_with_duplicate_text_are_selected_by_id() {
-        with_test_conn(|conn| {
-            conn.execute(
-                "INSERT INTO downloads (video_id, title, artist, file_path)
-                 VALUES ('video-a', 'Same Song', 'Same Artist', '/tmp/a.m4a')",
-                [],
-            )
-            .unwrap();
-            conn.execute(
-                "INSERT INTO downloads (video_id, title, artist, file_path)
-                 VALUES ('video-b', 'Same Song', 'Same Artist', '/tmp/b.m4a')",
-                [],
-            )
-            .unwrap();
-
-            let path: String = conn
-                .query_row(
-                    "SELECT file_path FROM downloads WHERE video_id = ?1",
-                    params!["video-b"],
-                    |row| row.get(0),
+        with_test_conn(|| {
+            crate::db::with_db(|conn| {
+                conn.execute(
+                    "INSERT INTO downloads (video_id, title, artist, file_path)
+                     VALUES ('video-a', 'Same Song', 'Same Artist', '/tmp/a.m4a')",
+                    [],
+                )
+                .unwrap();
+                conn.execute(
+                    "INSERT INTO downloads (video_id, title, artist, file_path)
+                     VALUES ('video-b', 'Same Song', 'Same Artist', '/tmp/b.m4a')",
+                    [],
                 )
                 .unwrap();
 
-            assert_eq!(path, "/tmp/b.m4a");
+                let path: String = conn
+                    .query_row(
+                        "SELECT file_path FROM downloads WHERE video_id = ?1",
+                        params!["video-b"],
+                        |row| row.get(0),
+                    )
+                    .unwrap();
+
+                assert_eq!(path, "/tmp/b.m4a");
+                Ok(())
+            })
+            .unwrap();
         });
     }
 }

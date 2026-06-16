@@ -349,7 +349,9 @@ void DoremiMainWindow::connect_signals() {
             on_search_item_clicked(track);
         });
     QObject::connect(search_view_, &SearchView::search_requested, this,
-        [](const std::string &query, const std::string &filter) {
+        [this](const std::string &query, const std::string &filter) {
+            title_bar_->set_search_text(query);
+            search_view_->set_query(query);
             on_search_submitted(query, filter);
         });
     QObject::connect(search_view_, &SearchView::album_requested, this,
@@ -456,6 +458,8 @@ void DoremiMainWindow::connect_signals() {
         });
     QObject::connect(album_detail_view_, &AlbumDetailView::back_requested, this,
         [this]() { navigate_back_from_detail(); });
+    QObject::connect(album_detail_view_, &AlbumDetailView::artist_requested, this,
+        [](const std::string &artist_id) { on_artist_requested(artist_id); });
 
     // Artist detail view
     QObject::connect(artist_detail_view_, &ArtistDetailView::play_requested, this,
@@ -942,7 +946,8 @@ void set_search_suggestions(rust::Str query, rust::Vec<rust::String> suggestions
     });
 }
 
-void set_search_results(rust::Vec<Track> songs, rust::Vec<Track> videos, rust::Vec<Artist> artists,
+void set_search_results(TopResult top_result, bool has_top_result,
+                        rust::Vec<Track> songs, rust::Vec<Track> videos, rust::Vec<Artist> artists,
                         rust::Vec<Album> albums, rust::Vec<Playlist> playlists) {
     std::vector<Track> s;
     for (const auto &x : songs) s.push_back(x);
@@ -954,8 +959,8 @@ void set_search_results(rust::Vec<Track> songs, rust::Vec<Track> videos, rust::V
     for (const auto &x : albums) al.push_back(x);
     std::vector<Playlist> p;
     for (const auto &x : playlists) p.push_back(x);
-    mutate_main_window("set_search_results", [s = std::move(s), v = std::move(v), a = std::move(a), al = std::move(al), p = std::move(p)](DoremiMainWindow &window) {
-        if (window.search_view()) window.search_view()->set_results(s, v, a, al, p);
+    mutate_main_window("set_search_results", [top_result, has_top_result, s = std::move(s), v = std::move(v), a = std::move(a), al = std::move(al), p = std::move(p)](DoremiMainWindow &window) {
+        if (window.search_view()) window.search_view()->set_results(top_result, has_top_result, s, v, a, al, p);
     });
 }
 

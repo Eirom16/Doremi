@@ -12,6 +12,7 @@ impl ApiClient {
         if query.trim().is_empty() {
             return SearchResults {
                 query: query.to_string(),
+                top_result: None,
                 songs: vec![],
                 videos: vec![],
                 albums: vec![],
@@ -37,6 +38,7 @@ impl ApiClient {
                 );
                 SearchResults {
                     query: query.to_string(),
+                    top_result: None,
                     songs: vec![],
                     videos: vec![],
                     albums: vec![],

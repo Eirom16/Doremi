@@ -20,6 +20,7 @@ struct Artist;
 struct Playlist;
 struct StatsData;
 struct HomeCard;
+struct TopResult;
 
 class TitleBar;
 class NavSidebar;
@@ -153,7 +154,8 @@ void set_window_title(rust::Str title);
 void set_playing(bool playing);
 void set_player_volume(int32_t volume);
 void run_event_loop();
-void set_search_results(rust::Vec<Track> songs, rust::Vec<Track> videos, rust::Vec<Artist> artists,
+void set_search_results(TopResult top_result, bool has_top_result,
+                        rust::Vec<Track> songs, rust::Vec<Track> videos, rust::Vec<Artist> artists,
                         rust::Vec<Album> albums, rust::Vec<Playlist> playlists);
 void add_home_section(rust::Str title, rust::Vec<HomeCard> items);
 void clear_home_sections();

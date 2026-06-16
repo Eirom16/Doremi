@@ -178,7 +178,12 @@ void AlbumDetailView::setupLayout() {
 
     artist_label_ = new QLabel("Artista", scroll_content_);
     artist_label_->setFont(DesignTokens::getFont("body", 14));
-    artist_label_->setStyleSheet(QString("color: %1;").arg(c.text_secondary.name()));
+    artist_label_->setStyleSheet(QString(
+        "QLabel { color: %1; background: transparent; }\n"
+        "QLabel:hover { color: %2; text-decoration: underline; }"
+    ).arg(c.text_secondary.name()).arg(c.accent.name()));
+    artist_label_->setCursor(Qt::PointingHandCursor);
+    artist_label_->installEventFilter(this);
     info->addWidget(artist_label_);
 
     meta_label_ = new QLabel("", scroll_content_);
@@ -241,6 +246,7 @@ void AlbumDetailView::set_album_info(const Album &album) {
     const auto &c = DesignTokens::current();
     title_label_->setText(QString::fromStdString(static_cast<std::string>(album.title)));
     artist_label_->setText(QString::fromStdString(static_cast<std::string>(album.artist)));
+    artist_id_ = static_cast<std::string>(album.artist_id);
 
     QString meta;
     if (!album.year.empty()) meta += QString::fromStdString(static_cast<std::string>(album.year));
@@ -308,6 +314,7 @@ void AlbumDetailView::set_album_tracks(const std::vector<Track> &tracks) {
 void AlbumDetailView::clear() {
     title_label_->setText("Álbum");
     artist_label_->setText("Artista");
+    artist_id_.clear();
     meta_label_->setText("");
     cover_label_->clear();
     QLayoutItem *item;
@@ -315,4 +322,17 @@ void AlbumDetailView::clear() {
         if (item->widget()) item->widget()->deleteLater();
         delete item;
     }
+}
+
+bool AlbumDetailView::eventFilter(QObject *obj, QEvent *event) {
+    if (obj == artist_label_) {
+        if (event->type() == QEvent::MouseButtonPress) {
+            auto *mouse_event = static_cast<QMouseEvent *>(event);
+            if (mouse_event->button() == Qt::LeftButton && !artist_id_.empty()) {
+                emit artist_requested(artist_id_);
+                return true;
+            }
+        }
+    }
+    return QWidget::eventFilter(obj, event);
 }

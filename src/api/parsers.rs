@@ -1,6 +1,6 @@
 use super::models::{
     Album, Artist, ArtistDetail, HomeItem, HomeSection, LikeStatus, Playlist, PlaylistDetail,
-    RemoteHistoryItem, SearchResults, Track,
+    RemoteHistoryItem, SearchResults, TopResultItem, Track,
 };
 use serde_json::Value;
 use std::collections::HashSet;
@@ -277,6 +277,7 @@ fn parse_library_album(renderer: &Value) -> Option<Album> {
     }
 
     let mut artists = Vec::new();
+    let mut artist_id = None;
     let mut year = None;
     if let Some(runs) = renderer.pointer("/subtitle/runs").and_then(Value::as_array) {
         for run in runs {
@@ -294,6 +295,11 @@ fn parse_library_album(renderer: &Value) -> Option<Album> {
                     && text != "EP"
                 {
                     artists.push(text.to_string());
+                    if artist_id.is_none() {
+                        artist_id = run.pointer("/navigationEndpoint/browseEndpoint/browseId")
+                            .and_then(Value::as_str)
+                            .map(String::from);
+                    }
                 }
             }
         }
@@ -312,6 +318,7 @@ fn parse_library_album(renderer: &Value) -> Option<Album> {
         year,
         thumbnail: thumbnail(renderer),
         track_count: None,
+        artist_id,
     })
 }
 
@@ -460,6 +467,122 @@ fn search_sections(json: &Value) -> Option<&Vec<Value>> {
         .and_then(Value::as_array)
 }
 
+fn parse_top_result(card: &Value) -> Option<TopResultItem> {
+    let subtitle_runs = card.pointer("/subtitle/runs").and_then(Value::as_array)?;
+    let type_str = subtitle_runs.first()?.get("text")?.as_str()?;
+    let type_lower = type_str.to_lowercase();
+
+    if type_lower.contains("artist") || type_lower.contains("artista") {
+        let id = card.pointer("/onTap/browseEndpoint/browseId").and_then(Value::as_str)?.to_string();
+        let name = runs(&card["title"]);
+        let thumbnail = thumbnail(card);
+        let subscriber_count = if subtitle_runs.len() >= 3 {
+            subtitle_runs[2]["text"].as_str().map(|s| s.to_string())
+        } else {
+            None
+        };
+        Some(TopResultItem::Artist(Artist {
+            id,
+            name,
+            thumbnail,
+            subscriber_count,
+        }))
+    } else if type_lower.contains("album") || type_lower.contains("álbum") {
+        let id = card.pointer("/onTap/browseEndpoint/browseId").and_then(Value::as_str)?.to_string();
+        let title = runs(&card["title"]);
+        let artist = if subtitle_runs.len() >= 3 {
+            subtitle_runs[2]["text"].as_str().unwrap_or_default().to_string()
+        } else {
+            String::new()
+        };
+        let artist_id = if subtitle_runs.len() >= 3 {
+            subtitle_runs[2].pointer("/navigationEndpoint/browseEndpoint/browseId")
+                .and_then(Value::as_str)
+                .map(String::from)
+        } else {
+            None
+        };
+        let year = if subtitle_runs.len() >= 5 {
+            subtitle_runs[4]["text"].as_str().and_then(|s| s.parse::<i32>().ok())
+        } else {
+            None
+        };
+        let thumbnail = thumbnail(card);
+        Some(TopResultItem::Album(Album {
+            id,
+            title,
+            artists: vec![artist],
+            year,
+            thumbnail,
+            track_count: None,
+            artist_id,
+        }))
+    } else if type_lower.contains("song") || type_lower.contains("canci") {
+        let id = card.pointer("/onTap/watchEndpoint/videoId").and_then(Value::as_str)?.to_string();
+        let title = runs(&card["title"]);
+        let (artist, album) = if subtitle_runs.len() >= 3 {
+            let artist = subtitle_runs[2]["text"].as_str().unwrap_or_default().to_string();
+            let album = if subtitle_runs.len() >= 5 {
+                Some(subtitle_runs[4]["text"].as_str().unwrap_or_default().to_string())
+            } else {
+                None
+            };
+            (artist, album)
+        } else {
+            (String::new(), None)
+        };
+        let thumbnail = thumbnail(card);
+        Some(TopResultItem::Track(Track {
+            id,
+            title,
+            artists: vec![artist],
+            album,
+            album_id: None,
+            duration_ms: 0,
+            thumbnail,
+            stream_url: None,
+        }))
+    } else if type_lower.contains("video") {
+        let id = card.pointer("/onTap/watchEndpoint/videoId").and_then(Value::as_str)?.to_string();
+        let title = runs(&card["title"]);
+        let artist = if subtitle_runs.len() >= 3 {
+            subtitle_runs[2]["text"].as_str().unwrap_or_default().to_string()
+        } else {
+            String::new()
+        };
+        let thumbnail = thumbnail(card);
+        Some(TopResultItem::Track(Track {
+            id,
+            title,
+            artists: vec![artist],
+            album: None,
+            album_id: None,
+            duration_ms: 0,
+            thumbnail,
+            stream_url: None,
+        }))
+    } else if type_lower.contains("playlist") {
+        let id = card.pointer("/onTap/browseEndpoint/browseId").and_then(Value::as_str)?.to_string();
+        let title = runs(&card["title"]);
+        let owner = if subtitle_runs.len() >= 3 {
+            Some(subtitle_runs[2]["text"].as_str().unwrap_or_default().to_string())
+        } else {
+            None
+        };
+        let thumbnail = thumbnail(card);
+        Some(TopResultItem::Playlist(Playlist {
+            id,
+            title,
+            description: None,
+            owner,
+            thumbnail,
+            track_count: None,
+        }))
+    } else {
+        None
+    }
+}
+
 pub(crate) fn parse_search_page(
     json: &Value,
     query: &str,
@@ -474,6 +597,7 @@ pub(crate) fn parse_search_page(
     })?;
     let mut result = SearchResults {
         query: query.to_string(),
+        top_result: None,
         songs: Vec::new(),
         videos: Vec::new(),
         albums: Vec::new(),
@@ -481,6 +605,9 @@ pub(crate) fn parse_search_page(
         playlists: Vec::new(),
     };
     for section in sections {
+        if let Some(card) = section.get("musicCardShelfRenderer") {
+            result.top_result = parse_top_result(card);
+        }
         let (category, items) = if section.get("musicResponsiveListItemRenderer").is_some() {
             (fallback_category, vec![section])
         } else {
@@ -564,6 +691,7 @@ pub(crate) fn parse_search_page(
                     year: None,
                     thumbnail: image,
                     track_count: None,
+                    artist_id: None,
                 }),
                 "artists" if !browse_id.is_empty() => result.artists.push(Artist {
                     id: browse_id,
@@ -649,6 +777,9 @@ pub fn parse_album_detail(json: &Value, browse_id: &str) -> Result<(Album, Vec<T
         ));
     }
     let artist_text = text(&header["straplineTextOne"]);
+    let artist_id = header["straplineTextOne"]["runs"][0]["navigationEndpoint"]["browseEndpoint"]["browseId"]
+        .as_str()
+        .map(|s| s.to_string());
     let artists = if artist_text.is_empty() {
         Vec::new()
     } else {
@@ -663,6 +794,7 @@ pub fn parse_album_detail(json: &Value, browse_id: &str) -> Result<(Album, Vec<T
         year: first_year(&header["subtitle"]),
         thumbnail: album_thumbnail.clone(),
         track_count,
+        artist_id,
     };
 
     let contents = json
@@ -726,7 +858,7 @@ fn artist_section_title(section: &Value) -> String {
         .to_lowercase()
 }
 
-fn parse_artist_release(renderer: &Value, artist_name: &str) -> Option<Album> {
+fn parse_artist_release(renderer: &Value, artist_name: &str, artist_id: &str) -> Option<Album> {
     let id = renderer
         .pointer("/navigationEndpoint/browseEndpoint/browseId")
         .and_then(Value::as_str)?;
@@ -744,6 +876,7 @@ fn parse_artist_release(renderer: &Value, artist_name: &str) -> Option<Album> {
         year: first_year(&renderer["subtitle"]),
         thumbnail: thumbnail(renderer),
         track_count: None,
+        artist_id: Some(artist_id.to_string()),
     })
 }
 
@@ -845,11 +978,11 @@ pub fn parse_artist_detail(json: &Value, browse_id: &str) -> Result<ArtistDetail
                 .and_then(Value::as_str)
                 .unwrap_or_default();
             if title.contains("album") || title.contains("álbum") {
-                if let Some(album) = parse_artist_release(renderer, &name) {
+                if let Some(album) = parse_artist_release(renderer, &name, browse_id) {
                     detail.albums.push(album);
                 }
             } else if title.contains("single") || title.contains("sencillo") {
-                if let Some(single) = parse_artist_release(renderer, &name) {
+                if let Some(single) = parse_artist_release(renderer, &name, browse_id) {
                     detail.singles.push(single);
                 }
             } else if !id.is_empty() {

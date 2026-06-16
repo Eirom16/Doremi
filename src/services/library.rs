@@ -62,6 +62,7 @@ impl LibraryService {
                 year: a.year.map(|y| y.to_string()).unwrap_or_default(),
                 thumbnail: a.thumbnail,
                 track_count: a.track_count.unwrap_or_default(),
+                artist_id: a.artist_id.unwrap_or_default(),
             })
             .collect();
         crate::bridge::bridge::set_library_albums(albums);

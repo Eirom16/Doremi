@@ -18,7 +18,8 @@ class SearchView : public QWidget {
 public:
     explicit SearchView(QWidget *parent = nullptr);
     void set_query(const std::string &query);
-    void set_results(const std::vector<Track> &songs,
+    void set_results(const TopResult &top_result, bool has_top_result,
+                     const std::vector<Track> &songs,
                      const std::vector<Track> &videos,
                      const std::vector<Artist> &artists,
                      const std::vector<Album> &albums,
@@ -45,7 +46,8 @@ private:
     std::string current_query_;
     void set_active_filter(const std::string &filter);
     void show_recent_searches(const std::vector<std::string> &queries);
-    void show_results(const std::vector<Track> &songs,
+    void show_results(const TopResult &top_result, bool has_top_result,
+                      const std::vector<Track> &songs,
                       const std::vector<Track> &videos,
                       const std::vector<Artist> &artists,
                       const std::vector<Album> &albums,

@@ -84,6 +84,7 @@ pub mod bridge {
         year: String,
         thumbnail: String,
         track_count: i32,
+        artist_id: String,
     }
 
     struct Artist {
@@ -92,6 +93,14 @@ pub mod bridge {
         thumbnail: String,
         description: String,
         subscribers: String,
+    }
+
+    struct TopResult {
+        id: String,
+        title: String,
+        subtitle: String,
+        thumbnail: String,
+        item_type: String,
     }
 
     struct HomeCard {
@@ -240,6 +249,8 @@ pub mod bridge {
 
         // Data service functions
         fn set_search_results(
+            top_result: TopResult,
+            has_top_result: bool,
             songs: Vec<Track>,
             videos: Vec<Track>,
             artists: Vec<Artist>,
@@ -547,6 +558,7 @@ pub fn on_library_tab_changed(tab_key: &str) {
                                     year: a.year.map(|y| y.to_string()).unwrap_or_default(),
                                     thumbnail: a.thumbnail.clone(),
                                     track_count: 0,
+                                    artist_id: String::new(),
                                 })
                                 .collect();
                             crate::bridge::bridge::set_library_albums(a_list);

@@ -128,6 +128,7 @@ pub struct Album {
     pub year: Option<i32>,
     pub thumbnail: String,
     pub track_count: Option<i32>,
+    pub artist_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -162,8 +163,17 @@ pub struct RemoteHistoryItem {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum TopResultItem {
+    Track(Track),
+    Artist(Artist),
+    Album(Album),
+    Playlist(Playlist),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SearchResults {
     pub query: String,
+    pub top_result: Option<TopResultItem>,
     pub songs: Vec<Track>,
     pub videos: Vec<Track>,
     pub albums: Vec<Album>,

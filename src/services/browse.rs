@@ -8,6 +8,7 @@ pub async fn load_album(browse_id: &str) {
                 year: album.year.map(|year| year.to_string()).unwrap_or_default(),
                 thumbnail: album.thumbnail,
                 track_count: album.track_count.unwrap_or(tracks.len() as i32),
+                artist_id: album.artist_id.unwrap_or_default(),
             };
             let tracks = tracks
                 .into_iter()
@@ -62,6 +63,7 @@ pub async fn load_artist(browse_id: &str) {
                     year: album.year.map(|year| year.to_string()).unwrap_or_default(),
                     thumbnail: album.thumbnail,
                     track_count: album.track_count.unwrap_or_default(),
+                    artist_id: album.artist_id.unwrap_or_default(),
                 })
                 .collect();
             crate::bridge::bridge::set_artist_detail(artist, tracks, albums);

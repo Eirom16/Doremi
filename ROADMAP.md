@@ -261,9 +261,9 @@ El port se considera terminado cuando Doremi cubra los flujos reales de Pyrolist
 
 - [x] Portar chips de filtros y categorias completas.
 - [x] Hecho - Añadir debounce y cancelacion de consultas anteriores.
-- [ ] Mostrar top result y secciones diferenciadas.
+- [x] Hecho - Mostrar top result y secciones diferenciadas.
 - [x] Portar sugerencias y busqueda global.
-- [ ] Integrar historial: abrir, eliminar una entrada y limpiar todo.
+- [x] Hecho - Integrar historial: abrir, eliminar una entrada y limpiar todo.
 - [x] Navegacion completa desde cada resultado.
 - [ ] Menus contextuales por tipo.
 - [ ] Accesibilidad y navegacion total con teclado.

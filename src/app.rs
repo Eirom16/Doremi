@@ -218,6 +218,7 @@ impl DoremiApp {
                             year: a.year.map(|y| y.to_string()).unwrap_or_default(),
                             thumbnail: a.thumbnail.clone(),
                             track_count: 0,
+                            artist_id: String::new(),
                         })
                         .collect();
                     set_library_albums(a_list);

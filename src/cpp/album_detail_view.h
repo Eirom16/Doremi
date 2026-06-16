@@ -46,6 +46,10 @@ signals:
     void play_requested(Track track);
     void play_all_requested(std::vector<Track> tracks);
     void back_requested();
+    void artist_requested(const std::string &artist_id);
+
+protected:
+    bool eventFilter(QObject *obj, QEvent *event) override;
 
 private:
     void setupLayout();
@@ -64,6 +68,7 @@ private:
     QWidget *tracks_widget_;
     QVBoxLayout *tracks_layout_;
     std::vector<Track> tracks_;
+    std::string artist_id_;
 };
 
 #endif

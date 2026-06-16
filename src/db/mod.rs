@@ -219,6 +219,6 @@ mod tests {
         let version: i32 = conn
             .query_row("SELECT COALESCE(MAX(version), 0) FROM schema_version", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(version, 3);
+        assert_eq!(version, 4);
     }
 }
