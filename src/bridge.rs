@@ -94,6 +94,14 @@ pub mod bridge {
         subscribers: String,
     }
 
+    struct HomeCard {
+        id: String,
+        title: String,
+        subtitle: String,
+        thumbnail: String,
+        item_type: String,
+    }
+
     struct StatsData {
         total_play_time: String,
         total_plays: i32,
@@ -112,6 +120,11 @@ pub mod bridge {
         fn on_search_submitted(query: &str, filter: &str);
         fn on_search_suggestions_requested(query: &str);
         fn on_search_history_requested();
+        fn on_search_history_delete(query: &str);
+        fn on_search_history_clear();
+        fn on_home_retry_requested();
+        fn on_home_load_more_requested();
+        fn on_trending_retry_requested();
         fn on_album_requested(browse_id: &str);
         fn on_artist_requested(browse_id: &str);
         fn on_playlist_requested(playlist_id: &str);
@@ -127,9 +140,19 @@ pub mod bridge {
         fn on_library_tab_changed(tab: &str);
         fn on_add_favorite(track: Track);
         fn on_remove_favorite(track_id: &str);
+        fn on_add_favorite_album(album: Album);
+        fn on_remove_favorite_album(album_id: &str);
+        fn on_add_favorite_artist(artist: Artist);
+        fn on_remove_favorite_artist(artist_id: &str);
+        fn on_add_to_playlist(track: Track, playlist_id: &str);
+        fn on_create_playlist(name: &str, description: &str, privacy: &str);
+        fn on_rename_playlist(playlist_id: &str, name: &str);
+        fn on_delete_playlist(playlist_id: &str);
+        fn on_remove_playlist_track(playlist_id: &str, track_id: &str);
         fn on_download_requested(track: Track);
         fn on_add_to_queue_next(track: Track);
         fn on_add_to_queue_end(track: Track);
+        fn on_play_all(tracks: Vec<Track>, shuffle: bool);
         fn on_lastfm_auth_requested(
             api_key: &str,
             api_secret: &str,
@@ -144,6 +167,7 @@ pub mod bridge {
         fn on_stats_requested();
         fn on_history_requested();
         fn on_youtube_login_success(headers_json: &str, name: &str, avatar_url: &str);
+        fn on_youtube_session_refresh(headers_json: &str);
         fn on_youtube_logout();
         fn is_youtube_authenticated() -> bool;
         fn on_check_for_updates_requested();
@@ -171,6 +195,7 @@ pub mod bridge {
         fn apply_theme(theme_mode: &str, accent_color: &str);
         fn update_player_state(state: i32, position_ms: i32, duration_ms: i32);
         fn set_mini_player(title: &str, artist: &str, thumbnail: &str);
+        fn set_current_track(track: Track);
         fn get_search_bar_text() -> String;
         fn set_search_bar_text(text: &str);
         fn set_window_title(title: &str);
@@ -179,15 +204,17 @@ pub mod bridge {
         fn set_player_volume(volume: i32);
         fn set_library_songs(songs: Vec<Track>);
         fn set_library_playlists(playlists: Vec<Playlist>);
+        fn set_context_playlists(playlists: Vec<Playlist>);
         fn set_library_albums(albums: Vec<Album>);
         fn set_library_artists(artists: Vec<Artist>);
         fn set_search_history(queries: Vec<String>);
-        fn set_search_suggestions(suggestions: Vec<String>);
+        fn set_search_suggestions(query: &str, suggestions: Vec<String>);
         fn apply_settings_to_ui();
         fn set_settings_theme(mode: &str);
         fn set_settings_accent(color: &str);
         fn set_settings_font_size(size: i32);
         fn set_settings_language(lang: &str);
+        fn set_settings_region(region: &str);
         fn set_settings_normalize(on: bool);
         fn set_settings_crossfade(on: bool);
         fn set_settings_equalizer_enabled(on: bool);
@@ -214,19 +241,23 @@ pub mod bridge {
         // Data service functions
         fn set_search_results(
             songs: Vec<Track>,
+            videos: Vec<Track>,
             artists: Vec<Artist>,
             albums: Vec<Album>,
             playlists: Vec<Playlist>,
         );
-        fn add_home_section(title: &str, items: Vec<String>);
+        fn add_home_section(title: &str, items: Vec<HomeCard>);
         fn clear_home_sections();
-        fn set_trending_items(titles: Vec<String>, subtitles: Vec<String>, thumbnails: Vec<String>);
+        fn set_home_state(state: &str, message: &str);
+        fn set_trending_items(items: Vec<HomeCard>);
+        fn set_trending_state(state: &str, message: &str);
         fn set_downloads_list(titles: Vec<String>, artists: Vec<String>, thumbnails: Vec<String>);
         fn set_player_shuffle(on: bool);
         fn set_player_repeat(mode: i32);
         fn get_or_create_thumbnail(title: &str, variant: i32) -> String;
         fn set_dominant_colors(colors: Vec<String>);
         fn set_playback_queue(queue: Vec<Track>, current_index: i32);
+        fn set_related_tracks(tracks: Vec<Track>);
         fn set_stats_data(stats: StatsData);
 
         fn set_history_data(history: Vec<Track>, played_at: Vec<String>);
@@ -311,7 +342,7 @@ pub fn on_search_suggestions_requested(query: &str) {
             Some(search) => search.suggestions(&query).await,
             None => Vec::new(),
         };
-        crate::bridge::bridge::set_search_suggestions(suggestions);
+        crate::bridge::bridge::set_search_suggestions(&query, suggestions);
     });
 }
 
@@ -330,6 +361,48 @@ async fn push_search_history_to_ui() {
 
 pub fn on_search_history_requested() {
     tokio::spawn(push_search_history_to_ui());
+}
+
+pub fn on_search_history_delete(query: &str) {
+    let query = query.trim().to_string();
+    if query.is_empty() {
+        return;
+    }
+    tokio::spawn(async move {
+        tokio::task::spawn_blocking(move || {
+            let _ = crate::db::repo::SearchHistoryRepo::delete_entry(&query);
+        })
+        .await
+        .ok();
+        push_search_history_to_ui().await;
+    });
+}
+
+pub fn on_search_history_clear() {
+    tokio::spawn(async move {
+        tokio::task::spawn_blocking(|| {
+            let _ = crate::db::repo::SearchHistoryRepo::clear();
+        })
+        .await
+        .ok();
+        push_search_history_to_ui().await;
+    });
+}
+
+pub fn on_home_retry_requested() {
+    tokio::spawn(async { crate::services::home::HomeService::new().load_home().await });
+}
+
+pub fn on_home_load_more_requested() {
+    tokio::spawn(async { crate::services::home::HomeService::new().load_more().await });
+}
+
+pub fn on_trending_retry_requested() {
+    tokio::spawn(async {
+        crate::services::trending::TrendingService::new()
+            .load()
+            .await
+    });
 }
 
 pub fn on_album_requested(browse_id: &str) {
@@ -709,6 +782,48 @@ pub fn on_add_favorite(track: bridge::Track) {
     });
 }
 
+pub fn on_add_favorite_album(album: bridge::Album) {
+    let fav = crate::db::repo::FavoriteAlbum {
+        id: album.id,
+        title: album.title,
+        artist: album.artist,
+        year: album.year.parse::<i32>().ok(),
+        thumbnail: album.thumbnail,
+        added_at: String::new(),
+    };
+    if let Err(e) = crate::db::repo::FavoritesRepo::add_album(&fav) {
+        log::error!("Failed to add favorite album: {e}");
+    } else {
+        log::info!("Added favorite album: {}", fav.title);
+    }
+}
+
+pub fn on_remove_favorite_album(album_id: &str) {
+    if let Err(e) = crate::db::repo::FavoritesRepo::remove_album(album_id) {
+        log::error!("Failed to remove favorite album: {e}");
+    }
+}
+
+pub fn on_add_favorite_artist(artist: bridge::Artist) {
+    let fav = crate::db::repo::FavoriteArtist {
+        id: artist.id,
+        name: artist.name,
+        thumbnail: artist.thumbnail,
+        added_at: String::new(),
+    };
+    if let Err(e) = crate::db::repo::FavoritesRepo::add_artist(&fav) {
+        log::error!("Failed to add favorite artist: {e}");
+    } else {
+        log::info!("Added favorite artist: {}", fav.name);
+    }
+}
+
+pub fn on_remove_favorite_artist(artist_id: &str) {
+    if let Err(e) = crate::db::repo::FavoritesRepo::remove_artist(artist_id) {
+        log::error!("Failed to remove favorite artist: {e}");
+    }
+}
+
 pub fn on_download_requested(track: bridge::Track) {
     log::info!("Download requested: {} — {}", track.title, track.artist);
     if !track.id.is_empty() {
@@ -727,6 +842,129 @@ pub fn on_download_requested(track: bridge::Track) {
     }
 }
 
+pub fn on_add_to_playlist(track: bridge::Track, playlist_id: &str) {
+    log::info!("Adding track {} to playlist {}", track.title, playlist_id);
+    let tracks = crate::db::repo::PlaylistRepo::tracks(playlist_id).unwrap_or_default();
+    let next_pos = tracks.len() as i32;
+    let pt = crate::db::repo::PlaylistTrack {
+        playlist_id: playlist_id.to_string(),
+        track_id: track.id.clone(),
+        position: next_pos,
+        title: track.title,
+        artist: track.artist,
+        album: track.album,
+        duration_ms: track.duration_ms,
+        thumbnail: track.thumbnail,
+        added_at: String::new(),
+    };
+    if let Err(e) = crate::db::repo::PlaylistRepo::add_track(playlist_id, &pt) {
+        log::error!("Failed to add track to playlist: {e}");
+    }
+}
+
+pub fn on_create_playlist(name: &str, description: &str, privacy: &str) {
+    let name = name.to_string();
+    let description = description.to_string();
+    let privacy = privacy.to_string();
+    log::info!("Creating playlist: {name}");
+    tokio::spawn(async move {
+        // Create locally in blocking task
+        let created_id = tokio::task::spawn_blocking({
+            let name = name.clone();
+            let description = description.clone();
+            move || crate::db::repo::PlaylistRepo::create(&name, &description)
+        }).await.ok().and_then(|r| r.ok());
+
+        if created_id.is_some() && crate::api::auth::is_authenticated() {
+            let _ = crate::api::endpoints::create_playlist(&name, &description, &privacy).await;
+        }
+
+        push_context_and_library_playlists();
+    });
+}
+
+pub fn on_rename_playlist(playlist_id: &str, name: &str) {
+    let playlist_id = playlist_id.to_string();
+    let name = name.to_string();
+    log::info!("Renaming playlist {playlist_id} to {name}");
+    let _ = crate::db::repo::PlaylistRepo::rename(&playlist_id, &name);
+    push_context_and_library_playlists();
+}
+
+pub fn on_delete_playlist(playlist_id: &str) {
+    let playlist_id = playlist_id.to_string();
+    log::info!("Deleting playlist {playlist_id}");
+    let _ = crate::db::repo::PlaylistRepo::delete(&playlist_id);
+    push_context_and_library_playlists();
+}
+
+pub fn on_remove_playlist_track(playlist_id: &str, track_id: &str) {
+    let playlist_id = playlist_id.to_string();
+    let track_id = track_id.to_string();
+    log::info!("Removing track {track_id} from playlist {playlist_id}");
+    let _ = crate::db::repo::PlaylistRepo::remove_track(&playlist_id, &track_id);
+    // Refresh detail view from local DB
+    if let Some(detail) = load_local_playlist_detail(&playlist_id) {
+        crate::bridge::bridge::set_playlist_detail(detail.0, detail.1);
+    }
+}
+
+fn load_local_playlist_detail(playlist_id: &str) -> Option<(crate::bridge::bridge::Playlist, Vec<crate::bridge::bridge::Track>)> {
+    let all = crate::db::repo::PlaylistRepo::all().ok()?;
+    let p = all.into_iter().find(|pl| pl.id == playlist_id)?;
+    let tracks = crate::db::repo::PlaylistRepo::tracks(playlist_id).ok()?;
+    let count = tracks.len() as i32;
+    let bp = crate::bridge::bridge::Playlist {
+        id: p.id.clone(),
+        name: p.name.clone(),
+        description: p.description.clone(),
+        thumbnail: p.artwork.clone(),
+        track_count: count,
+    };
+    let btracks: Vec<crate::bridge::bridge::Track> = tracks.into_iter().map(|t| {
+        crate::bridge::bridge::Track {
+            id: t.track_id,
+            title: t.title,
+            artist: t.artist,
+            album: t.album,
+            duration_ms: t.duration_ms,
+            thumbnail: t.thumbnail,
+        }
+    }).collect();
+    Some((bp, btracks))
+}
+
+fn push_context_and_library_playlists() {
+    if let Ok(playlists) = crate::db::repo::PlaylistRepo::all() {
+        let p_list: Vec<crate::bridge::bridge::Playlist> = playlists
+            .iter()
+            .map(|p| {
+                let count = crate::db::repo::PlaylistRepo::tracks(&p.id)
+                    .ok()
+                    .map(|t| t.len() as i32)
+                    .unwrap_or(0);
+                crate::bridge::bridge::Playlist {
+                    id: p.id.clone(),
+                    name: p.name.clone(),
+                    description: p.description.clone(),
+                    thumbnail: p.artwork.clone(),
+                    track_count: count,
+                }
+            })
+            .collect();
+        crate::bridge::bridge::set_context_playlists(
+            p_list.iter().map(|p| crate::bridge::bridge::Playlist {
+                id: p.id.clone(),
+                name: p.name.clone(),
+                description: p.description.clone(),
+                thumbnail: p.thumbnail.clone(),
+                track_count: p.track_count,
+            }).collect()
+        );
+        crate::bridge::bridge::set_library_playlists(p_list);
+    }
+}
+
 pub fn on_search_item_clicked(track: bridge::Track) {
     log::info!(
         "Search item clicked: {} — {} (id: {})",
@@ -735,6 +973,16 @@ pub fn on_search_item_clicked(track: bridge::Track) {
         track.id
     );
     with_player(|p| p.play_track_dto(track));
+}
+
+pub fn on_play_all(tracks: Vec<bridge::Track>, shuffle: bool) {
+    let count = tracks.len();
+    log::info!("Playing all {count} tracks (shuffle={shuffle})");
+    let track_infos: Vec<crate::player::queue::TrackInfo> = tracks
+        .into_iter()
+        .map(queue_track_from_dto)
+        .collect();
+    with_player(|p| p.play_all_tracks(track_infos, shuffle));
 }
 
 fn queue_track_from_dto(track: bridge::Track) -> crate::player::queue::TrackInfo {
@@ -792,6 +1040,7 @@ pub fn apply_settings_impl() {
     bridge::set_settings_accent(&settings.appearance.accent_color);
     bridge::set_settings_font_size(settings.appearance.font_size);
     bridge::set_settings_language(&settings.language);
+    bridge::set_settings_region(&settings.network.region);
     bridge::set_settings_normalize(settings.player.normalize_audio);
     bridge::set_settings_crossfade(settings.player.crossfade_enabled);
     bridge::set_settings_equalizer_enabled(settings.equalizer.enabled);
@@ -871,6 +1120,12 @@ pub fn on_setting_changed(key: &str, value: &str) {
             settings.language = value.to_string();
             crate::utils::i18n::set_language(value);
             crate::api::endpoints::configure(value, &settings.network.region);
+            reload_discovery_feeds();
+        }
+        "region" => {
+            settings.network.region = value.trim().to_uppercase();
+            crate::api::endpoints::configure(&settings.language, &settings.network.region);
+            reload_discovery_feeds();
         }
         "normalize_audio" => settings.player.normalize_audio = value == "true",
         "crossfade_enabled" => settings.player.crossfade_enabled = value == "true",
@@ -992,6 +1247,14 @@ pub fn on_setting_changed(key: &str, value: &str) {
     if let Err(e) = settings.save(&dirs.settings_path()) {
         log::error!("Failed to save setting '{key}': {e}");
     }
+}
+
+fn reload_discovery_feeds() {
+    tokio::spawn(async {
+        let home = crate::services::home::HomeService::new();
+        let trending = crate::services::trending::TrendingService::new();
+        tokio::join!(home.load_home(), trending.load());
+    });
 }
 
 pub fn on_lastfm_auth_requested(api_key: &str, api_secret: &str, username: &str, password: &str) {
@@ -1343,8 +1606,7 @@ pub fn on_youtube_login_success(headers_json: &str, name: &str, avatar_url: &str
         return;
     }
     crate::api::endpoints::invalidate_cache();
-
-    // Save profile
+    crate::api::auth::reset_session_revoked();
     let profile_path = config_dir.join("user_profile.json");
     let profile_data = serde_json::json!({
         "name": name,
@@ -1360,10 +1622,29 @@ pub fn on_youtube_login_success(headers_json: &str, name: &str, avatar_url: &str
     // Notify UI
     crate::bridge::bridge::update_youtube_auth_state(true, name, avatar_url);
 
-    // Reload home data
-    let home = crate::services::home::HomeService::new();
+    reload_discovery_feeds();
+}
+
+pub fn on_youtube_session_refresh(headers_json: &str) {
+    let headers_json = headers_json.to_string();
     tokio::spawn(async move {
-        home.load_home().await;
+        let saved = tokio::task::spawn_blocking(move || {
+            if !crate::api::auth::is_authenticated() {
+                return Ok(false);
+            }
+            crate::utils::secure_storage::save_youtube_headers(&headers_json).map(|_| true)
+        })
+        .await;
+        match saved {
+            Ok(Ok(true)) => {
+                crate::api::auth::reset_session_revoked();
+                crate::api::endpoints::invalidate_cache();
+                log::debug!("Refreshed YouTube Music session from WebEngine cookies");
+            }
+            Ok(Ok(false)) => {}
+            Ok(Err(error)) => log::warn!("Could not refresh YouTube Music session: {error}"),
+            Err(error) => log::warn!("YouTube Music session refresh task failed: {error}"),
+        }
     });
 }
 
@@ -1377,15 +1658,29 @@ pub fn on_youtube_logout() {
         log::warn!("Failed to delete YouTube credentials: {e}");
     }
     crate::api::endpoints::invalidate_cache();
+    crate::api::auth::reset_session_revoked();
     let _ = std::fs::remove_file(profile_path);
 
     crate::bridge::bridge::update_youtube_auth_state(false, "", "");
 
-    // Reload home data
-    let home = crate::services::home::HomeService::new();
-    tokio::spawn(async move {
-        home.load_home().await;
-    });
+    reload_discovery_feeds();
+}
+
+/// Invoked from the API transport layer when an authenticated request is
+/// rejected with 401/403. Credentials have already been cleared by
+/// `auth::handle_session_revoked`; here we tear down the rest of the session
+/// state, inform the user and reload the now-anonymous home feed.
+pub fn on_session_revoked() {
+    let config_dir = crate::config::paths::AppDirs::global().config_dir();
+    let _ = std::fs::remove_file(config_dir.join("user_profile.json"));
+
+    crate::bridge::bridge::update_youtube_auth_state(false, "", "");
+    crate::bridge::bridge::show_notification(
+        "Tu sesión de YouTube Music expiró. Continuando en modo anónimo.",
+        "warning",
+    );
+
+    reload_discovery_feeds();
 }
 
 pub fn is_youtube_authenticated() -> bool {
@@ -1395,10 +1690,7 @@ pub fn is_youtube_authenticated() -> bool {
         Ok(false) => {}
         Err(e) => log::warn!("Could not migrate YouTube credentials: {e}"),
     }
-    crate::utils::secure_storage::load_youtube_headers()
-        .ok()
-        .flatten()
-        .is_some()
+    crate::api::auth::is_authenticated()
 }
 
 pub fn on_check_for_updates_requested() {

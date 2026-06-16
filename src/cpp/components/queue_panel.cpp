@@ -8,6 +8,8 @@
 #include <QDropEvent>
 #include <QMimeData>
 #include <QMouseEvent>
+#include <QMenu>
+#include <QContextMenuEvent>
 #include <QPainter>
 #include <QPainterPath>
 #include <QScrollBar>
@@ -181,6 +183,23 @@ void QueueRow::leaveEvent(QEvent *event) {
         "transparent";
 
     setStyleSheet(QString("QWidget#QueueRow { background-color: %1; border-radius: 6px; }").arg(bg_color));
+}
+
+void QueueRow::contextMenuEvent(QContextMenuEvent *event) {
+    QMenu menu;
+    QAction *play_now = menu.addAction("Reproducir ahora");
+    menu.addSeparator();
+    QAction *move_top = menu.addAction("Mover al inicio");
+    QAction *remove = menu.addAction("Quitar de la cola");
+
+    QAction *chosen = menu.exec(event->globalPos());
+    if (chosen == play_now) {
+        emit clicked(index_);
+    } else if (chosen == move_top) {
+        emit move_requested(index_, 0);
+    } else if (chosen == remove) {
+        emit remove_requested(index_);
+    }
 }
 
 QueuePanel::QueuePanel(QWidget *parent)

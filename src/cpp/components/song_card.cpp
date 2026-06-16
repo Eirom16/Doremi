@@ -1,10 +1,12 @@
 #include "song_card.h"
 #include "design_tokens.h"
 #include "icon_provider.h"
+#include "artwork_loader.h"
 #include <QPainter>
 #include <QPainterPath>
 #include <QMouseEvent>
 #include <QFile>
+#include <QPointer>
 
 static QPixmap getRoundedPixmap(const QPixmap &src, int radius) {
     if (src.isNull()) return src;
@@ -30,6 +32,13 @@ SongCard::SongCard(const QString &title, const QString &artist, const QString &t
     m_hoverAnim->setEasingCurve(QEasingCurve::OutCubic);
     connect(m_hoverAnim, &QVariantAnimation::valueChanged, this, [this](const QVariant &val) {
         setHoverProgress(val.toReal());
+    });
+    QPointer<SongCard> self(this);
+    ArtworkLoader::load(m_thumbnail, QSize(136, 136), [self](const QPixmap &pixmap) {
+        if (!self) return;
+        self->m_artPixmap = getRoundedPixmap(pixmap, 6);
+        self->m_artLoaded = true;
+        self->update();
     });
 }
 

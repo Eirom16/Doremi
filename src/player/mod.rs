@@ -174,6 +174,22 @@ impl PlayerService {
         self.play_index(0);
     }
 
+    pub fn play_all_tracks(&self, tracks: Vec<TrackInfo>, shuffle: bool) {
+        log::info!("Play all {} tracks (shuffle={shuffle})", tracks.len());
+        {
+            let mut queue = self.queue.lock().unwrap();
+            queue.clear();
+            for t in tracks {
+                queue.enqueue(t);
+            }
+            if shuffle {
+                queue.toggle_shuffle();
+            }
+        }
+        self.sync_queue_ui();
+        self.play_index(0);
+    }
+
     pub fn stop(&self) {
         if self.crossfade_active.swap(false, std::sync::atomic::Ordering::Relaxed) {
             *self.crossfade_start_time.lock().unwrap() = None;
@@ -646,6 +662,16 @@ impl PlayerService {
             crate::bridge::bridge::set_mini_player(
                 &track.title, &track.artist, &thumb,
             );
+            crate::bridge::bridge::set_current_track(
+                crate::bridge::bridge::Track {
+                    id: track.id.clone(),
+                    title: track.title.clone(),
+                    artist: track.artist.clone(),
+                    album: track.album.clone(),
+                    duration_ms: track.duration_ms,
+                    thumbnail: thumb.clone(),
+                }
+            );
             // Record in recently played (only when playing new track)
             if is_playing && pos < 500 {
                 let _ = crate::db::repo::RecentlyPlayedRepo::record(
@@ -774,15 +800,35 @@ impl PlayerService {
                 }
             };
 
-            let candidates = related.into_iter().map(|track| TrackInfo {
-                id: track.id,
-                title: track.title,
-                artist: track.artists.into_iter().next().unwrap_or_default(),
-                album: track.album.unwrap_or_default(),
-                duration_ms: track.duration_ms,
-                thumbnail: track.thumbnail,
-                stream_url: track.stream_url.unwrap_or_default(),
-            }).collect();
+            let mut related_bridge = Vec::new();
+            let mut candidates = Vec::new();
+            for track in related {
+                let artist = track.artists.into_iter().next().unwrap_or_default();
+                let album = track.album.unwrap_or_default();
+                let thumbnail = if track.thumbnail.is_empty() {
+                    crate::bridge::bridge::get_or_create_thumbnail(&track.title, 0)
+                } else {
+                    track.thumbnail.clone()
+                };
+                related_bridge.push(crate::bridge::bridge::Track {
+                    id: track.id.clone(),
+                    title: track.title.clone(),
+                    artist: artist.clone(),
+                    album: album.clone(),
+                    duration_ms: track.duration_ms,
+                    thumbnail,
+                });
+                candidates.push(TrackInfo {
+                    id: track.id,
+                    title: track.title,
+                    artist,
+                    album,
+                    duration_ms: track.duration_ms,
+                    thumbnail: track.thumbnail,
+                    stream_url: track.stream_url.unwrap_or_default(),
+                });
+            }
+            crate::bridge::bridge::set_related_tracks(related_bridge);
 
             let next_track = {
                 let mut queue_guard = queue.lock().unwrap();

@@ -8,6 +8,7 @@
 #include <QPoint>
 #include <QPushButton>
 #include <QFrame>
+#include <QContextMenuEvent>
 #include "doremi/src/bridge.rs.h"
 
 // Interactive queue row widget
@@ -27,6 +28,7 @@ protected:
     void mousePressEvent(QMouseEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;
+    void contextMenuEvent(QContextMenuEvent *event) override;
     void enterEvent(QEnterEvent *event) override;
     void leaveEvent(QEvent *event) override;
 

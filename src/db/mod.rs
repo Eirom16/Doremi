@@ -1,5 +1,6 @@
 pub mod repo;
 pub mod cache;
+pub mod lyrics_cache;
 
 use std::sync::Mutex;
 use rusqlite::{Connection, Result as SqlResult};
@@ -163,6 +164,23 @@ impl Database {
                     parent_playlist_thumbnail_url TEXT
                 );
                 INSERT INTO schema_version (version) VALUES (3);"
+            )?;
+        }
+
+        if version < 4 {
+            conn.execute_batch(
+                "CREATE TABLE IF NOT EXISTS lyrics_cache (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    track_artist TEXT NOT NULL,
+                    track_title TEXT NOT NULL,
+                    plain_lyrics TEXT NOT NULL DEFAULT '',
+                    synced_lyrics TEXT NOT NULL DEFAULT '',
+                    source_version TEXT NOT NULL DEFAULT '1',
+                    cached_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    expires_at TEXT,
+                    UNIQUE(track_artist, track_title)
+                );
+                INSERT INTO schema_version (version) VALUES (4);"
             )?;
         }
 

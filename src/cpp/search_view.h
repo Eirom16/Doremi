@@ -19,6 +19,7 @@ public:
     explicit SearchView(QWidget *parent = nullptr);
     void set_query(const std::string &query);
     void set_results(const std::vector<Track> &songs,
+                     const std::vector<Track> &videos,
                      const std::vector<Artist> &artists,
                      const std::vector<Album> &albums,
                      const std::vector<Playlist> &playlists);
@@ -34,6 +35,8 @@ signals:
     void download_requested(Track track);
     void add_to_queue_next_requested(Track track);
     void add_to_queue_end_requested(Track track);
+    void search_history_delete_requested(const std::string &query);
+    void search_history_clear_requested();
 private:
     QLabel *header_;
     QVBoxLayout *results_;
@@ -43,6 +46,7 @@ private:
     void set_active_filter(const std::string &filter);
     void show_recent_searches(const std::vector<std::string> &queries);
     void show_results(const std::vector<Track> &songs,
+                      const std::vector<Track> &videos,
                       const std::vector<Artist> &artists,
                       const std::vector<Album> &albums,
                       const std::vector<Playlist> &playlists);

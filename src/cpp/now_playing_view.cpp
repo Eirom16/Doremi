@@ -79,6 +79,37 @@ void NowPlayingView::setupLayout() {
     meta_layout->addWidget(artist_label_);
     left_column->addLayout(meta_layout);
 
+    // Action buttons: like + download
+    auto *actions_layout = new QHBoxLayout();
+    actions_layout->setSpacing(8);
+    actions_layout->setAlignment(Qt::AlignCenter);
+
+    like_btn_ = new QPushButton(this);
+    like_btn_->setFixedSize(32, 32);
+    like_btn_->setCursor(Qt::PointingHandCursor);
+    like_btn_->setIcon(IconProvider::getIcon("favorite_border", c.text_secondary, 18));
+    like_btn_->setToolTip("Agregar a favoritos");
+    like_btn_->setStyleSheet("QPushButton { background: transparent; border: none; border-radius: 16px; }"
+                             "QPushButton:hover { background: rgba(255,255,255,0.08); }");
+    connect(like_btn_, &QPushButton::clicked, this, [this]() {
+        emit like_clicked(current_track_);
+    });
+    actions_layout->addWidget(like_btn_);
+
+    download_btn_ = new QPushButton(this);
+    download_btn_->setFixedSize(32, 32);
+    download_btn_->setCursor(Qt::PointingHandCursor);
+    download_btn_->setIcon(IconProvider::getIcon("download", c.text_secondary, 18));
+    download_btn_->setToolTip("Descargar");
+    download_btn_->setStyleSheet("QPushButton { background: transparent; border: none; border-radius: 16px; }"
+                                 "QPushButton:hover { background: rgba(255,255,255,0.08); }");
+    connect(download_btn_, &QPushButton::clicked, this, [this]() {
+        emit download_clicked(current_track_);
+    });
+    actions_layout->addWidget(download_btn_);
+
+    left_column->addLayout(actions_layout);
+
     // Waveform bars visualizer
     waveform_bars_ = new WaveformBars(this);
     left_column->addWidget(waveform_bars_, 0, Qt::AlignCenter);
@@ -180,8 +211,14 @@ void NowPlayingView::setupLayout() {
     queue_tab_btn_->setCursor(Qt::PointingHandCursor);
     queue_tab_btn_->setCheckable(true);
 
+    related_tab_btn_ = new QPushButton("Relacionados", this);
+    related_tab_btn_->setFont(DesignTokens::getFont("heading_sm", 13));
+    related_tab_btn_->setCursor(Qt::PointingHandCursor);
+    related_tab_btn_->setCheckable(true);
+
     tabs_bar->addWidget(lyrics_tab_btn_);
     tabs_bar->addWidget(queue_tab_btn_);
+    tabs_bar->addWidget(related_tab_btn_);
     right_column->addLayout(tabs_bar);
 
     // Stacked widget containing lyrics and queue
@@ -190,9 +227,11 @@ void NowPlayingView::setupLayout() {
 
     lyrics_widget_ = new LyricsWidget(this);
     queue_panel_ = new QueuePanel(this);
+    related_widget_ = new RelatedTracksWidget(this);
 
     tabs_stack_->addWidget(lyrics_widget_);
     tabs_stack_->addWidget(queue_panel_);
+    tabs_stack_->addWidget(related_widget_);
 
     right_column->addWidget(tabs_stack_, 1);
 
@@ -237,19 +276,29 @@ void NowPlayingView::setupLayout() {
     });
 
     // Tab buttons functionality
-    connect(lyrics_tab_btn_, &QPushButton::clicked, this, [this]() {
-        lyrics_tab_btn_->setChecked(true);
-        queue_tab_btn_->setChecked(false);
-        tabs_stack_->setCurrentIndex(0);
+    auto activate_tab = [this](int index, QPushButton *active) {
+        lyrics_tab_btn_->setChecked(active == lyrics_tab_btn_);
+        queue_tab_btn_->setChecked(active == queue_tab_btn_);
+        related_tab_btn_->setChecked(active == related_tab_btn_);
+        tabs_stack_->setCurrentIndex(index);
         updateButtonsStyle();
+    };
+
+    connect(lyrics_tab_btn_, &QPushButton::clicked, this, [this, activate_tab]() {
+        activate_tab(0, lyrics_tab_btn_);
     });
 
-    connect(queue_tab_btn_, &QPushButton::clicked, this, [this]() {
-        lyrics_tab_btn_->setChecked(false);
-        queue_tab_btn_->setChecked(true);
-        tabs_stack_->setCurrentIndex(1);
-        updateButtonsStyle();
+    connect(queue_tab_btn_, &QPushButton::clicked, this, [this, activate_tab]() {
+        activate_tab(1, queue_tab_btn_);
     });
+
+    connect(related_tab_btn_, &QPushButton::clicked, this, [this, activate_tab]() {
+        activate_tab(2, related_tab_btn_);
+    });
+
+    // Related tracks widget connections
+    connect(related_widget_, &RelatedTracksWidget::play_requested, this, &NowPlayingView::related_play_requested);
+    connect(related_widget_, &RelatedTracksWidget::add_to_queue_requested, this, &NowPlayingView::related_add_to_queue_requested);
 }
 
 void NowPlayingView::updateButtonsStyle() {
@@ -281,6 +330,7 @@ void NowPlayingView::updateButtonsStyle() {
 
     lyrics_tab_btn_->setStyleSheet(lyrics_tab_btn_->isChecked() ? active_tab_style : inactive_tab_style);
     queue_tab_btn_->setStyleSheet(queue_tab_btn_->isChecked() ? active_tab_style : inactive_tab_style);
+    related_tab_btn_->setStyleSheet(related_tab_btn_->isChecked() ? active_tab_style : inactive_tab_style);
 
     // Setup Shuffle style
     shuffle_btn_->setIcon(IconProvider::getIcon("shuffle", shuffle_on_ ? c.accent : c.text_secondary, 20));
@@ -348,6 +398,10 @@ void NowPlayingView::setTrackInfo(const std::string &title, const std::string &a
     vinyl_disc_->setArtwork(QString::fromStdString(thumbnail));
 }
 
+void NowPlayingView::setCurrentTrack(const Track &track) {
+    current_track_ = track;
+}
+
 void NowPlayingView::setPlaybackState(int32_t, int32_t position_ms, int32_t duration_ms) {
     if (duration_ms > 0) {
         progress_bar_->blockSignals(true);
@@ -396,6 +450,11 @@ void NowPlayingView::setLyrics(const QString &plain, const QString &synced) {
 void NowPlayingView::setQueue(const std::vector<Track> &tracks, int current_index)
 {
     queue_panel_->setQueue(tracks, current_index);
+}
+
+void NowPlayingView::setRelatedTracks(const std::vector<Track> &tracks)
+{
+    related_widget_->setTracks(tracks);
 }
 
 void NowPlayingView::resizeEvent(QResizeEvent *event) {

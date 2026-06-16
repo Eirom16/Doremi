@@ -23,6 +23,7 @@ public:
     void set_accent(const std::string &color);
     void set_font_size(int32_t size);
     void set_language(const std::string &lang);
+    void set_region(const std::string &region);
     void set_normalize(bool on);
     void set_crossfade(bool on);
     void set_equalizer_enabled(bool on);
@@ -64,6 +65,7 @@ private:
     QComboBox *accent_cmb_;
     QComboBox *font_cmb_;
     QComboBox *lang_cmb_;
+    QComboBox *region_cmb_;
     AnimatedToggle *normalize_cb_;
     AnimatedToggle *crossfade_cb_;
     AnimatedToggle *equalizer_cb_;

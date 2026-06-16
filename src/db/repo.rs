@@ -417,6 +417,16 @@ impl SearchHistoryRepo {
         })
     }
 
+    pub fn delete_entry(query: &str) -> SqlResult<()> {
+        with_db(|conn| {
+            conn.execute(
+                "DELETE FROM search_history WHERE lower(query) = lower(?1)",
+                params![query],
+            )
+            .map(|_| ())
+        })
+    }
+
     pub fn clear() -> SqlResult<()> {
         with_db(|conn| conn.execute("DELETE FROM search_history", []).map(|_| ()))
     }
@@ -554,9 +564,13 @@ mod tests {
     where
         F: FnOnce(&rusqlite::Connection) -> R,
     {
+        use crate::db::{init_connection, take_connection};
         let conn = rusqlite::Connection::open_in_memory().unwrap();
         Database::run_migrations(&conn).unwrap();
-        f(&conn)
+        init_connection(conn);
+        let res = crate::db::with_db(|c| Ok(f(c))).unwrap();
+        let _ = take_connection();
+        res
     }
 
     #[test]
@@ -645,6 +659,20 @@ mod tests {
                 .query_row("SELECT COUNT(*) FROM search_history", [], |r| r.get(0))
                 .unwrap();
             assert_eq!(count, 2);
+
+            // Test delete_entry (case-insensitive)
+            SearchHistoryRepo::delete_entry("HELLO").unwrap();
+            let count2: i64 = conn
+                .query_row("SELECT COUNT(*) FROM search_history", [], |r| r.get(0))
+                .unwrap();
+            assert_eq!(count2, 1);
+
+            // Test clear
+            SearchHistoryRepo::clear().unwrap();
+            let count3: i64 = conn
+                .query_row("SELECT COUNT(*) FROM search_history", [], |r| r.get(0))
+                .unwrap();
+            assert_eq!(count3, 0);
         });
     }
 

@@ -176,6 +176,8 @@ El port se considera terminado cuando Doremi cubra los flujos reales de Pyrolist
 - [x] Precargar metadata, artwork, letras y stream de la siguiente pista.
 - [x] Cancelar precarga cuando cambia la cola.
 - [x] Persistir y restaurar la cola.
+- [x] Actualizar PlayerBar al cambiar la cola.
+- [x] Menu contextual en filas de cola (reproducir ahora, mover al inicio, quitar).
 
 ### P1.4 Audio avanzado
 
@@ -229,80 +231,82 @@ El port se considera terminado cuando Doremi cubra los flujos reales de Pyrolist
 - [x] Like/unlike y estado de like.
 - [x] Crear, editar, borrar playlists.
 - [x] Añadir y eliminar canciones de playlists.
-- [ ] Historial remoto cuando la cuenta lo permita.
-- [ ] Perfil y estado de autenticacion.
+- [x] Hecho - Historial remoto cuando la cuenta lo permita.
+- [x] Hecho - Perfil y estado de autenticacion.
 
 ### P2.3 Login y sesion
 
-- [ ] Endurecer captura de cookies en WebEngine.
-- [ ] Limitar navegacion a dominios esperados durante login.
-- [ ] Detectar exito, cancelacion, expiracion y challenge.
+- [x] Hecho - Endurecer captura de cookies en WebEngine.
+- [x] Hecho - Limitar navegacion a dominios esperados durante login.
+- [x] Hecho - Detectar exito, cancelacion, expiracion y challenge.
 - [x] Hecho - Construir headers SAPISIDHASH correctamente cuando aplique.
-- [ ] Renovar sesion sin pedir login mientras sea posible.
-- [ ] Detectar sesion revocada y degradar limpiamente a modo anonimo.
+- [x] Hecho - Renovar sesion sin pedir login mientras sea posible.
+- [x] Hecho - Detectar sesion revocada y degradar limpiamente a modo anonimo.
 - [x] Hecho - Limpiar perfil/cookies WebEngine al cerrar sesion.
-- [ ] Añadir tests de serializacion segura de sesion.
+- [x] Hecho - Añadir tests de serializacion segura de sesion.
 
 ## P3 - Paridad de pantallas y flujos
 
 ### P3.1 Inicio y tendencias
 
-- [ ] Renderizar cards por tipo real, no labels planos.
-- [ ] Cargar thumbnails asincronamente con cache y placeholders.
-- [ ] Abrir song, album, artist y playlist segun su tipo.
-- [ ] Implementar skeleton, error, retry y empty state.
-- [ ] Añadir continuations o carga incremental.
-- [ ] Conservar scroll y contenido al navegar atras.
-- [ ] Actualizar contenido por sesion, locale y region.
+- [x] Renderizar cards por tipo real, no labels planos.
+- [x] Cargar thumbnails asincronamente con cache y placeholders.
+- [x] Abrir song, album, artist y playlist segun su tipo.
+- [x] Implementar skeleton, error, retry y empty state.
+- [x] Añadir continuations o carga incremental.
+- [x] Conservar scroll y contenido al navegar atras.
+- [x] Actualizar contenido por sesion, locale y region.
 
 ### P3.2 Busqueda
 
-- [ ] Portar chips de filtros y categorias completas.
-- [ ] Añadir debounce y cancelacion de consultas anteriores.
+- [x] Portar chips de filtros y categorias completas.
+- [x] Hecho - Añadir debounce y cancelacion de consultas anteriores.
 - [ ] Mostrar top result y secciones diferenciadas.
-- [ ] Portar sugerencias y busqueda global.
+- [x] Portar sugerencias y busqueda global.
 - [ ] Integrar historial: abrir, eliminar una entrada y limpiar todo.
-- [ ] Navegacion completa desde cada resultado.
+- [x] Navegacion completa desde cada resultado.
 - [ ] Menus contextuales por tipo.
 - [ ] Accesibilidad y navegacion total con teclado.
 
 ### P3.3 Biblioteca
 
+- [x] Portar tabs de canciones, albums, artistas y playlists.
+- [x] Sincronizar favoritos locales y likes remotos.
+- [x] Crear playlist con titulo, descripcion y privacidad.
+- [x] Editar metadata y borrar playlists con confirmacion.
+- [x] Añadir/eliminar tracks en playlist (falta reordenar).
+- [x] Menú contextual "Añadir a playlist" funcional.
+- [x] Favoritos álbumes y artistas.
 - [ ] Separar biblioteca local, remota y descargas.
-- [ ] Portar tabs de canciones, albums, artistas y playlists.
-- [ ] Sincronizar favoritos locales y likes remotos.
-- [ ] Crear playlist con titulo, descripcion y privacidad.
-- [ ] Editar metadata y borrar playlists con confirmacion.
-- [ ] Añadir/eliminar/reordenar tracks en playlist.
 - [ ] Implementar cache por tab e invalidacion despues de mutaciones.
 - [ ] Añadir sort, filter y busqueda dentro de biblioteca.
 - [ ] Estados de no autenticado y vacio con acciones claras.
 
 ### P3.4 Album, artista y playlist
 
-- [ ] Mostrar metadata completa, artwork, duracion y disponibilidad.
-- [ ] Play all y shuffle all construyendo una cola tipada.
-- [ ] Like/favorite y estado persistente.
-- [ ] Descargar track, album o playlist con progreso agregado.
-- [ ] Menus contextuales por track.
-- [ ] Navegar entre artista, album y playlist.
-- [ ] Artist: top tracks, albums, singles y related.
+- [x] Hecho - Mostrar metadata completa, artwork, duracion y disponibilidad.
+- [x] Hecho - Play all y shuffle all construyendo una cola tipada.
+- [~] Like/favorite via context menu (falta estado persistente).
+- [~] Descargar track via context menu (falta progreso agregado).
+- [x] Hecho - Menus contextuales por track (play, fav, dl, queue).
+- [~] Navegar entre artista, album y playlist (album desde artista funciona).
+- [x] Hecho - Artist: top tracks y seccion de albumes.
 - [ ] Playlist: owner, descripcion, privacy y continuations.
 - [ ] Manejar tracks eliminados, privados o no disponibles.
 
 ### P3.5 Now playing, letras y relacionados
 
 - [ ] Mantener player bar y full player perfectamente sincronizados.
-- [ ] Portar tabs de lyrics, queue y related.
+- [x] Portar tabs de lyrics, queue y related.
 - [ ] Parsear LRC con timestamps mejorados y metadatos.
 - [ ] Aplicar delay manual, alineacion, spacing, colores y animacion elegida.
 - [ ] Auto scroll configurable y click para seek a una linea.
 - [ ] Fallback entre letra sincronizada, plana y no encontrada.
-- [ ] Cache persistente de letras con TTL/version.
+- [x] Cache persistente de letras con TTL/version.
 - [ ] Prefetch de la siguiente pista y cancelacion.
-- [ ] Mostrar related real y permitir agregar/reproducir.
+- [x] Mostrar related real y permitir agregar/reproducir.
 - [ ] Mejorar fondo dinamico desde artwork sin bloquear UI.
-- [ ] Exponer like, download, repeat, shuffle y queue actions.
+- [x] Exponer like, download, repeat, shuffle y queue actions.
 
 ### P3.6 Historial y estadisticas
 

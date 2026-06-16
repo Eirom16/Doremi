@@ -4,8 +4,8 @@
 
 pub use super::endpoints::{
     add_playlist_items, album_detail, artist_detail, charts, create_playlist, delete_playlist,
-    edit_playlist, home_sections, library_albums, library_artists, library_playlists,
-    library_songs, playlist_detail, rate_song, related_tracks, remote_history,
+    edit_playlist, home_sections, home_sections_page, library_albums, library_artists,
+    library_playlists, library_songs, playlist_detail, rate_song, related_tracks, remote_history,
     remove_playlist_items, remove_remote_history_items, search, search_suggestions,
     song_like_status,
 };

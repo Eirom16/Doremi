@@ -35,19 +35,24 @@ impl LyricsService {
         title: &str,
         artist: &str,
     ) -> Result<Option<LyricsResponse>, String> {
-        // Clean metadata like Pyrolist did
-        let clean_title = Self::clean_title(title);
-        let clean_artist = Self::clean_artist(artist);
-        let cache_key = format!(
-            "lyrics:{}:{}",
-            clean_artist.to_lowercase(),
-            clean_title.to_lowercase()
-        );
+        let clean_title = Self::clean_title(title).to_lowercase();
+        let clean_artist = Self::clean_artist(artist).to_lowercase();
 
         if let Some(entry) =
-            crate::db::cache::ResponseCache::get::<Option<LyricsResponse>>(&cache_key)
+            crate::db::lyrics_cache::LyricsCache::get(&clean_artist, &clean_title)
         {
-            return Ok(entry.data);
+            if entry.plain_lyrics.is_empty() && entry.synced_lyrics.is_empty() {
+                return Ok(None);
+            }
+            return Ok(Some(LyricsResponse {
+                id: None,
+                name: clean_title.clone(),
+                artist_name: clean_artist.clone(),
+                album_name: None,
+                duration: None,
+                plain_lyrics: Some(entry.plain_lyrics),
+                synced_lyrics: Some(entry.synced_lyrics),
+            }));
         }
 
         log::info!(
@@ -77,9 +82,9 @@ impl LyricsService {
                 clean_title,
                 clean_artist
             );
-            let _ = crate::db::cache::ResponseCache::set::<Option<LyricsResponse>>(
-                &cache_key,
-                &None,
+            let _ = crate::db::lyrics_cache::LyricsCache::set_none(
+                &clean_artist,
+                &clean_title,
                 Some(30 * 24 * 60 * 60),
             );
             return Ok(None);
@@ -94,9 +99,11 @@ impl LyricsService {
             .await
             .map_err(|e| format!("JSON parse error: {e}"))?;
 
-        let _ = crate::db::cache::ResponseCache::set(
-            &cache_key,
-            &Some(lyrics.clone()),
+        let _ = crate::db::lyrics_cache::LyricsCache::set(
+            &clean_artist,
+            &clean_title,
+            lyrics.plain_lyrics.as_deref().unwrap_or(""),
+            lyrics.synced_lyrics.as_deref().unwrap_or(""),
             Some(30 * 24 * 60 * 60),
         );
 

@@ -5,6 +5,7 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <QPushButton>
+#include <QMenu>
 #include "doremi/src/bridge.rs.h"
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -67,6 +68,29 @@ void AlbumTrackRow::mousePressEvent(QMouseEvent *event) {
     QWidget::mousePressEvent(event);
     if (event->button() == Qt::LeftButton)
         emit play_requested(track_);
+}
+
+void AlbumTrackRow::contextMenuEvent(QContextMenuEvent *event) {
+    QMenu menu;
+    QAction *play = menu.addAction("Reproducir");
+    QAction *fav = menu.addAction("Agregar a favoritos");
+    QAction *dl = menu.addAction("Descargar");
+    menu.addSeparator();
+    QAction *next = menu.addAction("Reproducir siguiente");
+    QAction *end = menu.addAction("Agregar a la cola");
+
+    QAction *chosen = menu.exec(event->globalPos());
+    if (chosen == play) {
+        emit play_requested(track_);
+    } else if (chosen == fav) {
+        on_add_favorite(track_);
+    } else if (chosen == dl) {
+        on_download_requested(track_);
+    } else if (chosen == next) {
+        on_add_to_queue_next(track_);
+    } else if (chosen == end) {
+        on_add_to_queue_end(track_);
+    }
 }
 
 void AlbumTrackRow::enterEvent(QEnterEvent *event) {
@@ -181,7 +205,9 @@ void AlbumDetailView::setupLayout() {
         "QPushButton:hover { background: %2; }")
         .arg(c.accent.name())
         .arg(c.accent.lighter(115).name()));
-    connect(play_all_btn, &QPushButton::clicked, this, &AlbumDetailView::play_all_requested);
+    connect(play_all_btn, &QPushButton::clicked, this, [this]() {
+        emit play_all_requested(tracks_);
+    });
 
     info->addSpacing(8);
     info->addWidget(play_all_btn, 0, Qt::AlignLeft);
@@ -243,6 +269,7 @@ void AlbumDetailView::set_album_info(const Album &album) {
 }
 
 void AlbumDetailView::set_album_tracks(const std::vector<Track> &tracks) {
+    tracks_ = tracks;
     QLayoutItem *item;
     while ((item = tracks_layout_->takeAt(0)) != nullptr) {
         if (item->widget()) item->widget()->deleteLater();

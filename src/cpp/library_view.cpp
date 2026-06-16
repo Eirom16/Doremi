@@ -4,6 +4,7 @@
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QVariant>
+#include <QPushButton>
 
 namespace {
 struct LibraryTabSpec {
@@ -106,6 +107,9 @@ LibraryView::LibraryView(QWidget *parent)
 QWidget *LibraryView::make_list_item(const std::string &text, const std::string &sub, const std::string &id) {
     auto *ci = new ClickableItem(text, sub, this);
     ci->set_item_id(id);
+    ci->set_item_type(active_tab_ == "albums" ? "album" :
+                      active_tab_ == "artists" ? "artist" :
+                      active_tab_ == "playlists" ? "playlist" : "song");
     
     // Find icon label and set special icon based on active tab
     auto labels = ci->findChildren<QLabel*>();
@@ -130,7 +134,14 @@ QWidget *LibraryView::make_list_item(const std::string &text, const std::string 
     });
     connect(ci, &ClickableItem::context_action, this, [this, id](const std::string &action, const std::string &) {
         if (action == "add_favorite") {
-            emit remove_favorite_requested(id);
+            if (active_tab_ == "songs") {
+                emit remove_favorite_requested(id);
+            } else if (active_tab_ == "albums") {
+                // Add -> Remove (toggle)
+                emit remove_favorite_album_requested(id);
+            } else if (active_tab_ == "artists") {
+                emit remove_favorite_artist_requested(id);
+            }
         }
     });
     return ci;
@@ -178,6 +189,25 @@ void LibraryView::clear_list() {
 void LibraryView::set_playlists(const std::vector<Playlist> &playlists) {
     active_tab_ = "playlists";
     clear_list();
+    const auto &c = DesignTokens::current();
+    auto *create_btn = new QPushButton("+ Nueva playlist", this);
+    create_btn->setCursor(Qt::PointingHandCursor);
+    create_btn->setStyleSheet(QString(
+        "QPushButton { background: %1; color: white; border: none; border-radius: 8px; padding: 10px 20px; font-size: 14px; font-weight: 600; }"
+        "QPushButton:hover { background: %2; }"
+    ).arg(c.accent.name()).arg(c.accent_bright.name()));
+    connect(create_btn, &QPushButton::clicked, this, [this]() {
+        CreatePlaylistDialog dlg(this);
+        if (dlg.exec() == QDialog::Accepted) {
+            emit create_playlist_requested(
+                dlg.playlistName().toStdString(),
+                dlg.description().toStdString(),
+                dlg.privacy().toStdString()
+            );
+        }
+    });
+    list_->addWidget(create_btn);
+    list_->addSpacing(8);
     for (const auto &p : playlists) {
         list_->addWidget(make_list_item(static_cast<std::string>(p.name), std::to_string(p.track_count) + " canciones", static_cast<std::string>(p.id)));
     }

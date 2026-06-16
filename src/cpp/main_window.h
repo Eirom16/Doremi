@@ -11,6 +11,7 @@
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <cstdint>
+#include <map>
 #include "rust/cxx.h"
 
 struct Track;
@@ -18,6 +19,7 @@ struct Album;
 struct Artist;
 struct Playlist;
 struct StatsData;
+struct HomeCard;
 
 class TitleBar;
 class NavSidebar;
@@ -36,6 +38,7 @@ class ArtistDetailView;
 class PlaylistDetailView;
 class WelcomeView;
 class ThemeTransitionOverlay;
+class QNetworkCookie;
 
 
 
@@ -54,6 +57,9 @@ public:
     void set_dominant_colors(const std::vector<std::string> &colors);
     void set_track_lyrics(const std::string &plain, const std::string &synced);
     void set_playback_queue(const rust::Vec<Track> &queue, int32_t current_index);
+    void set_related_tracks(const rust::Vec<Track> &tracks);
+    void set_current_track(const Track &track);
+    void set_context_playlists(const rust::Vec<Playlist> &playlists);
     void set_history_data(const rust::Vec<Track> &history, const rust::Vec<rust::String> &played_at);
     void set_stats_data(const StatsData &stats);
 
@@ -95,6 +101,10 @@ protected:
 private:
     void setup_shortcuts();
     void connect_signals();
+    void setup_session_cookie_refresh();
+    void update_session_cookie(const QNetworkCookie &cookie, bool removed);
+    void persist_session_cookies();
+    void navigate_back_from_detail();
     TitleBar *title_bar_;
     NavSidebar *nav_sidebar_;
     FadeStack *stack_;
@@ -116,8 +126,12 @@ private:
     QSystemTrayIcon *tray_icon_;
     QAction *play_action_ = nullptr;
     bool stop_on_close_ = false;
+    std::string current_route_ = "home";
+    std::string detail_return_route_ = "home";
 
     QTimer *player_timer_;
+    QTimer *session_cookie_timer_ = nullptr;
+    std::map<std::string, std::string> session_cookies_;
     ThemeTransitionOverlay *theme_transition_;
 };
 
@@ -139,21 +153,23 @@ void set_window_title(rust::Str title);
 void set_playing(bool playing);
 void set_player_volume(int32_t volume);
 void run_event_loop();
-void set_search_results(rust::Vec<Track> songs, rust::Vec<Artist> artists,
+void set_search_results(rust::Vec<Track> songs, rust::Vec<Track> videos, rust::Vec<Artist> artists,
                         rust::Vec<Album> albums, rust::Vec<Playlist> playlists);
-void add_home_section(rust::Str title, rust::Vec<rust::String> items);
+void add_home_section(rust::Str title, rust::Vec<HomeCard> items);
 void clear_home_sections();
+void set_home_state(rust::Str state, rust::Str message);
 void set_library_songs(rust::Vec<Track> songs);
 void set_library_playlists(rust::Vec<Playlist> playlists);
 void set_library_albums(rust::Vec<Album> albums);
 void set_library_artists(rust::Vec<Artist> artists);
 void set_search_history(rust::Vec<rust::String> queries);
-void set_search_suggestions(rust::Vec<rust::String> suggestions);
+void set_search_suggestions(rust::Str query, rust::Vec<rust::String> suggestions);
 void apply_settings_to_ui();
 void set_settings_theme(rust::Str mode);
 void set_settings_accent(rust::Str color);
 void set_settings_font_size(int32_t size);
 void set_settings_language(rust::Str lang);
+void set_settings_region(rust::Str region);
 void set_settings_normalize(bool on);
 void set_settings_crossfade(bool on);
 void set_settings_equalizer_enabled(bool on);
@@ -178,15 +194,17 @@ rust::String get_or_create_thumbnail(rust::Str title, int32_t variant);
 void set_player_shuffle(bool on);
 void set_player_repeat(int32_t mode);
 
-void set_trending_items(rust::Vec<rust::String> titles,
-                        rust::Vec<rust::String> subtitles,
-                        rust::Vec<rust::String> thumbnails);
+void set_trending_items(rust::Vec<HomeCard> items);
+void set_trending_state(rust::Str state, rust::Str message);
 void set_downloads_list(rust::Vec<rust::String> titles,
                         rust::Vec<rust::String> artists,
                         rust::Vec<rust::String> thumbnails);
 
 void set_dominant_colors(rust::Vec<rust::String> colors);
 void set_playback_queue(rust::Vec<Track> queue, int32_t current_index);
+void set_context_playlists(rust::Vec<Playlist> playlists);
+void set_related_tracks(rust::Vec<Track> tracks);
+void set_current_track(Track track);
 void set_stats_data(StatsData stats);
 
 void set_history_data(rust::Vec<Track> history, rust::Vec<rust::String> played_at);

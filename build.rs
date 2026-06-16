@@ -77,6 +77,7 @@ fn main() {
         .file("src/cpp/components/icon_button.cpp")
         .file("src/cpp/components/fade_stack.cpp")
         .file("src/cpp/components/song_card.cpp")
+        .file("src/cpp/components/artwork_loader.cpp")
         .file("src/cpp/components/album_card.cpp")
         .file("src/cpp/components/artist_card.cpp")
         .file("src/cpp/components/horizontal_carousel.cpp")
@@ -86,6 +87,8 @@ fn main() {
         .file("src/cpp/components/lyrics_widget.cpp")
         .file("src/cpp/components/vinyl_disc.cpp")
         .file("src/cpp/components/queue_panel.cpp")
+        .file("src/cpp/components/related_tracks_widget.cpp")
+        .file("src/cpp/components/create_playlist_dialog.cpp")
         .file("src/cpp/stats_view.cpp")
         .file("src/cpp/components/stat_card.cpp")
         .file("src/cpp/components/bar_chart.cpp")
@@ -138,6 +141,8 @@ fn main() {
         "components/lyrics_widget.h",
         "components/vinyl_disc.h",
         "components/queue_panel.h",
+        "components/related_tracks_widget.h",
+        "components/create_playlist_dialog.h",
         "stats_view.h",
         "components/stat_card.h",
         "components/bar_chart.h",
@@ -207,6 +212,8 @@ fn main() {
     println!("cargo:rerun-if-changed=src/cpp/components/fade_stack.h");
     println!("cargo:rerun-if-changed=src/cpp/components/song_card.cpp");
     println!("cargo:rerun-if-changed=src/cpp/components/song_card.h");
+    println!("cargo:rerun-if-changed=src/cpp/components/artwork_loader.cpp");
+    println!("cargo:rerun-if-changed=src/cpp/components/artwork_loader.h");
     println!("cargo:rerun-if-changed=src/cpp/components/album_card.cpp");
     println!("cargo:rerun-if-changed=src/cpp/components/album_card.h");
     println!("cargo:rerun-if-changed=src/cpp/components/artist_card.cpp");
@@ -225,6 +232,10 @@ fn main() {
     println!("cargo:rerun-if-changed=src/cpp/components/vinyl_disc.h");
     println!("cargo:rerun-if-changed=src/cpp/components/queue_panel.cpp");
     println!("cargo:rerun-if-changed=src/cpp/components/queue_panel.h");
+    println!("cargo:rerun-if-changed=src/cpp/components/related_tracks_widget.cpp");
+    println!("cargo:rerun-if-changed=src/cpp/components/related_tracks_widget.h");
+    println!("cargo:rerun-if-changed=src/cpp/components/create_playlist_dialog.cpp");
+    println!("cargo:rerun-if-changed=src/cpp/components/create_playlist_dialog.h");
     println!("cargo:rerun-if-changed=src/cpp/stats_view.cpp");
     println!("cargo:rerun-if-changed=src/cpp/stats_view.h");
     println!("cargo:rerun-if-changed=src/cpp/components/stat_card.cpp");

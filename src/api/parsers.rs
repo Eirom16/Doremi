@@ -1071,7 +1071,12 @@ pub(crate) fn parse_home_page(json: &Value) -> Result<ParsedPage<Vec<HomeSection
                 .pointer("/navigationEndpoint/watchPlaylistEndpoint/playlistId")
                 .and_then(Value::as_str)
                 .map(str::to_string);
-            let item_type = if renderer.get("playlistItemData").is_some() {
+            let item_video_id = renderer
+                .pointer("/playlistItemData/videoId")
+                .or_else(|| renderer.pointer("/navigationEndpoint/watchEndpoint/videoId"))
+                .and_then(Value::as_str)
+                .map(str::to_string);
+            let item_type = if item_video_id.is_some() {
                 "song"
             } else if browse_id
                 .as_deref()
@@ -1079,6 +1084,12 @@ pub(crate) fn parse_home_page(json: &Value) -> Result<ParsedPage<Vec<HomeSection
                 .unwrap_or(false)
             {
                 "album"
+            } else if browse_id
+                .as_deref()
+                .map(|id| id.starts_with("UC"))
+                .unwrap_or(false)
+            {
+                "artist"
             } else {
                 "playlist"
             };
@@ -1089,6 +1100,7 @@ pub(crate) fn parse_home_page(json: &Value) -> Result<ParsedPage<Vec<HomeSection
                 item_type: item_type.to_string(),
                 browse_id,
                 playlist_id,
+                video_id: item_video_id,
             });
         }
         if !title.is_empty() || !items.is_empty() {
@@ -1240,6 +1252,37 @@ mod tests {
         let fixture = fixture(include_str!("fixtures/home_continuation.json"));
         let page = parse_home_page(&fixture).unwrap();
         assert_eq!(page.items[0].title, "Anonymous recommendations");
+    }
+
+    #[test]
+    fn home_items_keep_typed_navigation_ids() {
+        let json = serde_json::json!({
+            "contents": {"singleColumnBrowseResultsRenderer": {"tabs": [{"tabRenderer": {
+                "content": {"sectionListRenderer": {"contents": [{"musicCarouselShelfRenderer": {
+                    "header": {"musicCarouselShelfBasicHeaderRenderer": {"title": {"runs": [{"text": "Typed"}]}}},
+                    "contents": [
+                        {"musicResponsiveListItemRenderer": {
+                            "playlistItemData": {"videoId": "video-1"},
+                            "flexColumns": [{"musicResponsiveListItemFlexColumnRenderer": {"text": {"runs": [{"text": "Song"}]}}}]
+                        }},
+                        {"musicTwoRowItemRenderer": {
+                            "title": {"runs": [{"text": "Album"}]},
+                            "navigationEndpoint": {"browseEndpoint": {"browseId": "MPREalbum"}}
+                        }},
+                        {"musicTwoRowItemRenderer": {
+                            "title": {"runs": [{"text": "Artist"}]},
+                            "navigationEndpoint": {"browseEndpoint": {"browseId": "UCartist"}}
+                        }}
+                    ]
+                }}]}}
+            }}]}}
+        });
+        let sections = parse_home(&json).unwrap();
+        assert_eq!(sections[0].items[0].item_type, "song");
+        assert_eq!(sections[0].items[0].video_id.as_deref(), Some("video-1"));
+        assert_eq!(sections[0].items[1].item_type, "album");
+        assert_eq!(sections[0].items[2].item_type, "artist");
+        assert_eq!(sections[0].items[2].browse_id.as_deref(), Some("UCartist"));
     }
 
     #[test]

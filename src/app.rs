@@ -148,10 +148,16 @@ impl DoremiApp {
                 // Load recently played from DB → add "Seguir escuchando" section
                 if let Ok(recent) = crate::db::repo::RecentlyPlayedRepo::recent(12) {
                     if !recent.is_empty() {
-                        let items: Vec<String> = recent
+                        let items = recent
                             .iter()
-                            .map(|r| format!("{} — {}", r.title, r.artist))
-                            .collect();
+                            .map(|track| crate::bridge::bridge::HomeCard {
+                                id: track.track_id.clone(),
+                                title: track.title.clone(),
+                                subtitle: track.artist.clone(),
+                                thumbnail: track.thumbnail.clone(),
+                                item_type: "song".to_string(),
+                            })
+                            .collect::<Vec<_>>();
                         add_home_section("Seguir escuchando", items);
                     }
                 }
@@ -190,6 +196,15 @@ impl DoremiApp {
                             }
                         })
                         .collect();
+                    crate::bridge::bridge::set_context_playlists(
+                        p_list.iter().map(|p| crate::bridge::bridge::Playlist {
+                            id: p.id.clone(),
+                            name: p.name.clone(),
+                            description: p.description.clone(),
+                            thumbnail: p.thumbnail.clone(),
+                            track_count: p.track_count,
+                        }).collect()
+                    );
                     set_library_playlists(p_list);
                 }
                 // Albums

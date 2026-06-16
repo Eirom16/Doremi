@@ -7,6 +7,7 @@
 #include <QLabel>
 #include <QHBoxLayout>
 #include <QMouseEvent>
+#include <QContextMenuEvent>
 #include <vector>
 #include <string>
 #include "doremi/src/bridge.rs.h"
@@ -24,6 +25,7 @@ signals:
 
 protected:
     void mousePressEvent(QMouseEvent *event) override;
+    void contextMenuEvent(QContextMenuEvent *event) override;
     void enterEvent(QEnterEvent *event) override;
     void leaveEvent(QEvent *event) override;
 
@@ -42,7 +44,7 @@ public:
 
 signals:
     void play_requested(Track track);
-    void play_all_requested();
+    void play_all_requested(std::vector<Track> tracks);
     void back_requested();
 
 private:
@@ -61,6 +63,7 @@ private:
     // Tracks container
     QWidget *tracks_widget_;
     QVBoxLayout *tracks_layout_;
+    std::vector<Track> tracks_;
 };
 
 #endif

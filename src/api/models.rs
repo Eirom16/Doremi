@@ -186,4 +186,5 @@ pub struct HomeItem {
     pub item_type: String,
     pub browse_id: Option<String>,
     pub playlist_id: Option<String>,
+    pub video_id: Option<String>,
 }

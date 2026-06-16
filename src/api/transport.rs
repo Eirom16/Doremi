@@ -35,6 +35,12 @@ fn retryable(status: StatusCode) -> bool {
     status == StatusCode::TOO_MANY_REQUESTS || status.is_server_error()
 }
 
+/// A 401/403 on an authenticated request means the session was revoked or
+/// expired server-side; retrying with the same credentials cannot succeed.
+fn revokes_session(status: StatusCode) -> bool {
+    status == StatusCode::UNAUTHORIZED || status == StatusCode::FORBIDDEN
+}
+
 fn retry_delay(attempt: usize, retry_after: Option<&str>) -> Duration {
     retry_after
         .and_then(|value| value.trim().parse::<u64>().ok())
@@ -49,6 +55,7 @@ pub async fn post(endpoint: &str, body: Value) -> Result<Value, String> {
         .await
         .map_err(|_| "Innertube request limiter is unavailable".to_string())?;
     let url = format!("{BASE_URL}/{endpoint}?key={API_KEY}");
+    let was_authenticated = super::auth::is_authenticated();
     let mut last_error = None;
 
     for attempt in 0..MAX_ATTEMPTS {
@@ -88,6 +95,10 @@ pub async fn post(endpoint: &str, body: Value) -> Result<Value, String> {
         }
 
         last_error = Some(format!("Innertube endpoint {endpoint} returned {status}"));
+        if revokes_session(status) && was_authenticated {
+            super::auth::handle_session_revoked();
+            break;
+        }
         if retryable(status) && attempt + 1 < MAX_ATTEMPTS {
             tokio::time::sleep(retry_delay(attempt, retry_after.as_deref())).await;
             continue;

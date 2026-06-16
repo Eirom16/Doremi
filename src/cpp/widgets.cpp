@@ -6,6 +6,11 @@
 #include <QApplication>
 #include <QMenu>
 #include <QAction>
+#include <QKeyEvent>
+#include <QFocusEvent>
+#include "doremi/src/bridge.rs.h"
+
+extern const std::vector<Playlist> &get_context_playlists();
 
 QWidget* create_container_widget(QWidget *parent, const char *object_name) {
     auto *w = new QWidget(parent);
@@ -83,6 +88,12 @@ ClickableItem::ClickableItem(const std::string &title, const std::string &subtit
     setFixedHeight(52); // Slightly taller for premium look
     setCursor(Qt::PointingHandCursor);
     setContextMenuPolicy(Qt::CustomContextMenu);
+    // Keyboard accessibility: reachable via Tab and operable with Enter/Space.
+    setFocusPolicy(Qt::StrongFocus);
+    setAccessibleName(QString::fromStdString(title));
+    if (!subtitle.empty()) {
+        setAccessibleDescription(QString::fromStdString(subtitle));
+    }
 
     auto *lay = new QHBoxLayout(this);
     lay->setContentsMargins(12, 6, 12, 6);
@@ -135,6 +146,36 @@ void ClickableItem::enterEvent(QEnterEvent *) {
 }
 
 void ClickableItem::leaveEvent(QEvent *) {
+    if (!hasFocus()) {
+        setStyleSheet("ClickableItem { background: transparent; border-radius: 6px; }");
+    }
+}
+
+void ClickableItem::keyPressEvent(QKeyEvent *event) {
+    switch (event->key()) {
+    case Qt::Key_Return:
+    case Qt::Key_Enter:
+    case Qt::Key_Space:
+        emit clicked();
+        event->accept();
+        return;
+    case Qt::Key_Menu:
+        show_context_menu(mapToGlobal(rect().center()));
+        event->accept();
+        return;
+    default:
+        QWidget::keyPressEvent(event);
+    }
+}
+
+void ClickableItem::focusInEvent(QFocusEvent *) {
+    const auto &c = DesignTokens::current();
+    setStyleSheet(QString(
+        "ClickableItem { background: transparent; border-radius: 6px; border: 1px solid %1; }"
+    ).arg(c.accent.name()));
+}
+
+void ClickableItem::focusOutEvent(QFocusEvent *) {
     setStyleSheet("ClickableItem { background: transparent; border-radius: 6px; }");
 }
 
@@ -142,11 +183,33 @@ void ClickableItem::show_context_menu(const QPoint &global_pos) {
     const auto &c = DesignTokens::current();
     QMenu menu(this);
 
+    // Collection types (artist/album/playlist) get a navigation-oriented menu
+    if (item_type_ == "artist" || item_type_ == "album" || item_type_ == "playlist") {
+        QString open_label = item_type_ == "artist" ? "Ir al artista"
+                           : item_type_ == "album"  ? "Ir al álbum"
+                                                    : "Ir a la playlist";
+        QAction *open = new QAction(IconProvider::getIcon("open_in_new", c.text_primary, 16), open_label, &menu);
+        menu.addAction(open);
+        menu.addSeparator();
+        QAction *fav = new QAction(IconProvider::getIcon("favorite", c.accent, 16), "Añadir a favoritos", &menu);
+        menu.addAction(fav);
+        QAction *chosen = menu.exec(global_pos);
+        if (chosen == open) {
+            emit context_action("open", item_id_);
+            emit clicked();
+        } else if (chosen == fav) {
+            emit context_action("add_favorite", item_id_);
+        }
+        return;
+    }
+
+    bool is_video = item_type_ == "video";
     QAction *play = new QAction(IconProvider::getIcon("play_arrow", c.text_primary, 16), "Reproducir", &menu);
     QAction *play_next = new QAction(IconProvider::getIcon("playlist_play", c.text_primary, 16), "Reproducir después", &menu);
     QAction *add_to_queue = new QAction(IconProvider::getIcon("queue_music", c.text_primary, 16), "Añadir al final de la cola", &menu);
     QAction *fav = new QAction(IconProvider::getIcon("favorite", c.accent, 16), "Añadir a favoritos", &menu);
-    QAction *download = new QAction(IconProvider::getIcon("download", c.text_primary, 16), "Descargar canción", &menu);
+    QAction *download = new QAction(IconProvider::getIcon("download", c.text_primary, 16),
+                                    is_video ? "Descargar video" : "Descargar canción", &menu);
 
     menu.addAction(play);
     menu.addAction(play_next);
@@ -157,8 +220,15 @@ void ClickableItem::show_context_menu(const QPoint &global_pos) {
     menu.addSeparator();
 
     QMenu *playlist_menu = menu.addMenu(IconProvider::getIcon("playlist_add", c.text_secondary, 16), "Añadir a playlist");
-    QAction *no_playlists = playlist_menu->addAction("(Sin playlists)");
-    no_playlists->setEnabled(false);
+    const auto &playlists = get_context_playlists();
+    if (playlists.empty()) {
+        QAction *no_playlists = playlist_menu->addAction("(Sin playlists)");
+        no_playlists->setEnabled(false);
+    } else {
+        for (const auto &p : playlists) {
+            playlist_menu->addAction(QString::fromStdString(static_cast<std::string>(p.name)));
+        }
+    }
 
     QAction *chosen = menu.exec(global_pos);
     if (chosen == play) {
@@ -172,5 +242,21 @@ void ClickableItem::show_context_menu(const QPoint &global_pos) {
         emit context_action("add_favorite", item_id_);
     } else if (chosen == download) {
         emit context_action("download", item_id_);
+    } else if (chosen && qobject_cast<QWidget*>(chosen->parent()) == playlist_menu) {
+        int idx = -1;
+        for (const auto &action : playlist_menu->actions()) {
+            ++idx;
+            if (action == chosen) break;
+        }
+        if (idx >= 0 && idx < (int)playlists.size()) {
+            Track t;
+            t.id = item_id_;
+            t.title = title_;
+            t.artist = subtitle_;
+            t.album = "";
+            t.duration_ms = 0;
+            t.thumbnail = "";
+            on_add_to_playlist(t, static_cast<std::string>(playlists[idx].id));
+        }
     }
 }

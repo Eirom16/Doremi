@@ -5,6 +5,8 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <QPushButton>
+#include <QMenu>
+#include "components/album_card.h"
 #include "doremi/src/bridge.rs.h"
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -59,6 +61,29 @@ ArtistTrackRow::ArtistTrackRow(const QString &title, const QString &album,
 void ArtistTrackRow::mousePressEvent(QMouseEvent *event) {
     QWidget::mousePressEvent(event);
     if (event->button() == Qt::LeftButton) emit play_requested(track_);
+}
+
+void ArtistTrackRow::contextMenuEvent(QContextMenuEvent *event) {
+    QMenu menu;
+    QAction *play = menu.addAction("Reproducir");
+    QAction *fav = menu.addAction("Agregar a favoritos");
+    QAction *dl = menu.addAction("Descargar");
+    menu.addSeparator();
+    QAction *next = menu.addAction("Reproducir siguiente");
+    QAction *end = menu.addAction("Agregar a la cola");
+
+    QAction *chosen = menu.exec(event->globalPos());
+    if (chosen == play) {
+        emit play_requested(track_);
+    } else if (chosen == fav) {
+        on_add_favorite(track_);
+    } else if (chosen == dl) {
+        on_download_requested(track_);
+    } else if (chosen == next) {
+        on_add_to_queue_next(track_);
+    } else if (chosen == end) {
+        on_add_to_queue_end(track_);
+    }
 }
 
 void ArtistTrackRow::enterEvent(QEnterEvent *event) {
@@ -188,6 +213,20 @@ void ArtistDetailView::setupLayout() {
     tracks_layout_->setSpacing(2);
     content_layout_->addWidget(tracks_widget_);
 
+    // Albums section
+    content_layout_->addSpacing(16);
+    auto *albums_header = new QLabel("Álbumes", scroll_content_);
+    albums_header->setFont(DesignTokens::getFont("heading_sm", 14));
+    albums_header->setStyleSheet(QString("color: %1; font-weight: bold;").arg(c.text_primary.name()));
+    content_layout_->addWidget(albums_header);
+
+    albums_widget_ = new QWidget(scroll_content_);
+    albums_widget_->setStyleSheet("background: transparent;");
+    albums_layout_ = new QVBoxLayout(albums_widget_);
+    albums_layout_->setContentsMargins(0, 0, 0, 0);
+    albums_layout_->setSpacing(2);
+    content_layout_->addWidget(albums_widget_);
+
     scroll_area_->setWidget(scroll_content_);
     main_vbox->addWidget(scroll_area_);
     setLayout(main_vbox);
@@ -261,6 +300,40 @@ void ArtistDetailView::set_artist_tracks(const std::vector<Track> &tracks,
         empty->setStyleSheet(QString("color: %1; padding: 30px;").arg(c.text_muted.name()));
         tracks_layout_->addWidget(empty);
     }
+
+    // Albums section
+    albums_ = albums;
+    while ((item = albums_layout_->takeAt(0)) != nullptr) {
+        if (item->widget()) item->widget()->deleteLater();
+        delete item;
+    }
+
+    if (albums.empty()) {
+        albums_widget_->hide();
+        return;
+    }
+    albums_widget_->show();
+
+    auto *cards_layout = new QHBoxLayout();
+    cards_layout->setSpacing(12);
+    cards_layout->setAlignment(Qt::AlignLeft);
+
+    for (const auto &album : albums) {
+        auto *card = new AlbumCard(
+            QString::fromStdString(static_cast<std::string>(album.title)),
+            QString::fromStdString(static_cast<std::string>(album.artist)),
+            QString::fromStdString(static_cast<std::string>(album.thumbnail)),
+            albums_widget_
+        );
+        card->setItemId(static_cast<std::string>(album.id));
+        card->setFixedWidth(160);
+        connect(card, &AlbumCard::clicked, this, [this, card]() {
+            emit album_requested(card->itemId());
+        });
+        cards_layout->addWidget(card);
+    }
+    albums_layout_->addLayout(cards_layout);
+    albums_layout_->addStretch();
 }
 
 void ArtistDetailView::clear() {
@@ -273,4 +346,9 @@ void ArtistDetailView::clear() {
         if (item->widget()) item->widget()->deleteLater();
         delete item;
     }
+    while ((item = albums_layout_->takeAt(0)) != nullptr) {
+        if (item->widget()) item->widget()->deleteLater();
+        delete item;
+    }
+    albums_.clear();
 }

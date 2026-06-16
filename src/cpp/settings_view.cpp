@@ -371,6 +371,11 @@ SettingsView::SettingsView(QWidget *parent)
     lang_cmb_->setStyleSheet(comboStyle);
     content->addWidget(combo_row(std::string(doremi_tr("language")), lang_cmb_));
 
+    region_cmb_ = new QComboBox(inner);
+    region_cmb_->addItems({"US", "DO", "MX", "ES", "AR", "CO", "CL", "PE", "BR", "CA"});
+    region_cmb_->setStyleSheet(comboStyle);
+    content->addWidget(combo_row(std::string(doremi_tr("region")), region_cmb_));
+
     content->addSpacing(12);
     auto *sep_about = new QFrame(inner);
     sep_about->setFrameShape(QFrame::HLine);
@@ -510,6 +515,9 @@ SettingsView::SettingsView(QWidget *parent)
     });
     QObject::connect(lang_cmb_, &QComboBox::currentTextChanged, this, [this](const QString &v) {
         emit setting_changed("language", Ffi::to_std_string(v));
+    });
+    QObject::connect(region_cmb_, &QComboBox::currentTextChanged, this, [this](const QString &v) {
+        emit setting_changed("region", Ffi::to_std_string(v));
     });
     QObject::connect(normalize_cb_, &AnimatedToggle::toggled, this, [this](bool v) {
         emit setting_changed("normalize_audio", v ? "true" : "false");
@@ -769,6 +777,12 @@ void SettingsView::set_language(const std::string &lang) {
     int idx = lang_cmb_->findText(QString::fromStdString(lang));
     if (idx >= 0) lang_cmb_->setCurrentIndex(idx);
     lang_cmb_->blockSignals(false);
+}
+
+void SettingsView::set_region(const std::string &region) {
+    const QSignalBlocker blocker(region_cmb_);
+    const int index = region_cmb_->findText(QString::fromStdString(region).toUpper());
+    if (index >= 0) region_cmb_->setCurrentIndex(index);
 }
 void SettingsView::set_normalize(bool on) {
     normalize_cb_->blockSignals(true);

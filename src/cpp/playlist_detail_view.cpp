@@ -5,6 +5,7 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <QPushButton>
+#include <QMenu>
 #include "doremi/src/bridge.rs.h"
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -66,6 +67,34 @@ PlaylistTrackRow::PlaylistTrackRow(int num, const QString &title, const QString 
 void PlaylistTrackRow::mousePressEvent(QMouseEvent *event) {
     QWidget::mousePressEvent(event);
     if (event->button() == Qt::LeftButton) emit play_requested(track_);
+}
+
+void PlaylistTrackRow::contextMenuEvent(QContextMenuEvent *event) {
+    QMenu menu;
+    QAction *play = menu.addAction("Reproducir");
+    QAction *fav = menu.addAction("Agregar a favoritos");
+    QAction *dl = menu.addAction("Descargar");
+    menu.addSeparator();
+    QAction *next = menu.addAction("Reproducir siguiente");
+    QAction *end = menu.addAction("Agregar a la cola");
+    menu.addSeparator();
+    QAction *remove = menu.addAction("Quitar de la playlist");
+    remove->setIcon(IconProvider::getIcon("remove_circle", DesignTokens::current().error, 16));
+
+    QAction *chosen = menu.exec(event->globalPos());
+    if (chosen == play) {
+        emit play_requested(track_);
+    } else if (chosen == fav) {
+        on_add_favorite(track_);
+    } else if (chosen == dl) {
+        on_download_requested(track_);
+    } else if (chosen == next) {
+        on_add_to_queue_next(track_);
+    } else if (chosen == end) {
+        on_add_to_queue_end(track_);
+    } else if (chosen == remove) {
+        emit remove_requested(playlist_id_, static_cast<std::string>(track_.id));
+    }
 }
 
 void PlaylistTrackRow::enterEvent(QEnterEvent *event) {
@@ -190,7 +219,9 @@ void PlaylistDetailView::setupLayout() {
         "QPushButton { background: %1; border: none; border-radius: 20px; }"
         "QPushButton:hover { background: %2; }")
         .arg(c.accent.name()).arg(c.accent.lighter(115).name()));
-    connect(play_btn, &QPushButton::clicked, this, &PlaylistDetailView::play_all_requested);
+    connect(play_btn, &QPushButton::clicked, this, [this]() {
+        emit play_all_requested(tracks_);
+    });
     actions->addWidget(play_btn);
 
     // Shuffle
@@ -211,8 +242,47 @@ void PlaylistDetailView::setupLayout() {
         "QPushButton:hover { background: rgba(%2, %3, %4, 0.08); }")
         .arg(c.border.name())
         .arg(c.text_primary.red()).arg(c.text_primary.green()).arg(c.text_primary.blue()));
-    connect(shuffle_btn, &QPushButton::clicked, this, &PlaylistDetailView::shuffle_requested);
+    connect(shuffle_btn, &QPushButton::clicked, this, [this]() {
+        emit shuffle_requested(tracks_);
+    });
     actions->addWidget(shuffle_btn);
+
+    // Edit
+    edit_btn_ = new QPushButton(scroll_content_);
+    edit_btn_->setFixedSize(36, 36);
+    edit_btn_->setCursor(Qt::PointingHandCursor);
+    edit_btn_->setToolTip("Editar playlist");
+    edit_btn_->setIcon(IconProvider::getIcon("edit", c.text_secondary, 18));
+    edit_btn_->setStyleSheet("QPushButton { background: transparent; border: none; border-radius: 18px; }"
+                             "QPushButton:hover { background: rgba(255,255,255,0.08); }");
+    connect(edit_btn_, &QPushButton::clicked, this, [this]() {
+        bool ok;
+        QString new_name = QInputDialog::getText(this, "Renombrar playlist",
+            "Nuevo nombre:", QLineEdit::Normal,
+            QString::fromStdString(static_cast<std::string>(title_label_->text().toUtf8())), &ok);
+        if (ok && !new_name.trimmed().isEmpty()) {
+            emit rename_playlist_requested(playlist_id_, new_name.trimmed().toStdString());
+        }
+    });
+    actions->addWidget(edit_btn_);
+
+    // Delete
+    delete_btn_ = new QPushButton(scroll_content_);
+    delete_btn_->setFixedSize(36, 36);
+    delete_btn_->setCursor(Qt::PointingHandCursor);
+    delete_btn_->setToolTip("Eliminar playlist");
+    delete_btn_->setIcon(IconProvider::getIcon("delete", c.error, 18));
+    delete_btn_->setStyleSheet("QPushButton { background: transparent; border: none; border-radius: 18px; }"
+                               "QPushButton:hover { background: rgba(255,255,255,0.08); }");
+    connect(delete_btn_, &QPushButton::clicked, this, [this]() {
+        auto reply = QMessageBox::question(this, "Eliminar playlist",
+            "¿Estás seguro de que deseas eliminar esta playlist?",
+            QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+        if (reply == QMessageBox::Yes) {
+            emit delete_playlist_requested(playlist_id_);
+        }
+    });
+    actions->addWidget(delete_btn_);
 
     actions->addStretch();
 
@@ -246,6 +316,7 @@ void PlaylistDetailView::setupLayout() {
 
 void PlaylistDetailView::set_playlist_info(const Playlist &playlist) {
     const auto &c = DesignTokens::current();
+    playlist_id_ = static_cast<std::string>(playlist.id);
     title_label_->setText(QString::fromStdString(static_cast<std::string>(playlist.name)));
 
     if (!playlist.description.empty()) {
@@ -275,6 +346,7 @@ void PlaylistDetailView::set_playlist_info(const Playlist &playlist) {
 }
 
 void PlaylistDetailView::set_playlist_tracks(const std::vector<Track> &tracks) {
+    tracks_ = tracks;
     QLayoutItem *item;
     while ((item = tracks_layout_->takeAt(0)) != nullptr) {
         if (item->widget()) item->widget()->deleteLater();
@@ -297,7 +369,9 @@ void PlaylistDetailView::set_playlist_tracks(const std::vector<Track> &tracks) {
             t,
             tracks_widget_
         );
+        row->setPlaylistId(playlist_id_);
         connect(row, &PlaylistTrackRow::play_requested, this, &PlaylistDetailView::play_requested);
+        connect(row, &PlaylistTrackRow::remove_requested, this, &PlaylistDetailView::remove_track_from_playlist_requested);
         tracks_layout_->addWidget(row);
     }
 

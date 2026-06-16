@@ -1,12 +1,40 @@
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue, USER_AGENT};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 const ANONYMOUS_USER_AGENT: &str = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Doremi/2";
+
+/// Guards against multiple in-flight requests all degrading the session at once.
+static SESSION_REVOKED: AtomicBool = AtomicBool::new(false);
 
 fn stored_headers() -> Option<String> {
     crate::utils::secure_storage::load_youtube_headers()
         .map_err(|error| log::debug!("Could not load YouTube credentials: {error}"))
         .ok()
         .flatten()
+}
+
+/// Re-arm revocation detection after a fresh, deliberate login.
+pub fn reset_session_revoked() {
+    SESSION_REVOKED.store(false, Ordering::SeqCst);
+}
+
+/// Called by the transport layer when an authenticated Innertube request is
+/// rejected with 401/403. Clears stored credentials exactly once and degrades
+/// cleanly to anonymous mode, notifying the UI.
+pub fn handle_session_revoked() {
+    if !is_authenticated() {
+        return;
+    }
+    // Only the first concurrent request to observe the revocation acts on it.
+    if SESSION_REVOKED.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    log::warn!("YouTube Music session was revoked; degrading to anonymous mode");
+    if let Err(error) = crate::utils::secure_storage::delete_youtube_headers() {
+        log::warn!("Failed to delete revoked YouTube credentials: {error}");
+    }
+    crate::api::endpoints::invalidate_cache();
+    crate::bridge::on_session_revoked();
 }
 
 pub fn cache_scope() -> String {
@@ -16,7 +44,20 @@ pub fn cache_scope() -> String {
 }
 
 pub fn is_authenticated() -> bool {
-    stored_headers().is_some()
+    stored_headers().as_deref().is_some_and(session_has_sapisid)
+}
+
+fn session_has_sapisid(content: &str) -> bool {
+    serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(content)
+        .ok()
+        .and_then(|headers| {
+            headers
+                .iter()
+                .find(|(name, _)| name.eq_ignore_ascii_case("cookie"))
+                .and_then(|(_, value)| value.as_str())
+                .and_then(extract_sapisid_from_cookie)
+        })
+        .is_some()
 }
 
 fn extract_sapisid_from_cookie(cookie_val: &str) -> Option<String> {
@@ -34,24 +75,31 @@ fn extract_sapisid_from_cookie(cookie_val: &str) -> Option<String> {
 }
 
 pub fn request_headers() -> HeaderMap {
-    let mut headers = HeaderMap::new();
-    let stored = stored_headers();
+    match stored_headers() {
+        Some(content) => headers_from_session(&content),
+        None => headers_from_session(""),
+    }
+}
 
-    if let Some(content) = stored {
-        if let Ok(values) =
-            serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(&content)
-        {
-            for (name, value) in values {
-                let (Ok(name), Some(value)) = (
-                    HeaderName::from_bytes(name.as_bytes()),
-                    value
-                        .as_str()
-                        .and_then(|value| HeaderValue::from_str(value).ok()),
-                ) else {
-                    continue;
-                };
-                headers.insert(name, value);
-            }
+/// Build the outgoing Innertube header map from a stored session blob (a JSON
+/// object of header name -> value). Pure and side-effect free so it can be
+/// tested without touching the system keyring. An empty/invalid blob yields a
+/// valid anonymous header set.
+fn headers_from_session(content: &str) -> HeaderMap {
+    let mut headers = HeaderMap::new();
+
+    if let Ok(values) = serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(content)
+    {
+        for (name, value) in values {
+            let (Ok(name), Some(value)) = (
+                HeaderName::from_bytes(name.as_bytes()),
+                value
+                    .as_str()
+                    .and_then(|value| HeaderValue::from_str(value).ok()),
+            ) else {
+                continue;
+            };
+            headers.insert(name, value);
         }
     }
 
@@ -62,16 +110,7 @@ pub fn request_headers() -> HeaderMap {
                 .duration_since(std::time::UNIX_EPOCH)
                 .map(|d| d.as_secs())
                 .unwrap_or(0);
-            let origin = "https://music.youtube.com";
-            let message = format!("{} {} {}", timestamp, sapisid, origin);
-
-            use sha1::{Digest, Sha1};
-            let mut hasher = Sha1::new();
-            hasher.update(message.as_bytes());
-            let result = hasher.finalize();
-            let hash_hex = format!("{:x}", result);
-
-            if let Ok(auth_val) = HeaderValue::from_str(&format!("SAPISIDHASH {}_{}", timestamp, hash_hex)) {
+            if let Ok(auth_val) = HeaderValue::from_str(&sapisidhash(timestamp, &sapisid)) {
                 headers.insert("authorization", auth_val);
             }
         }
@@ -81,6 +120,17 @@ pub fn request_headers() -> HeaderMap {
         headers.insert(USER_AGENT, HeaderValue::from_static(ANONYMOUS_USER_AGENT));
     }
     headers
+}
+
+/// Compute the `SAPISIDHASH <ts>_<sha1>` authorization value for a given
+/// timestamp and SAPISID, against the music.youtube.com origin.
+fn sapisidhash(timestamp: u64, sapisid: &str) -> String {
+    use sha1::{Digest, Sha1};
+    let origin = "https://music.youtube.com";
+    let message = format!("{} {} {}", timestamp, sapisid, origin);
+    let mut hasher = Sha1::new();
+    hasher.update(message.as_bytes());
+    format!("SAPISIDHASH {}_{:x}", timestamp, hasher.finalize())
 }
 
 #[cfg(test)]
@@ -102,9 +152,79 @@ mod tests {
             extract_sapisid_from_cookie("foo=bar; SAPISID=world; baz=qux"),
             Some("world".to_string())
         );
+        assert_eq!(extract_sapisid_from_cookie("foo=bar; baz=qux"), None);
+    }
+
+    #[test]
+    fn empty_session_blob_yields_anonymous_headers() {
+        for blob in ["", "   ", "not json", "[]", "null"] {
+            let headers = headers_from_session(blob);
+            assert!(headers.contains_key(USER_AGENT), "blob: {blob:?}");
+            assert!(!headers.contains_key("authorization"), "blob: {blob:?}");
+            assert!(!headers.contains_key("cookie"), "blob: {blob:?}");
+        }
+    }
+
+    #[test]
+    fn session_blob_round_trips_headers_and_signs_requests() {
+        let blob = serde_json::json!({
+            "cookie": "SAPISID=secret-sapisid; SID=abc",
+            "x-goog-authuser": "0"
+        })
+        .to_string();
+        let headers = headers_from_session(&blob);
         assert_eq!(
-            extract_sapisid_from_cookie("foo=bar; baz=qux"),
-            None
+            headers.get("x-goog-authuser").unwrap().to_str().unwrap(),
+            "0"
         );
+        let auth = headers
+            .get("authorization")
+            .expect("authenticated session must carry an authorization header")
+            .to_str()
+            .unwrap()
+            .to_string();
+        assert!(auth.starts_with("SAPISIDHASH "));
+        // The raw SAPISID must never leak into the signed header.
+        assert!(!auth.contains("secret-sapisid"));
+    }
+
+    #[test]
+    fn sapisidhash_is_deterministic_and_hides_the_secret() {
+        let value = sapisidhash(1_700_000_000, "secret-sapisid");
+        // Format is "SAPISIDHASH <ts>_<40-hex sha1>".
+        assert!(value.starts_with("SAPISIDHASH 1700000000_"));
+        let hash = &value["SAPISIDHASH 1700000000_".len()..];
+        assert_eq!(hash.len(), 40);
+        assert!(hash.chars().all(|c| c.is_ascii_hexdigit()));
+        // The raw secret must never appear in the signed value.
+        assert!(!value.contains("secret-sapisid"));
+        // Same inputs -> same hash; different timestamp -> different hash.
+        assert_eq!(value, sapisidhash(1_700_000_000, "secret-sapisid"));
+        assert_ne!(value, sapisidhash(1_700_000_001, "secret-sapisid"));
+    }
+
+    #[test]
+    fn malformed_header_values_are_skipped_not_panicked() {
+        // Newline in a header value is illegal; it must be dropped silently.
+        let blob = serde_json::json!({
+            "cookie": "SAPISID=ok",
+            "x-bad": "line1\nline2",
+            "x-good": "fine"
+        })
+        .to_string();
+        let headers = headers_from_session(&blob);
+        assert!(!headers.contains_key("x-bad"));
+        assert_eq!(headers.get("x-good").unwrap().to_str().unwrap(), "fine");
+    }
+
+    #[test]
+    fn authentication_requires_a_valid_sapisid_cookie() {
+        assert!(session_has_sapisid(
+            &serde_json::json!({"cookie": "SID=abc; SAPISID=renewable"}).to_string()
+        ));
+        assert!(!session_has_sapisid(
+            &serde_json::json!({"cookie": "SID=abc"}).to_string()
+        ));
+        assert!(!session_has_sapisid("not json"));
     }
 }

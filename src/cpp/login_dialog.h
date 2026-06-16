@@ -34,8 +34,11 @@ private slots:
 
 private:
     void save_cookies_and_close(const QString &avatar_url, const QString &user_name);
+    void set_status(const QString &message);
+    static bool is_trusted_host(const QString &host);
 
     QVBoxLayout *layout_;
+    QLabel *hint_ = nullptr;
     QPushButton *btn_close_;
     QWebEngineView *view_;
     QWebEngineProfile *profile_;
@@ -43,6 +46,8 @@ private:
     QTimer *poll_timer_;
     std::map<std::string, std::string> cookies_;
     bool login_detected_ = false;
+    int elapsed_secs_ = 0;
+    bool challenge_seen_ = false;
 };
 
 #endif // DOREMI_LOGIN_DIALOG_H

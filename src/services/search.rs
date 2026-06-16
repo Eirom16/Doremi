@@ -33,6 +33,18 @@ impl SearchService {
                 thumbnail: t.thumbnail.clone(),
             })
             .collect();
+        let videos = results
+            .videos
+            .iter()
+            .map(|track| crate::bridge::bridge::Track {
+                id: track.id.clone(),
+                title: track.title.clone(),
+                artist: track.artists.join(", "),
+                album: track.album.clone().unwrap_or_default(),
+                duration_ms: track.duration_ms,
+                thumbnail: track.thumbnail.clone(),
+            })
+            .collect();
         let artists: Vec<crate::bridge::bridge::Artist> = results
             .artists
             .iter()
@@ -68,7 +80,7 @@ impl SearchService {
             })
             .collect();
 
-        crate::bridge::bridge::set_search_results(songs, artists, albums, playlists);
+        crate::bridge::bridge::set_search_results(songs, videos, artists, albums, playlists);
     }
 }
 

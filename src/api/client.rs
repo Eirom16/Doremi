@@ -57,35 +57,21 @@ impl ApiClient {
         }
     }
 
-    pub async fn home_sections(&self) -> Vec<HomeSection> {
-        match super::innertube::home_sections().await {
-            Ok(sections) => {
-                log::info!("Home feed (real): {} sections", sections.len());
-                sections
-            }
-            Err(e) => {
-                log::error!("Home feed API failed: {e}");
-                crate::bridge::bridge::show_notification(
-                    &format!("Error al cargar inicio: {e}"),
-                    "error",
-                );
-                vec![]
-            }
-        }
+    pub async fn home_sections(&self) -> Result<Vec<HomeSection>, String> {
+        let sections = super::innertube::home_sections().await?;
+        log::info!("Home feed (real): {} sections", sections.len());
+        Ok(sections)
     }
 
-    pub async fn charts(&self) -> Vec<HomeSection> {
-        match super::innertube::charts().await {
-            Ok(sections) => sections,
-            Err(error) => {
-                log::error!("Charts API failed: {error}");
-                crate::bridge::bridge::show_notification(
-                    &format!("Error al cargar tendencias: {error}"),
-                    "error",
-                );
-                Vec::new()
-            }
-        }
+    pub async fn home_sections_page(
+        &self,
+        continuation: Option<&str>,
+    ) -> Result<(Vec<HomeSection>, Option<String>), String> {
+        super::innertube::home_sections_page(continuation).await
+    }
+
+    pub async fn charts(&self) -> Result<Vec<HomeSection>, String> {
+        super::innertube::charts().await
     }
 
     pub async fn library_playlists(&self) -> Vec<Playlist> {

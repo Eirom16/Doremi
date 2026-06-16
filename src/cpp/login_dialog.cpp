@@ -33,6 +33,7 @@ WebLoginDialog::WebLoginDialog(QWidget *parent)
     auto *hint = new QLabel(QString::fromStdString(std::string(doremi_tr("login_hint"))), header);
     hint->setFont(DesignTokens::getFont("body", 11));
     hint->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_muted.name()));
+    hint_ = hint;
     header_layout->addWidget(hint);
     header_layout->addStretch();
 
@@ -100,11 +101,23 @@ WebLoginDialog::~WebLoginDialog() {
 
 void WebLoginDialog::on_cookie_added(const QNetworkCookie &cookie) {
     QString domain = cookie.domain();
-    if (domain.contains("youtube") || domain.contains("google")) {
-        std::string name = cookie.name().toStdString();
-        std::string value = cookie.value().toStdString();
-        cookies_[name] = value;
+    // Normalise a leading dot ("\.youtube.com" -> "youtube.com") so we can match
+    // the registrable domain exactly instead of an unanchored substring.
+    QString bare = domain.startsWith('.') ? domain.mid(1) : domain;
+    bare = bare.toLower();
+
+    bool trusted = bare == "youtube.com" || bare.endsWith(".youtube.com") ||
+                   bare == "google.com" || bare.endsWith(".google.com");
+    if (!trusted) {
+        return;
     }
+
+    std::string name = cookie.name().toStdString();
+    std::string value = cookie.value().toStdString();
+    if (name.empty() || value.empty()) {
+        return;
+    }
+    cookies_[name] = value;
 }
 
 void WebLoginDialog::on_load_finished(bool ok) {
@@ -115,6 +128,15 @@ void WebLoginDialog::on_load_finished(bool ok) {
 
 void WebLoginDialog::poll_login() {
     if (login_detected_) return;
+
+    // Bound the login session: after 5 minutes without a detected sign-in we
+    // treat it as expired rather than polling forever.
+    elapsed_secs_ += 2;
+    if (elapsed_secs_ >= 300) {
+        poll_timer_->stop();
+        set_status(QString::fromStdString(std::string(doremi_tr("login_status_expired"))));
+        return;
+    }
 
     QString js = R"(
         (() => {
@@ -189,17 +211,33 @@ void WebLoginDialog::on_url_changed(const QUrl &url) {
     QString host = url.host().toLower();
     if (host.isEmpty()) return;
 
-    // Check if the host is allowed (must end with .google.com or .youtube.com, or contains .google. / .youtube.)
-    bool is_allowed = host.endsWith("google.com") || 
-                      host.endsWith("youtube.com") || 
-                      host.contains(".google.") || 
-                      host.contains(".youtube.") ||
-                      host == "accounts.google" ||
-                      host == "music.youtube";
-
-    if (!is_allowed) {
-        // Block navigation by redirecting back to music.youtube.com
+    if (!is_trusted_host(host)) {
+        // Confine the login flow to Google/YouTube; bounce anything else back.
         view_->load(QUrl("https://music.youtube.com"));
+        return;
+    }
+
+    // Surface an account challenge (2FA, captcha, consent, recovery) so the
+    // user understands why sign-in has not completed yet.
+    QString path = url.path().toLower();
+    bool is_challenge = host.startsWith("accounts.google") &&
+                        (path.contains("challenge") || path.contains("signin/v2") ||
+                         path.contains("/challenge/") || path.contains("consent"));
+    if (is_challenge && !challenge_seen_) {
+        challenge_seen_ = true;
+        set_status(QString::fromStdString(std::string(doremi_tr("login_status_challenge"))));
+    }
+}
+
+bool WebLoginDialog::is_trusted_host(const QString &host) {
+    return host == "youtube.com" || host.endsWith(".youtube.com") ||
+           host == "google.com" || host.endsWith(".google.com") ||
+           host == "accounts.google" || host == "music.youtube";
+}
+
+void WebLoginDialog::set_status(const QString &message) {
+    if (hint_) {
+        hint_->setText(message);
     }
 }
 

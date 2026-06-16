@@ -7,6 +7,7 @@
 #include <QLabel>
 #include <QCompleter>
 #include <QStringListModel>
+#include <QTimer>
 #include <vector>
 
 class TitleBar : public QWidget {
@@ -14,7 +15,7 @@ class TitleBar : public QWidget {
 public:
     explicit TitleBar(QWidget *parent = nullptr);
     void set_search_text(const std::string &text);
-    void set_search_suggestions(const std::vector<std::string> &suggestions);
+    void set_search_suggestions(const std::string &query, const std::vector<std::string> &suggestions);
     std::string search_text() const;
     void update_theme();
 signals:
@@ -24,6 +25,7 @@ private:
     QLineEdit *search_input_;
     QCompleter *search_completer_;
     QStringListModel *search_suggestions_model_;
+    QTimer *debounce_timer_;
 };
 
 #endif

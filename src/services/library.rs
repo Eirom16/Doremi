@@ -39,6 +39,15 @@ impl LibraryService {
                 track_count: p.track_count.unwrap_or_default(),
             })
             .collect();
+        crate::bridge::bridge::set_context_playlists(
+            playlists.iter().map(|p| crate::bridge::bridge::Playlist {
+                id: p.id.clone(),
+                name: p.name.clone(),
+                description: p.description.clone(),
+                thumbnail: p.thumbnail.clone(),
+                track_count: p.track_count,
+            }).collect()
+        );
         crate::bridge::bridge::set_library_playlists(playlists);
     }
 

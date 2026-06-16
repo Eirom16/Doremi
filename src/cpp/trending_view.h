@@ -16,14 +16,18 @@ class TrendingView : public QWidget {
 public:
     explicit TrendingView(QWidget *parent = nullptr);
     void clear_items();
-    void add_item(const std::string &title, const std::string &subtitle,
-                  const std::string &thumbnail_path);
+    void add_item(const HomeCard &item);
+    void set_state(const std::string &state, const std::string &message);
 signals:
     void play_requested(Track track);
+    void album_requested(const std::string &browse_id);
+    void artist_requested(const std::string &browse_id);
+    void playlist_requested(const std::string &playlist_id);
+    void retry_requested();
 private:
-    QWidget *make_trending_card(const std::string &title, const std::string &subtitle,
-                                const std::string &thumbnail_path);
+    QWidget *make_trending_card(const HomeCard &item);
     QVBoxLayout *list_;
+    QWidget *state_widget_ = nullptr;
 };
 
 #endif

@@ -201,6 +201,20 @@ pub async fn home_sections() -> Result<Vec<super::models::HomeSection>, String> 
     Ok(sections)
 }
 
+pub async fn home_sections_page(
+    continuation: Option<&str>,
+) -> Result<(Vec<super::models::HomeSection>, Option<String>), String> {
+    let mut body = context();
+    if let Some(token) = continuation.filter(|token| !token.trim().is_empty()) {
+        body["continuation"] = serde_json::json!(token);
+    } else {
+        body["browseId"] = serde_json::json!("FEmusic_home");
+    }
+    let response = super::transport::post("browse", body).await?;
+    let page = super::parsers::parse_home_page(&response)?;
+    Ok((page.items, page.continuation))
+}
+
 fn charts_body() -> Value {
     let region = current_client_context().region;
     let mut body = context();

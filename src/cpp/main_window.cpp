@@ -20,6 +20,10 @@
 #include <QDir>
 #include <QWebEngineProfile>
 #include <QWebEngineCookieStore>
+#include <QNetworkCookie>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QDateTime>
 
 #include "main_window.h"
 #include "title_bar.h"
@@ -131,6 +135,7 @@ DoremiMainWindow::DoremiMainWindow(QWidget *parent)
 
     theme_transition_ = new ThemeTransitionOverlay(this);
     theme_transition_->hide();
+    setup_session_cookie_refresh();
 
 
     // Window icon
@@ -166,6 +171,70 @@ DoremiMainWindow::DoremiMainWindow(QWidget *parent)
     player_timer_->setInterval(250);
     QObject::connect(player_timer_, &QTimer::timeout, this, []() { on_timer_tick(); });
     player_timer_->start();
+}
+
+void DoremiMainWindow::setup_session_cookie_refresh() {
+    auto *profile = QWebEngineProfile::defaultProfile();
+    if (!profile) return;
+    auto *store = profile->cookieStore();
+    if (!store) return;
+
+    session_cookie_timer_ = new QTimer(this);
+    session_cookie_timer_->setSingleShot(true);
+    session_cookie_timer_->setInterval(1500);
+    connect(session_cookie_timer_, &QTimer::timeout,
+            this, &DoremiMainWindow::persist_session_cookies);
+    connect(store, &QWebEngineCookieStore::cookieAdded, this,
+            [this](const QNetworkCookie &cookie) {
+                update_session_cookie(cookie, false);
+            });
+    connect(store, &QWebEngineCookieStore::cookieRemoved, this,
+            [this](const QNetworkCookie &cookie) {
+                update_session_cookie(cookie, true);
+            });
+    store->loadAllCookies();
+}
+
+void DoremiMainWindow::update_session_cookie(const QNetworkCookie &cookie, bool removed) {
+    QString domain = cookie.domain().toLower();
+    if (domain.startsWith('.')) domain.remove(0, 1);
+    const bool trusted = domain == "youtube.com" || domain.endsWith(".youtube.com") ||
+                         domain == "google.com" || domain.endsWith(".google.com");
+    if (!trusted) return;
+
+    const std::string name = cookie.name().toStdString();
+    if (name.empty()) return;
+    const bool expired = !cookie.isSessionCookie() &&
+                         cookie.expirationDate().isValid() &&
+                         cookie.expirationDate() <= QDateTime::currentDateTimeUtc();
+    if (removed || expired || cookie.value().isEmpty()) {
+        session_cookies_.erase(name);
+    } else {
+        session_cookies_[name] = cookie.value().toStdString();
+    }
+    session_cookie_timer_->start();
+}
+
+void DoremiMainWindow::persist_session_cookies() {
+    const bool has_sapisid = session_cookies_.count("SAPISID") ||
+                             session_cookies_.count("__Secure-3PAPISID") ||
+                             session_cookies_.count("__Secure-1PAPISID");
+    if (!has_sapisid) return;
+
+    QString cookie_string;
+    for (const auto &[name, value] : session_cookies_) {
+        if (!cookie_string.isEmpty()) cookie_string += "; ";
+        cookie_string += QString::fromStdString(name + "=" + value);
+    }
+    QJsonObject headers;
+    headers.insert("cookie", cookie_string);
+    headers.insert("x-goog-authuser", "0");
+    headers.insert("user-agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Doremi/2");
+    headers.insert("accept", "*/*");
+    headers.insert("origin", "https://music.youtube.com");
+    headers.insert("x-origin", "https://music.youtube.com");
+    const QString json = QJsonDocument(headers).toJson(QJsonDocument::Compact);
+    on_youtube_session_refresh(Ffi::to_std_string(json));
 }
 
 DoremiMainWindow::~DoremiMainWindow() { g_main_window = nullptr; }
@@ -246,6 +315,14 @@ void DoremiMainWindow::connect_signals() {
         [this](bool on) { emit shuffle_toggled(on); });
     QObject::connect(now_playing_view_, &NowPlayingView::repeat_cycled, this,
         [this]() { emit repeat_cycled(); });
+    QObject::connect(now_playing_view_, &NowPlayingView::related_play_requested, this,
+        [](Track track) { on_search_item_clicked(track); });
+    QObject::connect(now_playing_view_, &NowPlayingView::related_add_to_queue_requested, this,
+        [](Track track) { on_add_to_queue_end(track); });
+    QObject::connect(now_playing_view_, &NowPlayingView::like_clicked, this,
+        [](Track track) { on_add_favorite(track); });
+    QObject::connect(now_playing_view_, &NowPlayingView::download_clicked, this,
+        [](Track track) { on_download_requested(track); });
 
     QObject::connect(this, &DoremiMainWindow::shuffle_toggled, this,
         [](bool on) { on_shuffle_toggled(on); });
@@ -293,6 +370,34 @@ void DoremiMainWindow::connect_signals() {
         [](Track track) { on_add_to_queue_next(track); });
     QObject::connect(search_view_, &SearchView::add_to_queue_end_requested, this,
         [](Track track) { on_add_to_queue_end(track); });
+    QObject::connect(search_view_, &SearchView::search_history_delete_requested, this,
+        [](const std::string &query) { on_search_history_delete(query); });
+    QObject::connect(search_view_, &SearchView::search_history_clear_requested, this,
+        []() { on_search_history_clear(); });
+
+    QObject::connect(home_view_, &HomeView::play_requested, this,
+        [](Track track) { on_search_item_clicked(track); });
+    QObject::connect(home_view_, &HomeView::album_requested, this,
+        [](const std::string &id) { on_album_requested(id); });
+    QObject::connect(home_view_, &HomeView::artist_requested, this,
+        [](const std::string &id) { on_artist_requested(id); });
+    QObject::connect(home_view_, &HomeView::playlist_requested, this,
+        [](const std::string &id) { on_playlist_requested(id); });
+    QObject::connect(home_view_, &HomeView::retry_requested, this,
+        []() { on_home_retry_requested(); });
+    QObject::connect(home_view_, &HomeView::load_more_requested, this,
+        []() { on_home_load_more_requested(); });
+
+    QObject::connect(trending_view_, &TrendingView::play_requested, this,
+        [](Track track) { on_search_item_clicked(track); });
+    QObject::connect(trending_view_, &TrendingView::album_requested, this,
+        [](const std::string &id) { on_album_requested(id); });
+    QObject::connect(trending_view_, &TrendingView::artist_requested, this,
+        [](const std::string &id) { on_artist_requested(id); });
+    QObject::connect(trending_view_, &TrendingView::playlist_requested, this,
+        [](const std::string &id) { on_playlist_requested(id); });
+    QObject::connect(trending_view_, &TrendingView::retry_requested, this,
+        []() { on_trending_retry_requested(); });
 
     QObject::connect(library_view_, &LibraryView::tab_changed, this,
         [](const std::string &tab) {
@@ -306,6 +411,10 @@ void DoremiMainWindow::connect_signals() {
         [](const std::string &info) {
             on_remove_favorite(info);
         });
+    QObject::connect(library_view_, &LibraryView::remove_favorite_album_requested, this,
+        [](const std::string &id) { on_remove_favorite_album(id); });
+    QObject::connect(library_view_, &LibraryView::remove_favorite_artist_requested, this,
+        [](const std::string &id) { on_remove_favorite_artist(id); });
     QObject::connect(library_view_, &LibraryView::download_requested, this,
         [](Track track) {
             on_download_requested(track);
@@ -314,6 +423,10 @@ void DoremiMainWindow::connect_signals() {
         [](Track track) { on_add_to_queue_next(track); });
     QObject::connect(library_view_, &LibraryView::add_to_queue_end_requested, this,
         [](Track track) { on_add_to_queue_end(track); });
+    QObject::connect(library_view_, &LibraryView::create_playlist_requested, this,
+        [](const std::string &name, const std::string &desc, const std::string &privacy) {
+            on_create_playlist(name, desc, privacy);
+        });
 
     QObject::connect(trending_view_, &TrendingView::play_requested, this,
         [](Track track) {
@@ -342,19 +455,19 @@ void DoremiMainWindow::connect_signals() {
             on_search_item_clicked(track);
         });
     QObject::connect(album_detail_view_, &AlbumDetailView::back_requested, this,
-        [this]() {
-            navigate_to("library");
-        });
+        [this]() { navigate_back_from_detail(); });
 
     // Artist detail view
     QObject::connect(artist_detail_view_, &ArtistDetailView::play_requested, this,
         [](Track track) {
             on_search_item_clicked(track);
         });
-    QObject::connect(artist_detail_view_, &ArtistDetailView::back_requested, this,
-        [this]() {
-            navigate_to("library");
+    QObject::connect(artist_detail_view_, &ArtistDetailView::album_requested, this,
+        [](const std::string &album_id) {
+            on_album_requested(album_id);
         });
+    QObject::connect(artist_detail_view_, &ArtistDetailView::back_requested, this,
+        [this]() { navigate_back_from_detail(); });
 
     // Playlist detail view
     QObject::connect(playlist_detail_view_, &PlaylistDetailView::play_requested, this,
@@ -362,8 +475,41 @@ void DoremiMainWindow::connect_signals() {
             on_search_item_clicked(track);
         });
     QObject::connect(playlist_detail_view_, &PlaylistDetailView::back_requested, this,
-        [this]() {
-            navigate_to("library");
+        [this]() { navigate_back_from_detail(); });
+
+    // Play all / shuffle buttons on detail views
+    QObject::connect(album_detail_view_, &AlbumDetailView::play_all_requested, this,
+        [](std::vector<Track> tracks) {
+            rust::Vec<Track> v;
+            for (const auto &t : tracks) v.push_back(t);
+            on_play_all(v, false);
+        });
+    QObject::connect(playlist_detail_view_, &PlaylistDetailView::play_all_requested, this,
+        [](std::vector<Track> tracks) {
+            rust::Vec<Track> v;
+            for (const auto &t : tracks) v.push_back(t);
+            on_play_all(v, false);
+        });
+    QObject::connect(playlist_detail_view_, &PlaylistDetailView::shuffle_requested, this,
+        [](std::vector<Track> tracks) {
+            rust::Vec<Track> v;
+            for (const auto &t : tracks) v.push_back(t);
+            on_play_all(v, true);
+        });
+    QObject::connect(playlist_detail_view_, &PlaylistDetailView::rename_playlist_requested, this,
+        [](const std::string &id, const std::string &name) {
+            on_rename_playlist(id, name);
+            // Refresh library list in background
+            on_library_tab_changed("playlists");
+        });
+    QObject::connect(playlist_detail_view_, &PlaylistDetailView::delete_playlist_requested, this,
+        [this](const std::string &id) {
+            on_delete_playlist(id);
+            navigate_back_from_detail();
+        });
+    QObject::connect(playlist_detail_view_, &PlaylistDetailView::remove_track_from_playlist_requested, this,
+        [](const std::string &pl_id, const std::string &t_id) {
+            on_remove_playlist_track(pl_id, t_id);
         });
 }
 
@@ -382,11 +528,15 @@ void DoremiMainWindow::closeEvent(QCloseEvent *event) {
 }
 
 void DoremiMainWindow::navigate_to(const std::string &route) {
+    const bool opens_detail = route == "album_detail" || route == "artist_detail" ||
+                              route == "playlist_detail";
+    if (opens_detail && current_route_ != "album_detail" &&
+        current_route_ != "artist_detail" && current_route_ != "playlist_detail") {
+        detail_return_route_ = current_route_;
+    }
     nav_sidebar_->set_active_route(route);
     if (route == "home") {
         stack_->setCurrentIndex(1);
-        auto *sa = home_view_->findChild<QScrollArea *>();
-        if (sa) sa->verticalScrollBar()->setValue(0);
     } else if (route == "search") {
         stack_->setCurrentIndex(2);
         auto *sa = search_view_->findChild<QScrollArea *>();
@@ -399,8 +549,6 @@ void DoremiMainWindow::navigate_to(const std::string &route) {
         stack_->setCurrentIndex(4);
     } else if (route == "trending") {
         stack_->setCurrentIndex(5);
-        auto *sa = trending_view_->findChild<QScrollArea *>();
-        if (sa) sa->verticalScrollBar()->setValue(0);
     } else if (route == "downloads") {
         stack_->setCurrentIndex(6);
         auto *sa = downloads_view_->findChild<QScrollArea *>();
@@ -432,7 +580,11 @@ void DoremiMainWindow::navigate_to(const std::string &route) {
     } else {
         stack_->setCurrentIndex(1);
     }
+    current_route_ = route;
+}
 
+void DoremiMainWindow::navigate_back_from_detail() {
+    navigate_to(detail_return_route_.empty() ? "home" : detail_return_route_);
 }
 
 void DoremiMainWindow::show_notif(const std::string &message, const std::string &kind) {
@@ -513,8 +665,27 @@ void DoremiMainWindow::set_playback_queue(const rust::Vec<Track> &queue, int32_t
         for (const auto &t : queue) q.push_back(t);
         now_playing_view_->setQueue(q, current_index);
     }
-    if (player_bar_) {
-        // Update player bar with current track info
+    if (player_bar_ && current_index >= 0 && current_index < static_cast<int32_t>(queue.size())) {
+        const auto &t = queue[current_index];
+        player_bar_->set_track_info(
+            static_cast<std::string>(t.title),
+            static_cast<std::string>(t.artist),
+            static_cast<std::string>(t.thumbnail)
+        );
+    }
+}
+
+void DoremiMainWindow::set_related_tracks(const rust::Vec<Track> &tracks) {
+    if (now_playing_view_) {
+        std::vector<Track> t;
+        for (const auto &tr : tracks) t.push_back(tr);
+        now_playing_view_->setRelatedTracks(t);
+    }
+}
+
+void DoremiMainWindow::set_current_track(const Track &track) {
+    if (now_playing_view_) {
+        now_playing_view_->setCurrentTrack(track);
     }
 }
 
@@ -761,34 +932,37 @@ void set_search_history(rust::Vec<rust::String> queries) {
     });
 }
 
-void set_search_suggestions(rust::Vec<rust::String> suggestions) {
+void set_search_suggestions(rust::Str query, rust::Vec<rust::String> suggestions) {
+    const std::string q_str = Ffi::to_std_string(query);
     std::vector<std::string> values;
     values.reserve(suggestions.size());
     for (const auto &suggestion : suggestions) values.push_back(static_cast<std::string>(suggestion));
-    mutate_main_window("set_search_suggestions", [values = std::move(values)](DoremiMainWindow &window) {
-        if (window.title_bar()) window.title_bar()->set_search_suggestions(values);
+    mutate_main_window("set_search_suggestions", [q_str, values = std::move(values)](DoremiMainWindow &window) {
+        if (window.title_bar()) window.title_bar()->set_search_suggestions(q_str, values);
     });
 }
 
-void set_search_results(rust::Vec<Track> songs, rust::Vec<Artist> artists,
+void set_search_results(rust::Vec<Track> songs, rust::Vec<Track> videos, rust::Vec<Artist> artists,
                         rust::Vec<Album> albums, rust::Vec<Playlist> playlists) {
     std::vector<Track> s;
     for (const auto &x : songs) s.push_back(x);
+    std::vector<Track> v;
+    for (const auto &x : videos) v.push_back(x);
     std::vector<Artist> a;
     for (const auto &x : artists) a.push_back(x);
     std::vector<Album> al;
     for (const auto &x : albums) al.push_back(x);
     std::vector<Playlist> p;
     for (const auto &x : playlists) p.push_back(x);
-    mutate_main_window("set_search_results", [s = std::move(s), a = std::move(a), al = std::move(al), p = std::move(p)](DoremiMainWindow &window) {
-        if (window.search_view()) window.search_view()->set_results(s, a, al, p);
+    mutate_main_window("set_search_results", [s = std::move(s), v = std::move(v), a = std::move(a), al = std::move(al), p = std::move(p)](DoremiMainWindow &window) {
+        if (window.search_view()) window.search_view()->set_results(s, v, a, al, p);
     });
 }
 
-void add_home_section(rust::Str title, rust::Vec<rust::String> items) {
+void add_home_section(rust::Str title, rust::Vec<HomeCard> items) {
     const std::string title_copy = Ffi::to_std_string(title);
-    std::vector<std::string> v;
-    for (auto &x : items) v.push_back(Ffi::to_std_string(x));
+    std::vector<HomeCard> v;
+    for (const auto &x : items) v.push_back(x);
     mutate_main_window("add_home_section", [title_copy, v = std::move(v)](DoremiMainWindow &window) {
         if (window.home_view()) window.home_view()->add_section(title_copy, v);
     });
@@ -797,6 +971,14 @@ void add_home_section(rust::Str title, rust::Vec<rust::String> items) {
 void clear_home_sections() {
     mutate_main_window("clear_home_sections", [](DoremiMainWindow &window) {
         if (window.home_view()) window.home_view()->clear_sections();
+    });
+}
+
+void set_home_state(rust::Str state, rust::Str message) {
+    const std::string state_copy = Ffi::to_std_string(state);
+    const std::string message_copy = Ffi::to_std_string(message);
+    mutate_main_window("set_home_state", [state_copy, message_copy](DoremiMainWindow &window) {
+        if (window.home_view()) window.home_view()->set_state(state_copy, message_copy);
     });
 }
 
@@ -832,6 +1014,20 @@ void set_library_playlists(rust::Vec<Playlist> playlists) {
     });
 }
 
+static std::vector<Playlist> s_context_playlists;
+
+const std::vector<Playlist> &get_context_playlists() {
+    return s_context_playlists;
+}
+
+void set_context_playlists(rust::Vec<Playlist> playlists) {
+    std::vector<Playlist> p;
+    for (const auto &x : playlists) p.push_back(x);
+    mutate_main_window("set_context_playlists", [p = std::move(p)](DoremiMainWindow &) mutable {
+        s_context_playlists = std::move(p);
+    });
+}
+
 void apply_settings_to_ui() {
     // Implemented in Rust — reads AppSettings and calls individual setters
 }
@@ -860,6 +1056,13 @@ void set_settings_language(rust::Str lang) {
     const std::string value = Ffi::to_std_string(lang);
     mutate_main_window("set_settings_language", [value](DoremiMainWindow &window) {
         if (window.settings_view()) window.settings_view()->set_language(value);
+    });
+}
+
+void set_settings_region(rust::Str region) {
+    const std::string value = Ffi::to_std_string(region);
+    mutate_main_window("set_settings_region", [value](DoremiMainWindow &window) {
+        if (window.settings_view()) window.settings_view()->set_region(value);
     });
 }
 
@@ -1003,6 +1206,22 @@ void set_playback_queue(rust::Vec<Track> queue, int32_t current_index) {
     });
 }
 
+void set_related_tracks(rust::Vec<Track> tracks) {
+    std::vector<Track> t;
+    for (const auto &tr : tracks) t.push_back(tr);
+    mutate_main_window("set_related_tracks", [t = std::move(t)](DoremiMainWindow &window) {
+        rust::Vec<Track> tracks_copy;
+        for (const auto &tr : t) tracks_copy.push_back(tr);
+        window.set_related_tracks(tracks_copy);
+    });
+}
+
+void set_current_track(Track track) {
+    mutate_main_window("set_current_track", [track = std::move(track)](DoremiMainWindow &window) mutable {
+        window.set_current_track(track);
+    });
+}
+
 void set_stats_data(StatsData stats) {
     mutate_main_window("set_stats_data", [stats = std::move(stats)](DoremiMainWindow &window) {
         window.set_stats_data(stats);
@@ -1030,20 +1249,21 @@ void set_player_repeat(int32_t mode) {
 
 // ── Trending ──
 
-void set_trending_items(rust::Vec<rust::String> titles,
-                         rust::Vec<rust::String> subtitles,
-                         rust::Vec<rust::String> thumbnails) {
-    std::vector<std::string> t, s, th;
-    for (auto &x : titles) t.push_back(Ffi::to_std_string(x));
-    for (auto &x : subtitles) s.push_back(Ffi::to_std_string(x));
-    for (auto &x : thumbnails) th.push_back(Ffi::to_std_string(x));
-    mutate_main_window("set_trending_items", [t = std::move(t), s = std::move(s), th = std::move(th)](DoremiMainWindow &window) {
+void set_trending_items(rust::Vec<HomeCard> items) {
+    std::vector<HomeCard> cards;
+    for (const auto &item : items) cards.push_back(item);
+    mutate_main_window("set_trending_items", [cards = std::move(cards)](DoremiMainWindow &window) {
         if (!window.trending_view()) return;
         window.trending_view()->clear_items();
-        const size_t count = std::min({t.size(), s.size(), th.size()});
-        for (size_t i = 0; i < count; ++i) {
-            window.trending_view()->add_item(t[i], s[i], th[i]);
-        }
+        for (const auto &item : cards) window.trending_view()->add_item(item);
+    });
+}
+
+void set_trending_state(rust::Str state, rust::Str message) {
+    const std::string state_copy = Ffi::to_std_string(state);
+    const std::string message_copy = Ffi::to_std_string(message);
+    mutate_main_window("set_trending_state", [state_copy, message_copy](DoremiMainWindow &window) {
+        if (window.trending_view()) window.trending_view()->set_state(state_copy, message_copy);
     });
 }
 
@@ -1143,4 +1363,3 @@ void update_youtube_auth_state(bool authenticated, rust::Str name, rust::Str ava
         }
     });
 }
-
