@@ -47,7 +47,9 @@ public:
 signals:
     void play_requested(Track track);
     void album_requested(const std::string &album_id);
+    void album_clicked(const std::string &album_id);
     void back_requested();
+    void favorite_toggled(const std::string &artist_id, bool is_favorite);
 
 private:
     void setupLayout();

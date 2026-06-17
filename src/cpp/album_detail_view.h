@@ -47,6 +47,8 @@ signals:
     void play_all_requested(std::vector<Track> tracks);
     void back_requested();
     void artist_requested(const std::string &artist_id);
+    void artist_name_clicked(const std::string &artist_id);
+    void favorite_toggled(const std::string &album_id, bool is_favorite);
 
 protected:
     bool eventFilter(QObject *obj, QEvent *event) override;

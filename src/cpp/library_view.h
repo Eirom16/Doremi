@@ -5,7 +5,9 @@
 #include <QVBoxLayout>
 #include <QPushButton>
 #include <QLabel>
+#include <QLineEdit>
 #include <QScrollArea>
+#include <QComboBox>
 #include <vector>
 #include <string>
 
@@ -21,6 +23,15 @@ public:
     void set_songs(const std::vector<Track> &songs);
     void set_albums(const std::vector<Album> &albums);
     void set_artists(const std::vector<Artist> &artists);
+    void set_search_results(
+        const std::string &tab,
+        const std::vector<Track> &songs,
+        const std::vector<Album> &albums,
+        const std::vector<Artist> &artists,
+        const std::vector<Playlist> &playlists
+    );
+    void set_library_state(const std::string &state, const std::string &message);
+    void set_authenticated(bool authenticated);
     std::string current_tab() const;
 signals:
     void tab_changed(const std::string &tab);
@@ -34,14 +45,21 @@ signals:
     void download_requested(Track track);
     void add_to_queue_next_requested(Track track);
     void add_to_queue_end_requested(Track track);
+    void search_requested(const std::string &tab, const std::string &query, const std::string &sort_by);
 private:
     QVBoxLayout *list_;
+    QLineEdit *search_box_;
+    QComboBox *sort_combo_;
     std::vector<QPushButton *> tab_btns_;
     std::string active_tab_;
+    bool authenticated_;
     void set_active_tab(const std::string &tab);
+    void setup_search_bar();
     QWidget *make_list_item(const std::string &text, const std::string &sub, const std::string &id);
     QWidget *make_song_item(const Track &track);
     void clear_list();
+    void show_empty_state();
+    void show_not_authenticated_state();
 };
 
 #endif

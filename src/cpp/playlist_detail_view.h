@@ -56,6 +56,9 @@ signals:
     void rename_playlist_requested(const std::string &playlist_id, const std::string &name);
     void delete_playlist_requested(const std::string &playlist_id);
     void remove_track_from_playlist_requested(const std::string &playlist_id, const std::string &track_id);
+    void album_clicked(const std::string &album_id);
+    void artist_clicked(const std::string &artist_id);
+    void privacy_changed(const std::string &playlist_id, const std::string &privacy);
 
 private:
     void setupLayout();

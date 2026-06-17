@@ -114,6 +114,28 @@ impl FavoritesRepo {
         })
     }
 
+    pub fn is_favorite_album(album_id: &str) -> SqlResult<bool> {
+        with_db(|conn| {
+            conn.query_row(
+                "SELECT COUNT(*) FROM favorite_albums WHERE id = ?1",
+                params![album_id],
+                |r| r.get::<_, i64>(0),
+            )
+            .map(|c| c > 0)
+        })
+    }
+
+    pub fn is_favorite_artist(artist_id: &str) -> SqlResult<bool> {
+        with_db(|conn| {
+            conn.query_row(
+                "SELECT COUNT(*) FROM favorite_artists WHERE id = ?1",
+                params![artist_id],
+                |r| r.get::<_, i64>(0),
+            )
+            .map(|c| c > 0)
+        })
+    }
+
     pub fn add_track(track: &FavoriteTrack) -> SqlResult<()> {
         with_db(|conn| {
             conn.execute(

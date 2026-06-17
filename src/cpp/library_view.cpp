@@ -254,3 +254,73 @@ void LibraryView::set_active_tab(const std::string &tab) {
         btn->setChecked(btn->property("tabKey").toString().toStdString() == tab);
     }
 }
+
+void LibraryView::set_search_results(
+    const std::string &tab,
+    const std::vector<Track> &songs,
+    const std::vector<Album> &albums,
+    const std::vector<Artist> &artists,
+    const std::vector<Playlist> &playlists
+) {
+    active_tab_ = tab;
+    clear_list();
+    
+    if (tab == "songs") {
+        for (const auto &t : songs) {
+            list_->addWidget(make_song_item(t));
+        }
+    } else if (tab == "albums") {
+        for (const auto &a : albums) {
+            list_->addWidget(make_list_item(static_cast<std::string>(a.title), static_cast<std::string>(a.artist), static_cast<std::string>(a.id)));
+        }
+    } else if (tab == "artists") {
+        for (const auto &a : artists) {
+            list_->addWidget(make_list_item(static_cast<std::string>(a.name), "", static_cast<std::string>(a.id)));
+        }
+    } else if (tab == "playlists") {
+        for (const auto &p : playlists) {
+            list_->addWidget(make_list_item(static_cast<std::string>(p.name), std::to_string(p.track_count) + " canciones", static_cast<std::string>(p.id)));
+        }
+    }
+    
+    list_->addStretch(1);
+    set_active_tab(tab);
+}
+
+void LibraryView::set_library_state(const std::string &state, const std::string &message) {
+    clear_list();
+    
+    auto *placeholder = new QLabel(QString::fromStdString(message), this);
+    const auto &c = DesignTokens::current();
+    placeholder->setFont(DesignTokens::getFont("body", 14));
+    placeholder->setStyleSheet(QString("color: %1; padding: 24px;").arg(c.text_muted.name()));
+    placeholder->setAlignment(Qt::AlignCenter);
+    placeholder->setWordWrap(true);
+    
+    list_->addWidget(placeholder);
+    
+    // Show action button if not authenticated
+    if (state == "not_authenticated") {
+        auto *login_btn = new QPushButton("Iniciar sesión en YouTube Music", this);
+        login_btn->setCursor(Qt::PointingHandCursor);
+        login_btn->setStyleSheet(QString(
+            "QPushButton { background: %1; color: white; border: none; border-radius: 8px; padding: 10px 20px; font-size: 14px; font-weight: 600; }"
+            "QPushButton:hover { background: %2; }"
+        ).arg(c.accent.name()).arg(c.accent_bright.name()));
+        list_->addWidget(login_btn);
+    }
+    
+    list_->addStretch(1);
+}
+
+void LibraryView::set_authenticated(bool authenticated) {
+    authenticated_ = authenticated;
+}
+
+void LibraryView::show_empty_state() {
+    set_library_state("empty", "Tu biblioteca está vacía");
+}
+
+void LibraryView::show_not_authenticated_state() {
+    set_library_state("not_authenticated", "Inicia sesión en YouTube Music para acceder a tu biblioteca");
+}

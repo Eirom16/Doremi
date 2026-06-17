@@ -190,6 +190,13 @@ pub mod bridge {
         fn clear_downloads();
         fn export_backup(zip_path: &str) -> bool;
         fn import_backup(zip_path: &str) -> bool;
+        fn on_library_search(tab: &str, query: &str, sort_by: &str);
+        fn on_library_invalidate_cache(tab: &str);
+        fn on_library_set_filter_source(source: i32);
+        fn get_album_favorite_state(album_id: &str) -> bool;
+        fn get_artist_favorite_state(artist_id: &str) -> bool;
+        fn on_update_playlist_privacy(playlist_id: &str, privacy: &str);
+        fn on_playlist_load_continuations(playlist_id: &str);
     }
 
     // C++ functions called from Rust
@@ -274,6 +281,15 @@ pub mod bridge {
         fn set_history_data(history: Vec<Track>, played_at: Vec<String>);
 
         fn set_album_detail(album: Album, tracks: Vec<Track>);
+        fn set_library_search_results(
+            tab: &str,
+            songs: Vec<Track>,
+            albums: Vec<Album>,
+            artists: Vec<Artist>,
+            playlists: Vec<Playlist>,
+        );
+        fn set_library_authenticated_state(authenticated: bool);
+        fn set_library_state(state: &str, message: &str);
 
         fn set_artist_detail(artist: Artist, tracks: Vec<Track>, albums: Vec<Album>);
 
@@ -1791,4 +1807,130 @@ pub fn export_backup(zip_path: &str) -> bool {
 pub fn import_backup(zip_path: &str) -> bool {
     let path = std::path::Path::new(zip_path);
     crate::utils::backup::import_backup(path)
+}
+
+/// Buscar y filtrar en la biblioteca
+pub fn on_library_search(tab: &str, query: &str, sort_by: &str) {
+    let tab = tab.to_string();
+    let query = query.to_string();
+    let sort_by = sort_by.to_string();
+    
+    tokio::spawn(async move {
+        use crate::services::library::LibraryService;
+        let lib = LibraryService::new(true);
+        
+        match tab.as_str() {
+            "songs" => {
+                let mut results = lib.search_songs(&query).await;
+                if !sort_by.is_empty() {
+                    results = LibraryService::sort_songs(&lib, &sort_by).await;
+                }
+                crate::bridge::bridge::set_library_search_results(
+                    "songs",
+                    results,
+                    Vec::new(),
+                    Vec::new(),
+                    Vec::new(),
+                );
+            }
+            "albums" => {
+                let mut results = lib.search_albums(&query).await;
+                if !sort_by.is_empty() {
+                    results = LibraryService::sort_albums(&lib, &sort_by).await;
+                }
+                crate::bridge::bridge::set_library_search_results(
+                    "albums",
+                    Vec::new(),
+                    results,
+                    Vec::new(),
+                    Vec::new(),
+                );
+            }
+            "artists" => {
+                let mut results = lib.search_artists(&query).await;
+                if !sort_by.is_empty() {
+                    results = LibraryService::sort_artists(&lib, &sort_by).await;
+                }
+                crate::bridge::bridge::set_library_search_results(
+                    "artists",
+                    Vec::new(),
+                    Vec::new(),
+                    results,
+                    Vec::new(),
+                );
+            }
+            "playlists" => {
+                let mut results = lib.search_playlists(&query).await;
+                if !sort_by.is_empty() {
+                    results = LibraryService::sort_playlists(&lib, &sort_by).await;
+                }
+                crate::bridge::bridge::set_library_search_results(
+                    "playlists",
+                    Vec::new(),
+                    Vec::new(),
+                    Vec::new(),
+                    results,
+                );
+            }
+            _ => {}
+        }
+    });
+}
+
+/// Invalidar caché de un tab
+pub fn on_library_invalidate_cache(tab: &str) {
+    let tab = tab.to_string();
+    tokio::spawn(async move {
+        use crate::services::library::LibraryService;
+        let lib = LibraryService::new(true);
+        lib.invalidate_cache(&tab).await;
+    });
+}
+
+/// Filtrar biblioteca por origen (remota, local, descargas)
+pub fn on_library_set_filter_source(source: i32) {
+    // source: 0 = All, 1 = Remote, 2 = Downloaded, 3 = Local
+    log::info!("Filter library by source: {}", source);
+}
+
+/// Obtener estado de favorito para un álbum
+pub fn get_album_favorite_state(album_id: &str) -> bool {
+    use crate::db::repo::FavoritesRepo;
+    FavoritesRepo::is_favorite_album(album_id).unwrap_or(false)
+}
+
+/// Obtener estado de favorito para un artista
+pub fn get_artist_favorite_state(artist_id: &str) -> bool {
+    use crate::db::repo::FavoritesRepo;
+    FavoritesRepo::is_favorite_artist(artist_id).unwrap_or(false)
+}
+
+/// Actualizar privacidad de una playlist
+pub fn on_update_playlist_privacy(playlist_id: &str, privacy: &str) {
+    let playlist_id = playlist_id.to_string();
+    let privacy = privacy.to_string();
+    
+    tokio::spawn(async move {
+        use crate::db::repo::PlaylistRepo;
+        if let Ok(mut playlist) = PlaylistRepo::get(&playlist_id) {
+            playlist.privacy = if privacy == "public" { 0 } else { 1 };
+            if PlaylistRepo::update(&playlist).is_ok() {
+                log::info!("Playlist {} privacy updated to {}", playlist_id, privacy);
+            }
+        }
+    });
+}
+
+/// Cargar continuations de una playlist (para paginación)
+pub fn on_playlist_load_continuations(playlist_id: &str) {
+    let playlist_id = playlist_id.to_string();
+    
+    tokio::spawn(async move {
+        use crate::api::client::ApiClient;
+        let api = ApiClient::new();
+        
+        // TODO: Implementar lógica de continuations
+        // Esta función cargará más tracks de una playlist si existen continuations
+        log::info!("Loading continuations for playlist: {}", playlist_id);
+    });
 }
