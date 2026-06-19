@@ -12,9 +12,9 @@
 NowPlayingView::NowPlayingView(QWidget *parent)
     : QWidget(parent)
 {
-    // Setup background first
+    // Setup backgrounds (creation order determines z-order)
+    artwork_backdrop_ = new ArtworkBackdrop(this);
     nebula_bg_ = new NebulaBg(this);
-    nebula_bg_->lower(); // Send to back
 
     setupLayout();
 
@@ -92,7 +92,15 @@ void NowPlayingView::setupLayout() {
     like_btn_->setStyleSheet("QPushButton { background: transparent; border: none; border-radius: 16px; }"
                              "QPushButton:hover { background: rgba(255,255,255,0.08); }");
     connect(like_btn_, &QPushButton::clicked, this, [this]() {
-        emit like_clicked(current_track_);
+        std::string track_id = static_cast<std::string>(current_track_.id);
+        if (track_id.empty()) return;
+        bool is_fav = get_track_favorite_state(track_id);
+        if (is_fav) {
+            on_remove_favorite(track_id);
+        } else {
+            on_add_favorite(current_track_);
+        }
+        updateLikeButtonState(!is_fav);
     });
     actions_layout->addWidget(like_btn_);
 
@@ -396,10 +404,29 @@ void NowPlayingView::setTrackInfo(const std::string &title, const std::string &a
     artist_label_->setText(QString::fromStdString(artist));
     
     vinyl_disc_->setArtwork(QString::fromStdString(thumbnail));
+
+    if (!thumbnail.empty()) {
+        artwork_backdrop_->setImage(QString::fromStdString(thumbnail));
+    } else {
+        artwork_backdrop_->clear();
+    }
 }
 
 void NowPlayingView::setCurrentTrack(const Track &track) {
     current_track_ = track;
+    bool is_fav = get_track_favorite_state(static_cast<std::string>(track.id));
+    updateLikeButtonState(is_fav);
+}
+
+void NowPlayingView::updateLikeButtonState(bool is_favorite) {
+    const auto &c = DesignTokens::current();
+    if (is_favorite) {
+        like_btn_->setIcon(IconProvider::getIcon("favorite", c.accent, 18));
+        like_btn_->setToolTip("Quitar de favoritos");
+    } else {
+        like_btn_->setIcon(IconProvider::getIcon("favorite_border", c.text_secondary, 18));
+        like_btn_->setToolTip("Agregar a favoritos");
+    }
 }
 
 void NowPlayingView::setPlaybackState(int32_t, int32_t position_ms, int32_t duration_ms) {
@@ -459,6 +486,7 @@ void NowPlayingView::setRelatedTracks(const std::vector<Track> &tracks)
 
 void NowPlayingView::resizeEvent(QResizeEvent *event) {
     QWidget::resizeEvent(event);
+    artwork_backdrop_->setGeometry(rect());
     nebula_bg_->setGeometry(rect());
 }
 

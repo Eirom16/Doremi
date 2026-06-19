@@ -2,7 +2,6 @@
 #define DOREMI_ALBUM_DETAIL_VIEW_H
 
 #include <QWidget>
-#include <QScrollArea>
 #include <QVBoxLayout>
 #include <QLabel>
 #include <QHBoxLayout>
@@ -45,6 +44,7 @@ public:
 signals:
     void play_requested(Track track);
     void play_all_requested(std::vector<Track> tracks);
+    void download_all_requested(std::vector<Track> tracks, std::string parent_id, std::string parent_title, std::string parent_thumbnail);
     void back_requested();
     void artist_requested(const std::string &artist_id);
     void artist_name_clicked(const std::string &artist_id);
@@ -56,8 +56,6 @@ protected:
 private:
     void setupLayout();
 
-    QScrollArea *scroll_area_;
-    QWidget *scroll_content_;
     QVBoxLayout *content_layout_;
 
     // Header widgets
@@ -71,6 +69,7 @@ private:
     QVBoxLayout *tracks_layout_;
     std::vector<Track> tracks_;
     std::string artist_id_;
+    Album current_album_;
 };
 
 #endif

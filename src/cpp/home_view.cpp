@@ -1,8 +1,6 @@
-#include <QScrollArea>
 #include <QFrame>
 #include <QLabel>
 #include <QPushButton>
-#include <QScrollBar>
 #include "home_view.h"
 #include "design_tokens.h"
 #include "components/song_card.h"
@@ -16,18 +14,12 @@ HomeView::HomeView(QWidget *parent)
 {
     const auto &c = DesignTokens::current();
 
-    scroll_ = new QScrollArea(this);
-    scroll_->setWidgetResizable(true);
-    scroll_->setFrameShape(QFrame::NoFrame);
-    scroll_->setStyleSheet("background: transparent; border: none;");
-
-    auto *inner = new QWidget();
-    inner->setStyleSheet("background: transparent;");
-    content_ = new QVBoxLayout(inner);
+    setStyleSheet("background: transparent;");
+    content_ = new QVBoxLayout(this);
     content_->setContentsMargins(24, 24, 24, 24);
     content_->setSpacing(28);
 
-    auto *welcome = new QLabel("¡Bienvenido a Doremi!", inner);
+    auto *welcome = new QLabel("¡Bienvenido a Doremi!", this);
     welcome->setFont(DesignTokens::getFont("display", 24));
     welcome->setStyleSheet(QString("font-weight: bold; color: %1; background: transparent;")
         .arg(c.text_primary.name()));
@@ -35,19 +27,6 @@ HomeView::HomeView(QWidget *parent)
 
     // Sections are added dynamically via add_section() from Rust
     content_->addStretch(1);
-    scroll_->setWidget(inner);
-    connect(scroll_->verticalScrollBar(), &QScrollBar::valueChanged, this,
-            [this](int value) {
-        auto *bar = scroll_->verticalScrollBar();
-        if (bar->maximum() > 0 && bar->maximum() - value < 320) {
-            emit load_more_requested();
-        }
-    });
-
-    auto *root = new QVBoxLayout(this);
-    root->setContentsMargins(0, 0, 0, 0);
-    root->addWidget(scroll_);
-    setStyleSheet("background: transparent;");
 }
 
 void HomeView::set_welcome_message(const std::string &msg) {
@@ -112,6 +91,7 @@ QWidget *HomeView::add_section_widget(const std::string &title,
             card->setItemId(id);
             connect(card, &AlbumCard::clicked, this, [this, id, itemType]() {
                 if (itemType == "album") emit album_requested(id);
+                else if (itemType == "show") emit show_requested(id);
                 else emit playlist_requested(id);
             });
             carousel->addWidget(card);

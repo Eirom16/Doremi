@@ -7,7 +7,6 @@
 #include <QComboBox>
 #include <QCheckBox>
 #include <QPushButton>
-#include <QScrollArea>
 #include <QLineEdit>
 #include <QSlider>
 #include <vector>

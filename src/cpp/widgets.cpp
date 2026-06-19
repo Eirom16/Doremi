@@ -190,15 +190,34 @@ void ClickableItem::show_context_menu(const QPoint &global_pos) {
                                                     : "Ir a la playlist";
         QAction *open = new QAction(IconProvider::getIcon("open_in_new", c.text_primary, 16), open_label, &menu);
         menu.addAction(open);
-        menu.addSeparator();
-        QAction *fav = new QAction(IconProvider::getIcon("favorite", c.accent, 16), "Añadir a favoritos", &menu);
-        menu.addAction(fav);
+
+        bool is_fav = false;
+        bool has_fav = false;
+        if (item_type_ == "artist") {
+            is_fav = get_artist_favorite_state(item_id_);
+            has_fav = true;
+        } else if (item_type_ == "album") {
+            is_fav = get_album_favorite_state(item_id_);
+            has_fav = true;
+        }
+
+        QAction *fav = nullptr;
+        if (has_fav) {
+            menu.addSeparator();
+            fav = new QAction(
+                IconProvider::getIcon(is_fav ? "favorite" : "favorite_border", is_fav ? c.accent : c.text_secondary, 16),
+                is_fav ? "Quitar de favoritos" : "Agregar a favoritos",
+                &menu
+            );
+            menu.addAction(fav);
+        }
+
         QAction *chosen = menu.exec(global_pos);
         if (chosen == open) {
             emit context_action("open", item_id_);
             emit clicked();
-        } else if (chosen == fav) {
-            emit context_action("add_favorite", item_id_);
+        } else if (fav && chosen == fav) {
+            emit context_action(is_fav ? "remove_favorite" : "add_favorite", item_id_);
         }
         return;
     }
@@ -207,7 +226,13 @@ void ClickableItem::show_context_menu(const QPoint &global_pos) {
     QAction *play = new QAction(IconProvider::getIcon("play_arrow", c.text_primary, 16), "Reproducir", &menu);
     QAction *play_next = new QAction(IconProvider::getIcon("playlist_play", c.text_primary, 16), "Reproducir después", &menu);
     QAction *add_to_queue = new QAction(IconProvider::getIcon("queue_music", c.text_primary, 16), "Añadir al final de la cola", &menu);
-    QAction *fav = new QAction(IconProvider::getIcon("favorite", c.accent, 16), "Añadir a favoritos", &menu);
+    
+    bool is_track_fav = get_track_favorite_state(item_id_);
+    QAction *fav = new QAction(
+        IconProvider::getIcon(is_track_fav ? "favorite" : "favorite_border", is_track_fav ? c.accent : c.text_secondary, 16),
+        is_track_fav ? "Quitar de favoritos" : "Agregar a favoritos",
+        &menu
+    );
     QAction *download = new QAction(IconProvider::getIcon("download", c.text_primary, 16),
                                     is_video ? "Descargar video" : "Descargar canción", &menu);
 
@@ -239,7 +264,7 @@ void ClickableItem::show_context_menu(const QPoint &global_pos) {
     } else if (chosen == add_to_queue) {
         emit context_action("queue_end", item_id_);
     } else if (chosen == fav) {
-        emit context_action("add_favorite", item_id_);
+        emit context_action(is_track_fav ? "remove_favorite" : "add_favorite", item_id_);
     } else if (chosen == download) {
         emit context_action("download", item_id_);
     } else if (chosen && qobject_cast<QWidget*>(chosen->parent()) == playlist_menu) {

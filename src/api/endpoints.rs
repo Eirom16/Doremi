@@ -273,6 +273,23 @@ pub async fn artist_detail(browse_id: &str) -> Result<super::models::ArtistDetai
     Ok(detail)
 }
 
+pub async fn show_detail(browse_id: &str) -> Result<super::models::ShowDetail, String> {
+    let browse_id = browse_id.trim();
+    if browse_id.is_empty() {
+        return Err("Show browse ID cannot be empty".to_string());
+    }
+    let key = cache_key(&format!("show:{browse_id}"));
+    if let Some(detail) = cached(&key) {
+        return Ok(detail);
+    }
+    let mut body = context();
+    body["browseId"] = serde_json::json!(browse_id);
+    let response = super::transport::post("browse", body).await?;
+    let detail = super::parsers::parse_show_detail(&response, browse_id)?;
+    cache(&key, &detail, HOME_CACHE_TTL_SECS);
+    Ok(detail)
+}
+
 pub async fn playlist_detail(playlist_id: &str) -> Result<super::models::PlaylistDetail, String> {
     let playlist_id = playlist_id.trim();
     if playlist_id.is_empty() {

@@ -46,6 +46,7 @@ signals:
     void add_to_queue_next_requested(Track track);
     void add_to_queue_end_requested(Track track);
     void search_requested(const std::string &tab, const std::string &query, const std::string &sort_by);
+    void login_requested();
 private:
     QVBoxLayout *list_;
     QLineEdit *search_box_;

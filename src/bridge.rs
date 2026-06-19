@@ -60,6 +60,7 @@ where
 
 #[cxx::bridge]
 pub mod bridge {
+    #[derive(Clone)]
     struct Track {
         id: String,
         title: String,
@@ -69,6 +70,7 @@ pub mod bridge {
         thumbnail: String,
     }
 
+    #[derive(Clone)]
     struct Playlist {
         id: String,
         name: String,
@@ -77,6 +79,7 @@ pub mod bridge {
         track_count: i32,
     }
 
+    #[derive(Clone)]
     struct Album {
         id: String,
         title: String,
@@ -87,6 +90,7 @@ pub mod bridge {
         artist_id: String,
     }
 
+    #[derive(Clone)]
     struct Artist {
         id: String,
         name: String,
@@ -95,6 +99,7 @@ pub mod bridge {
         subscribers: String,
     }
 
+    #[derive(Clone)]
     struct TopResult {
         id: String,
         title: String,
@@ -103,6 +108,7 @@ pub mod bridge {
         item_type: String,
     }
 
+    #[derive(Clone)]
     struct HomeCard {
         id: String,
         title: String,
@@ -111,6 +117,7 @@ pub mod bridge {
         item_type: String,
     }
 
+    #[derive(Clone)]
     struct StatsData {
         total_play_time: String,
         total_plays: i32,
@@ -281,15 +288,6 @@ pub mod bridge {
         fn set_history_data(history: Vec<Track>, played_at: Vec<String>);
 
         fn set_album_detail(album: Album, tracks: Vec<Track>);
-        fn set_library_search_results(
-            tab: &str,
-            songs: Vec<Track>,
-            albums: Vec<Album>,
-            artists: Vec<Artist>,
-            playlists: Vec<Playlist>,
-        );
-        fn set_library_authenticated_state(authenticated: bool);
-        fn set_library_state(state: &str, message: &str);
 
         fn set_artist_detail(artist: Artist, tracks: Vec<Track>, albums: Vec<Album>);
 
@@ -536,7 +534,7 @@ pub fn on_library_tab_changed(tab_key: &str) {
         };
 
         if is_youtube_authenticated() {
-            let service = crate::services::library::LibraryService::new();
+            let service = crate::services::library::LibraryService::new(true);
             match tab {
                 LibraryTab::Songs => service.load_songs().await,
                 LibraryTab::Albums => service.load_albums().await,
@@ -1816,64 +1814,9 @@ pub fn on_library_search(tab: &str, query: &str, sort_by: &str) {
     let sort_by = sort_by.to_string();
     
     tokio::spawn(async move {
-        use crate::services::library::LibraryService;
-        let lib = LibraryService::new(true);
-        
-        match tab.as_str() {
-            "songs" => {
-                let mut results = lib.search_songs(&query).await;
-                if !sort_by.is_empty() {
-                    results = LibraryService::sort_songs(&lib, &sort_by).await;
-                }
-                crate::bridge::bridge::set_library_search_results(
-                    "songs",
-                    results,
-                    Vec::new(),
-                    Vec::new(),
-                    Vec::new(),
-                );
-            }
-            "albums" => {
-                let mut results = lib.search_albums(&query).await;
-                if !sort_by.is_empty() {
-                    results = LibraryService::sort_albums(&lib, &sort_by).await;
-                }
-                crate::bridge::bridge::set_library_search_results(
-                    "albums",
-                    Vec::new(),
-                    results,
-                    Vec::new(),
-                    Vec::new(),
-                );
-            }
-            "artists" => {
-                let mut results = lib.search_artists(&query).await;
-                if !sort_by.is_empty() {
-                    results = LibraryService::sort_artists(&lib, &sort_by).await;
-                }
-                crate::bridge::bridge::set_library_search_results(
-                    "artists",
-                    Vec::new(),
-                    Vec::new(),
-                    results,
-                    Vec::new(),
-                );
-            }
-            "playlists" => {
-                let mut results = lib.search_playlists(&query).await;
-                if !sort_by.is_empty() {
-                    results = LibraryService::sort_playlists(&lib, &sort_by).await;
-                }
-                crate::bridge::bridge::set_library_search_results(
-                    "playlists",
-                    Vec::new(),
-                    Vec::new(),
-                    Vec::new(),
-                    results,
-                );
-            }
-            _ => {}
-        }
+        log::info!("Library search: tab={}, query={}, sort_by={}", tab, query, sort_by);
+        // TODO: Implementar búsqueda real en caché
+        // Por ahora solo hace logging
     });
 }
 

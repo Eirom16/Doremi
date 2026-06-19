@@ -11,6 +11,9 @@ class AlbumCard : public QWidget {
 public:
     explicit AlbumCard(const QString &title, const QString &artist, const QString &thumbnail, QWidget *parent = nullptr);
     
+    QSize sizeHint() const override { return QSize(170, 235); }
+    QSize minimumSizeHint() const override { return QSize(170, 235); }
+    
     void setItemId(const std::string &id) { m_itemId = id; }
     std::string itemId() const { return m_itemId; }
     

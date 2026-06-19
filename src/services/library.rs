@@ -55,6 +55,8 @@ impl LibraryService {
                 description: p.description.unwrap_or_default(),
                 thumbnail: p.thumbnail,
                 track_count: p.track_count.unwrap_or_default(),
+                owner: p.owner.unwrap_or_default(),
+                privacy: String::new(),
             })
             .collect();
         
@@ -75,6 +77,8 @@ impl LibraryService {
                 description: p.description.clone(),
                 thumbnail: p.thumbnail.clone(),
                 track_count: p.track_count,
+                owner: p.owner.clone(),
+                privacy: p.privacy.clone(),
             }).collect()
         );
         crate::bridge::bridge::set_library_playlists(playlists);

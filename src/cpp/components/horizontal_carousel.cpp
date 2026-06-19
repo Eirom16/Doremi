@@ -95,7 +95,26 @@ void HorizontalCarousel::addWidget(QWidget *widget) {
     widget->setParent(m_contentWidget);
     // Insert before the stretch item
     m_contentLayout->insertWidget(m_contentLayout->count() - 1, widget);
+    
+    int card_h = widget->sizeHint().height();
+    if (card_h <= 0) {
+        card_h = widget->maximumHeight();
+    }
+    if (card_h <= 0 || card_h >= 16777215) { // 16777215 is QWIDGETSIZE_MAX
+        card_h = widget->height();
+    }
+    
+    int h = card_h + 24;
+    if (h > m_minContentHeight) {
+        m_minContentHeight = h;
+        setFixedHeight(m_minContentHeight);
+        updateGeometry();
+    }
     update();
+}
+
+QSize HorizontalCarousel::sizeHint() const {
+    return QSize(width(), m_minContentHeight);
 }
 
 void HorizontalCarousel::clear() {
@@ -111,6 +130,8 @@ void HorizontalCarousel::clear() {
         delete child;
     }
     m_scrollArea->horizontalScrollBar()->setValue(0);
+    m_minContentHeight = 0;
+    setFixedHeight(0);
 }
 
 int HorizontalCarousel::scrollValue() const {

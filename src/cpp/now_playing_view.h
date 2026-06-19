@@ -7,6 +7,7 @@
 #include <QStackedWidget>
 #include <QHBoxLayout>
 #include <QVBoxLayout>
+#include "components/artwork_backdrop.h"
 #include "components/nebula_bg.h"
 #include "components/vinyl_disc.h"
 #include "components/lyrics_widget.h"
@@ -61,9 +62,11 @@ protected:
 private:
     void setupLayout();
     void updateButtonsStyle();
+    void updateLikeButtonState(bool is_favorite);
 
+    ArtworkBackdrop *artwork_backdrop_;
     NebulaBg *nebula_bg_;
-    
+
     // Left side: Player Controls
     VinylDisc *vinyl_disc_;
     QLabel *title_label_;

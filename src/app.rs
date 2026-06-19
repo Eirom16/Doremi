@@ -146,7 +146,7 @@ impl DoremiApp {
 
             tokio::task::spawn_blocking(move || {
                 // Load recently played from DB → add "Seguir escuchando" section
-                if let Ok(recent) = crate::db::repo::RecentlyPlayedRepo::recent(12) {
+                if let Ok(recent) = crate::db::repo::PlayHistoryRepo::recent(12) {
                     if !recent.is_empty() {
                         let items = recent
                             .iter()
@@ -193,6 +193,12 @@ impl DoremiApp {
                                 description: p.description.clone(),
                                 thumbnail: p.artwork.clone(),
                                 track_count: count,
+                                owner: String::new(),
+                                privacy: match p.privacy {
+                                    0 => "PUBLIC".to_string(),
+                                    1 => "PRIVATE".to_string(),
+                                    _ => "UNLISTED".to_string(),
+                                },
                             }
                         })
                         .collect();
@@ -203,6 +209,8 @@ impl DoremiApp {
                             description: p.description.clone(),
                             thumbnail: p.thumbnail.clone(),
                             track_count: p.track_count,
+                            owner: p.owner.clone(),
+                            privacy: p.privacy.clone(),
                         }).collect()
                     );
                     set_library_playlists(p_list);

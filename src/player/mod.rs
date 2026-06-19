@@ -17,6 +17,8 @@ use state::PlayState;
 static QUEUE_PERSIST_GENERATION: AtomicU64 = AtomicU64::new(0);
 static QUEUE_PERSIST_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 
+static PREFETCH_GENERATION: AtomicU64 = AtomicU64::new(0);
+
 pub struct PlayerService {
     audio: AudioEngine,
     queue: Arc<Mutex<PlaybackQueue>>,
@@ -672,11 +674,11 @@ impl PlayerService {
                     thumbnail: thumb.clone(),
                 }
             );
-            // Record in recently played (only when playing new track)
+            // Record in play history (only when playing new track at start)
             if is_playing && pos < 500 {
-                let _ = crate::db::repo::RecentlyPlayedRepo::record(
+                let _ = crate::db::repo::PlayHistoryRepo::record(
                     &track.id, &track.title, &track.artist, &track.album,
-                    track.duration_ms, &thumb,
+                    track.duration_ms, &thumb, dur as i64, false,
                 );
             }
 
@@ -760,17 +762,28 @@ impl PlayerService {
                     }
                 }
             }
-        } else {
-            let mut last_id = self.last_track_id.lock().unwrap();
-            if !last_id.is_empty() {
-                last_id.clear();
-                self.last_is_playing.store(false, std::sync::atomic::Ordering::Relaxed);
-                self.lastfm_scrobbled.store(false, std::sync::atomic::Ordering::Relaxed);
-                self.accumulated_playback_ms.store(0, std::sync::atomic::Ordering::Relaxed);
+            } else {
+                let mut last_id = self.last_track_id.lock().unwrap();
+                if !last_id.is_empty() {
+                    last_id.clear();
+                    self.last_is_playing.store(false, std::sync::atomic::Ordering::Relaxed);
+                    self.lastfm_scrobbled.store(false, std::sync::atomic::Ordering::Relaxed);
+                    self.accumulated_playback_ms.store(0, std::sync::atomic::Ordering::Relaxed);
 
-                crate::services::discord::disconnect();
+                    crate::services::discord::disconnect();
+                }
+                crate::bridge::bridge::set_mini_player("", "", "");
+                crate::bridge::bridge::set_current_track(
+                    crate::bridge::bridge::Track {
+                        id: String::new(),
+                        title: String::new(),
+                        artist: String::new(),
+                        album: String::new(),
+                        duration_ms: 0,
+                        thumbnail: String::new(),
+                    }
+                );
             }
-        }
     }
 
     fn sync_queue_ui(&self) {
@@ -867,7 +880,8 @@ impl PlayerService {
                 }
                 audio.play_url(&track.stream_url, normalize);
                 if preload_next {
-                    schedule_prefetch_task(queue.clone(), prefetch_task);
+                    let gen = PREFETCH_GENERATION.fetch_add(1, Ordering::AcqRel) + 1;
+                    schedule_prefetch_task(queue.clone(), prefetch_task, gen);
                 }
             }
             loading.store(false, Ordering::Release);
@@ -876,7 +890,8 @@ impl PlayerService {
 
     fn schedule_prefetch(&self) {
         if self.preload_next {
-            schedule_prefetch_task(self.queue.clone(), self.prefetch_task.clone());
+            let gen = PREFETCH_GENERATION.fetch_add(1, Ordering::AcqRel) + 1;
+            schedule_prefetch_task(self.queue.clone(), self.prefetch_task.clone(), gen);
         } else {
             self.cancel_prefetch();
         }
@@ -936,6 +951,7 @@ fn persist_queue_snapshot(queue: Arc<Mutex<PlaybackQueue>>) {
 fn schedule_prefetch_task(
     queue: Arc<Mutex<PlaybackQueue>>,
     task_slot: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>>,
+    generation: u64,
 ) {
     let candidate = queue.lock().ok().and_then(|queue| queue.next_candidate().cloned());
     let Ok(mut slot) = task_slot.lock() else { return; };
@@ -945,9 +961,20 @@ fn schedule_prefetch_task(
     let Some(candidate) = candidate else { return; };
 
     let handle = tokio::spawn(async move {
+        // Debounce: short delay before starting work
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        if PREFETCH_GENERATION.load(Ordering::Acquire) != generation {
+            return; // stale, a newer prefetch has been scheduled
+        }
+
+        crate::bridge::bridge::set_prefetch_status(&candidate.id, "loading");
+
         let stream_future = async {
             if candidate.stream_url.is_empty() {
-                crate::player::resolver::StreamResolver::resolve(&candidate.id).await.ok()
+                tokio::time::timeout(
+                    Duration::from_secs(30),
+                    crate::player::resolver::StreamResolver::resolve(&candidate.id),
+                ).await.ok().and_then(|r| r.ok())
             } else {
                 Some(candidate.stream_url.clone())
             }
@@ -957,11 +984,16 @@ fn schedule_prefetch_task(
         let artwork_future = prefetch_artwork(&candidate);
         let (stream_url, _, artwork_path) = tokio::join!(stream_future, lyrics_future, artwork_future);
 
+        if PREFETCH_GENERATION.load(Ordering::Acquire) != generation {
+            return; // stale after long-running work
+        }
+
         if let Ok(mut queue_guard) = queue.lock() {
             let still_next = queue_guard.next_candidate()
                 .map(|track| track.id == candidate.id)
                 .unwrap_or(false);
             if !still_next {
+                crate::bridge::bridge::set_prefetch_status(&candidate.id, "stale");
                 return;
             }
             if let Some(target) = queue_guard.all_tracks().iter().position(|track| track.id == candidate.id) {
@@ -972,6 +1004,7 @@ fn schedule_prefetch_task(
             }
         }
         sync_queue_to_ui(&queue);
+        crate::bridge::bridge::set_prefetch_status(&candidate.id, "ready");
     });
     *slot = Some(handle);
 }

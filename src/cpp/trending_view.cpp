@@ -34,30 +34,22 @@ TrendingView::TrendingView(QWidget *parent)
     root->setContentsMargins(0, 0, 0, 0);
     root->setSpacing(0);
 
-    auto *scroll = new QScrollArea(this);
-    scroll->setWidgetResizable(true);
-    scroll->setFrameShape(QFrame::NoFrame);
-    scroll->setStyleSheet("background: transparent; border: none;");
-
-    auto *inner = new QWidget();
-    inner->setStyleSheet("background: transparent;");
-    list_ = new QVBoxLayout(inner);
+    list_ = new QVBoxLayout();
     list_->setContentsMargins(24, 24, 24, 24);
     list_->setSpacing(8);
 
-    auto *header = new QLabel("Tendencias", inner);
+    auto *header = new QLabel("Tendencias", this);
     header->setFont(DesignTokens::getFont("display", 24));
     header->setStyleSheet(QString("color: %1; font-weight: bold; background: transparent;").arg(c.text_primary.name()));
     list_->addWidget(header);
 
-    auto *sub = new QLabel("Lo más popular del momento", inner);
+    auto *sub = new QLabel("Lo más popular del momento", this);
     sub->setFont(DesignTokens::getFont("body", 13));
     sub->setStyleSheet(QString("color: %1; background: transparent; margin-bottom: 8px;").arg(c.text_secondary.name()));
     list_->addWidget(sub);
 
     list_->addStretch(1);
-    scroll->setWidget(inner);
-    root->addWidget(scroll);
+    root->addLayout(list_);
     setStyleSheet("background: transparent;");
 }
 

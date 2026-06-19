@@ -78,15 +78,10 @@ pub fn clear_cache() {
 }
 
 pub fn clear_downloads() {
+    crate::services::download::DownloadManager::get_instance().clear_all();
     let dirs = AppDirs::global();
     let downloads_dir = dirs.cache_dir().join("downloads");
     let _ = std::fs::remove_dir_all(&downloads_dir);
     let _ = std::fs::create_dir_all(&downloads_dir);
-    
-    if let Err(e) = crate::db::repo::DownloadsRepo::clear_all() {
-        log::error!("Failed to clear downloads in database: {e}");
-    }
-    
-    crate::services::download::DownloadManager::refresh_downloads_ui();
     log::info!("Downloads cleared successfully");
 }

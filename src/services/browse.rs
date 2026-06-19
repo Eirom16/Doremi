@@ -87,6 +87,8 @@ pub async fn load_playlist(playlist_id: &str) {
                     .playlist
                     .track_count
                     .unwrap_or(detail.tracks.len() as i32),
+                owner: detail.playlist.owner.clone().unwrap_or_default(),
+                privacy: detail.privacy.clone(),
             };
             let tracks = detail
                 .tracks
@@ -113,6 +115,39 @@ pub async fn load_playlist(playlist_id: &str) {
         }
         Err(error) => crate::bridge::bridge::show_notification(
             &format!("No se pudo cargar la playlist: {error}"),
+            "error",
+        ),
+    }
+}
+
+pub async fn load_show(browse_id: &str) {
+    match crate::api::innertube::show_detail(browse_id).await {
+        Ok(detail) => {
+            let show = crate::bridge::bridge::Show {
+                id: detail.show.id,
+                title: detail.show.title,
+                author: detail.show.author,
+                description: detail.show.description,
+                thumbnail: detail.show.thumbnail,
+                episode_count: detail.show.episode_count.unwrap_or(detail.episodes.len() as i32),
+            };
+            let episodes = detail
+                .episodes
+                .into_iter()
+                .map(|ep| crate::bridge::bridge::Episode {
+                    id: ep.id,
+                    title: ep.title,
+                    show: ep.show,
+                    show_id: ep.show_id,
+                    description: ep.description,
+                    thumbnail: ep.thumbnail,
+                    duration_ms: ep.duration_ms,
+                })
+                .collect();
+            crate::bridge::bridge::set_show_detail(show, episodes);
+        }
+        Err(error) => crate::bridge::bridge::show_notification(
+            &format!("No se pudo cargar el podcast: {error}"),
             "error",
         ),
     }

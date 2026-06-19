@@ -5,6 +5,8 @@
 #include <QHBoxLayout>
 #include <QVariant>
 #include <QPushButton>
+#include <QLineEdit>
+#include <QComboBox>
 
 namespace {
 struct LibraryTabSpec {
@@ -21,7 +23,7 @@ constexpr LibraryTabSpec kLibraryTabs[] = {
 }
 
 LibraryView::LibraryView(QWidget *parent)
-    : QWidget(parent)
+    : QWidget(parent), authenticated_(false), active_tab_("")
 {
     const auto &c = DesignTokens::current();
 
@@ -81,26 +83,27 @@ LibraryView::LibraryView(QWidget *parent)
     tab_lay->addStretch(1);
     root->addWidget(tab_bar);
 
-    auto *scroll = new QScrollArea(this);
-    scroll->setWidgetResizable(true);
-    scroll->setFrameShape(QFrame::NoFrame);
-    scroll->setStyleSheet("background: transparent; border: none;");
+    // Search bar + sort combo
+    auto *search_row = new QHBoxLayout();
+    search_row->setContentsMargins(24, 8, 24, 4);
+    search_row->setSpacing(8);
+    setup_search_bar();
+    search_row->addWidget(search_box_, 1);
+    search_row->addWidget(sort_combo_);
+    root->addLayout(search_row);
 
-    auto *inner = new QWidget();
-    inner->setStyleSheet("background: transparent;");
-    list_ = new QVBoxLayout(inner);
+    list_ = new QVBoxLayout();
     list_->setContentsMargins(24, 16, 24, 16);
     list_->setSpacing(6);
 
-    auto *placeholder = new QLabel("Tu biblioteca está vacía", inner);
+    auto *placeholder = new QLabel("Tu biblioteca está vacía", this);
     placeholder->setFont(DesignTokens::getFont("body", 14));
     placeholder->setStyleSheet(QString("color: %1; padding: 24px;").arg(c.text_muted.name()));
     placeholder->setAlignment(Qt::AlignCenter);
     list_->addWidget(placeholder);
     list_->addStretch(1);
 
-    scroll->setWidget(inner);
-    root->addWidget(scroll, 1);
+    root->addLayout(list_, 1);
     setStyleSheet("background: transparent;");
 }
 
@@ -133,11 +136,10 @@ QWidget *LibraryView::make_list_item(const std::string &text, const std::string 
         emit play_requested(track);
     });
     connect(ci, &ClickableItem::context_action, this, [this, id](const std::string &action, const std::string &) {
-        if (action == "add_favorite") {
+        if (action == "add_favorite" || action == "remove_favorite") {
             if (active_tab_ == "songs") {
                 emit remove_favorite_requested(id);
             } else if (active_tab_ == "albums") {
-                // Add -> Remove (toggle)
                 emit remove_favorite_album_requested(id);
             } else if (active_tab_ == "artists") {
                 emit remove_favorite_artist_requested(id);
@@ -163,7 +165,7 @@ QWidget *LibraryView::make_song_item(const Track &track) {
         emit play_requested(track);
     });
     connect(ci, &ClickableItem::context_action, this, [this, track](const std::string &action, const std::string &) {
-        if (action == "add_favorite") {
+        if (action == "add_favorite" || action == "remove_favorite") {
             emit remove_favorite_requested(static_cast<std::string>(track.id));
         } else if (action == "download") {
             emit download_requested(track);
@@ -174,6 +176,37 @@ QWidget *LibraryView::make_song_item(const Track &track) {
         }
     });
     return ci;
+}
+
+void LibraryView::setup_search_bar() {
+    const auto &c = DesignTokens::current();
+
+    search_box_ = new QLineEdit(this);
+    search_box_->setPlaceholderText("Buscar en biblioteca...");
+    search_box_->setClearButtonEnabled(true);
+    search_box_->setFixedHeight(36);
+    search_box_->setStyleSheet(QString(
+        "QLineEdit { background: %1; border: 1px solid %2; border-radius: 18px; padding: 0 16px; color: %3; font-size: 13px; }"
+        "QLineEdit:focus { border-color: %4; }")
+        .arg(c.bg_elevated.name()).arg(c.border.name()).arg(c.text_primary.name()).arg(c.accent.name()));
+
+    sort_combo_ = new QComboBox(this);
+    sort_combo_->addItem("Nombre A-Z", "name_asc");
+    sort_combo_->addItem("Nombre Z-A", "name_desc");
+    sort_combo_->addItem("Más reciente", "recent");
+    sort_combo_->addItem("Más antiguo", "oldest");
+    sort_combo_->setFixedHeight(32);
+    sort_combo_->setStyleSheet(QString(
+        "QComboBox { background: %1; border: 1px solid %2; border-radius: 16px; padding: 0 12px; color: %3; font-size: 12px; }"
+        "QComboBox::drop-down { border: none; width: 20px; }")
+        .arg(c.bg_elevated.name()).arg(c.border.name()).arg(c.text_primary.name()));
+
+    connect(search_box_, &QLineEdit::textChanged, this, [this](const QString &text) {
+        emit search_requested(active_tab_, text.toStdString(), sort_combo_->currentData().toString().toStdString());
+    });
+    connect(sort_combo_, &QComboBox::currentIndexChanged, this, [this](int) {
+        emit search_requested(active_tab_, search_box_->text().toStdString(), sort_combo_->currentData().toString().toStdString());
+    });
 }
 
 void LibraryView::clear_list() {
@@ -208,8 +241,15 @@ void LibraryView::set_playlists(const std::vector<Playlist> &playlists) {
     });
     list_->addWidget(create_btn);
     list_->addSpacing(8);
-    for (const auto &p : playlists) {
-        list_->addWidget(make_list_item(static_cast<std::string>(p.name), std::to_string(p.track_count) + " canciones", static_cast<std::string>(p.id)));
+    if (playlists.empty()) {
+        auto *lbl = new QLabel("No tienes playlists creadas", this);
+        lbl->setFont(DesignTokens::getFont("body", 13));
+        lbl->setStyleSheet(QString("color: %1; padding: 12px;").arg(c.text_muted.name()));
+        list_->addWidget(lbl);
+    } else {
+        for (const auto &p : playlists) {
+            list_->addWidget(make_list_item(static_cast<std::string>(p.name), std::to_string(p.track_count) + " canciones", static_cast<std::string>(p.id)));
+        }
     }
     list_->addStretch(1);
     set_active_tab(active_tab_);
@@ -218,6 +258,11 @@ void LibraryView::set_playlists(const std::vector<Playlist> &playlists) {
 void LibraryView::set_songs(const std::vector<Track> &songs) {
     active_tab_ = "songs";
     clear_list();
+    if (songs.empty()) {
+        show_empty_state();
+        set_active_tab(active_tab_);
+        return;
+    }
     for (const auto &t : songs) {
         list_->addWidget(make_song_item(t));
     }
@@ -228,6 +273,11 @@ void LibraryView::set_songs(const std::vector<Track> &songs) {
 void LibraryView::set_albums(const std::vector<Album> &albums) {
     active_tab_ = "albums";
     clear_list();
+    if (albums.empty()) {
+        show_empty_state();
+        set_active_tab(active_tab_);
+        return;
+    }
     for (const auto &a : albums) {
         list_->addWidget(make_list_item(static_cast<std::string>(a.title), static_cast<std::string>(a.artist), static_cast<std::string>(a.id)));
     }
@@ -238,6 +288,11 @@ void LibraryView::set_albums(const std::vector<Album> &albums) {
 void LibraryView::set_artists(const std::vector<Artist> &artists) {
     active_tab_ = "artists";
     clear_list();
+    if (artists.empty()) {
+        show_empty_state();
+        set_active_tab(active_tab_);
+        return;
+    }
     for (const auto &a : artists) {
         list_->addWidget(make_list_item(static_cast<std::string>(a.name), "", static_cast<std::string>(a.id)));
     }
@@ -250,6 +305,8 @@ std::string LibraryView::current_tab() const {
 }
 
 void LibraryView::set_active_tab(const std::string &tab) {
+    active_tab_ = tab;
+    if (search_box_) search_box_->clear();
     for (auto *btn : tab_btns_) {
         btn->setChecked(btn->property("tabKey").toString().toStdString() == tab);
     }
@@ -266,20 +323,61 @@ void LibraryView::set_search_results(
     clear_list();
     
     if (tab == "songs") {
+        if (songs.empty()) {
+            show_empty_state();
+            set_active_tab(tab);
+            return;
+        }
         for (const auto &t : songs) {
             list_->addWidget(make_song_item(t));
         }
     } else if (tab == "albums") {
+        if (albums.empty()) {
+            show_empty_state();
+            set_active_tab(tab);
+            return;
+        }
         for (const auto &a : albums) {
             list_->addWidget(make_list_item(static_cast<std::string>(a.title), static_cast<std::string>(a.artist), static_cast<std::string>(a.id)));
         }
     } else if (tab == "artists") {
+        if (artists.empty()) {
+            show_empty_state();
+            set_active_tab(tab);
+            return;
+        }
         for (const auto &a : artists) {
             list_->addWidget(make_list_item(static_cast<std::string>(a.name), "", static_cast<std::string>(a.id)));
         }
     } else if (tab == "playlists") {
-        for (const auto &p : playlists) {
-            list_->addWidget(make_list_item(static_cast<std::string>(p.name), std::to_string(p.track_count) + " canciones", static_cast<std::string>(p.id)));
+        const auto &c = DesignTokens::current();
+        auto *create_btn = new QPushButton("+ Nueva playlist", this);
+        create_btn->setCursor(Qt::PointingHandCursor);
+        create_btn->setStyleSheet(QString(
+            "QPushButton { background: %1; color: white; border: none; border-radius: 8px; padding: 10px 20px; font-size: 14px; font-weight: 600; }"
+            "QPushButton:hover { background: %2; }"
+        ).arg(c.accent.name()).arg(c.accent_bright.name()));
+        connect(create_btn, &QPushButton::clicked, this, [this]() {
+            CreatePlaylistDialog dlg(this);
+            if (dlg.exec() == QDialog::Accepted) {
+                emit create_playlist_requested(
+                    dlg.playlistName().toStdString(),
+                    dlg.description().toStdString(),
+                    dlg.privacy().toStdString()
+                );
+            }
+        });
+        list_->addWidget(create_btn);
+        list_->addSpacing(8);
+        if (playlists.empty()) {
+            auto *lbl = new QLabel("No tienes playlists creadas", this);
+            lbl->setFont(DesignTokens::getFont("body", 13));
+            lbl->setStyleSheet(QString("color: %1; padding: 12px;").arg(c.text_muted.name()));
+            list_->addWidget(lbl);
+        } else {
+            for (const auto &p : playlists) {
+                list_->addWidget(make_list_item(static_cast<std::string>(p.name), std::to_string(p.track_count) + " canciones", static_cast<std::string>(p.id)));
+            }
         }
     }
     
@@ -307,6 +405,7 @@ void LibraryView::set_library_state(const std::string &state, const std::string 
             "QPushButton { background: %1; color: white; border: none; border-radius: 8px; padding: 10px 20px; font-size: 14px; font-weight: 600; }"
             "QPushButton:hover { background: %2; }"
         ).arg(c.accent.name()).arg(c.accent_bright.name()));
+        connect(login_btn, &QPushButton::clicked, this, &LibraryView::login_requested);
         list_->addWidget(login_btn);
     }
     
@@ -318,7 +417,11 @@ void LibraryView::set_authenticated(bool authenticated) {
 }
 
 void LibraryView::show_empty_state() {
-    set_library_state("empty", "Tu biblioteca está vacía");
+    if (authenticated_) {
+        set_library_state("empty", "Tu biblioteca está vacía");
+    } else {
+        set_library_state("not_authenticated", "Tu biblioteca local está vacía.\nInicia sesión en YouTube Music para acceder a tu biblioteca en la nube.");
+    }
 }
 
 void LibraryView::show_not_authenticated_state() {

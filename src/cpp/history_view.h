@@ -2,7 +2,6 @@
 #define DOREMI_HISTORY_VIEW_H
 
 #include <QWidget>
-#include <QScrollArea>
 #include <QVBoxLayout>
 #include <QLabel>
 #include <vector>
@@ -50,8 +49,6 @@ private:
     QString formatRelativeTime(const QString &played_at) const;
     QString getGroupLabel(const QString &played_at) const;
 
-    QScrollArea *scroll_area_;
-    QWidget *scroll_content_;
     QVBoxLayout *content_layout_;
     QLabel *empty_label_;
 };

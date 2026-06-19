@@ -7,7 +7,7 @@ pub use super::endpoints::{
     edit_playlist, home_sections, home_sections_page, library_albums, library_artists,
     library_playlists, library_songs, playlist_detail, rate_song, related_tracks, remote_history,
     remove_playlist_items, remove_remote_history_items, search, search_suggestions,
-    song_like_status,
+    show_detail, song_like_status,
 };
 
 pub fn get_stream_url(video_id: &str) -> Option<String> {

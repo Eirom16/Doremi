@@ -3,7 +3,6 @@
 
 #include <QWidget>
 #include <QVBoxLayout>
-#include <QScrollArea>
 #include <QLabel>
 #include <QHBoxLayout>
 #include "doremi/src/bridge.rs.h"
@@ -21,12 +20,12 @@ signals:
     void album_requested(const std::string &browse_id);
     void artist_requested(const std::string &browse_id);
     void playlist_requested(const std::string &playlist_id);
+    void show_requested(const std::string &browse_id);
     void retry_requested();
     void load_more_requested();
 private:
     QWidget *add_section_widget(const std::string &title, const std::vector<HomeCard> &items);
     QVBoxLayout *content_;
-    QScrollArea *scroll_ = nullptr;
     QWidget *state_widget_ = nullptr;
 };
 

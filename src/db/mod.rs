@@ -184,6 +184,48 @@ impl Database {
             )?;
         }
 
+        if version < 5 {
+            conn.execute_batch(
+                "ALTER TABLE playlists ADD COLUMN privacy INTEGER NOT NULL DEFAULT 1;
+                 INSERT INTO schema_version (version) VALUES (5);"
+            )?;
+        }
+
+        if version < 6 {
+            conn.execute_batch(
+                "ALTER TABLE recently_played ADD COLUMN play_count INTEGER NOT NULL DEFAULT 1;
+                 ALTER TABLE recently_played ADD COLUMN progress_ms INTEGER NOT NULL DEFAULT 0;
+                 ALTER TABLE recently_played ADD COLUMN skipped INTEGER NOT NULL DEFAULT 0;
+                 CREATE UNIQUE INDEX IF NOT EXISTS idx_recently_played_track_id ON recently_played(track_id);
+                 INSERT INTO schema_version (version) VALUES (6);"
+            )?;
+        }
+
+        if version < 7 {
+            conn.execute_batch(
+                "ALTER TABLE downloads ADD COLUMN status TEXT NOT NULL DEFAULT 'completed';
+                 ALTER TABLE downloads ADD COLUMN progress REAL NOT NULL DEFAULT 100.0;
+                 ALTER TABLE downloads ADD COLUMN error TEXT NOT NULL DEFAULT '';
+                 ALTER TABLE downloads ADD COLUMN cancelled INTEGER NOT NULL DEFAULT 0;
+                 INSERT INTO schema_version (version) VALUES (7);"
+            )?;
+        }
+
+        if version < 8 {
+            conn.execute_batch(
+                "CREATE TABLE IF NOT EXISTS favorite_shows (
+                    id TEXT PRIMARY KEY,
+                    title TEXT NOT NULL,
+                    author TEXT NOT NULL DEFAULT '',
+                    description TEXT NOT NULL DEFAULT '',
+                    thumbnail TEXT NOT NULL DEFAULT '',
+                    episode_count INTEGER NOT NULL DEFAULT 0,
+                    added_at TEXT NOT NULL DEFAULT (datetime('now'))
+                 );
+                 INSERT INTO schema_version (version) VALUES (8);"
+            )?;
+        }
+
         Ok(())
     }
 
@@ -219,6 +261,6 @@ mod tests {
         let version: i32 = conn
             .query_row("SELECT COALESCE(MAX(version), 0) FROM schema_version", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(version, 4);
+        assert_eq!(version, 7);
     }
 }

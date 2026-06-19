@@ -12,3 +12,4 @@ headers_auth.json
 oauth.json
 browser.json
 *.log
+compile_commands.json

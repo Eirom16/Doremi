@@ -11,6 +11,9 @@ class SongCard : public QWidget {
 public:
     explicit SongCard(const QString &title, const QString &artist, const QString &thumbnail, QWidget *parent = nullptr);
     
+    QSize sizeHint() const override { return QSize(160, 220); }
+    QSize minimumSizeHint() const override { return QSize(160, 220); }
+    
     void setItemId(const std::string &id) { m_itemId = id; }
     std::string itemId() const { return m_itemId; }
     

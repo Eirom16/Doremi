@@ -122,7 +122,8 @@ NavSidebar::NavSidebar(QWidget *parent)
     setFixedWidth(210);
     
     // Set sidebar base background
-    setStyleSheet(QString("background-color: %1; border-right: 1px solid %2;")
+    setAttribute(Qt::WA_StyledBackground, true);
+    setStyleSheet(QString("NavSidebar { background-color: %1; border-right: 1px solid %2; }")
         .arg(c.bg_surface.name())
         .arg(QString("rgba(%1, %2, %3, %4)").arg(c.border.red()).arg(c.border.green()).arg(c.border.blue()).arg(c.border.alpha() / 255.0))
     );
@@ -141,9 +142,7 @@ void NavSidebar::set_active_route(const std::string &route) {
         auto labels = nb.btn->findChildren<QLabel*>();
         for (auto *label : labels) {
             if (label->font().family() == "Material Symbols Rounded") {
-                label->setStyleSheet(QString("color: %1; background: transparent;")
-                    .arg(active ? c.accent.name() : c.text_secondary.name())
-                );
+                IconProvider::setupIconLabel(label, label->text(), 20, active ? c.accent : c.text_secondary, true);
             }
         }
     }
@@ -157,7 +156,7 @@ void NavSidebar::on_button_clicked(const std::string &route) {
 void NavSidebar::update_theme() {
     const auto &c = DesignTokens::current();
     
-    setStyleSheet(QString("background-color: %1; border-right: 1px solid %2;")
+    setStyleSheet(QString("NavSidebar { background-color: %1; border-right: 1px solid %2; }")
         .arg(c.bg_surface.name())
         .arg(QString("rgba(%1, %2, %3, %4)").arg(c.border.red()).arg(c.border.green()).arg(c.border.blue()).arg(c.border.alpha() / 255.0))
     );

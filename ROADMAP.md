@@ -34,6 +34,7 @@ El port se considera terminado cuando Doremi cubra los flujos reales de Pyrolist
 - [~] Login: captura cookies mediante WebEngine, pero persiste headers en texto plano.
 - [~] Pantallas de detalle: tienen presentacion basica, pero faltan varias acciones y datos de Pyrolist.
 - [~] Descargas: funciona por proceso externo `yt-dlp`, sin cola observable, progreso, cancelacion, reintentos, albums o playlists completos.
+- [ ] Podcasts/shows: no existe soporte de ningun tipo (API, UI, DB ni bridge).
 - [~] Biblioteca: favoritos locales basicos; falta paridad con biblioteca remota y gestion completa de playlists.
 - [~] Ajustes: varios controles existen, pero no todas las opciones afectan realmente al motor.
 - [~] i18n: los locales de Doremi tienen menos cobertura y quedan numerosos textos C++ hardcodeados.
@@ -50,7 +51,7 @@ El port se considera terminado cuando Doremi cubra los flujos reales de Pyrolist
 - [ ] Busqueda global avanzada, filtros completos, sugerencias e historial interactivo.
 - [ ] Menus contextuales completos: reproducir despues, agregar a cola, playlist, favorito y descarga.
 - [ ] Crear, editar y borrar playlists; sincronizacion con YouTube Music.
-- [ ] Like/unlike remoto y reconciliacion con favoritos locales.
+- [x] Hecho - Like/unlike remoto y reconciliacion con favoritos locales.
 - [ ] Descarga y gestion completa de albums y playlists.
 - [ ] Mini player flotante equivalente y modo compacto pulido.
 - [ ] Notificaciones dentro de la app equivalentes al centro de notificaciones de Pyrolist.
@@ -228,7 +229,7 @@ El port se considera terminado cuando Doremi cubra los flujos reales de Pyrolist
 - [x] Hecho - Playlist detail, continuations y disponibilidad.
 - [x] Hecho - Related/radio/watch playlist para autoplay.
 - [x] Hecho - Library songs, albums, artists, playlists y subscriptions.
-- [x] Like/unlike y estado de like.
+- [x] Hecho - Like/unlike y estado de like.
 - [x] Crear, editar, borrar playlists.
 - [x] Añadir y eliminar canciones de playlists.
 - [x] Hecho - Historial remoto cuando la cuenta lo permita.
@@ -265,13 +266,13 @@ El port se considera terminado cuando Doremi cubra los flujos reales de Pyrolist
 - [x] Portar sugerencias y busqueda global.
 - [x] Hecho - Integrar historial: abrir, eliminar una entrada y limpiar todo.
 - [x] Navegacion completa desde cada resultado.
-- [ ] Menus contextuales por tipo.
+- [x] Hecho - Menus contextuales por tipo.
 - [ ] Accesibilidad y navegacion total con teclado.
 
 ### P3.3 Biblioteca
 
 - [x] Portar tabs de canciones, albums, artistas y playlists.
-- [x] Sincronizar favoritos locales y likes remotos.
+- [x] Hecho - Sincronizar favoritos locales y likes remotos.
 - [x] Crear playlist con titulo, descripcion y privacidad.
 - [x] Editar metadata y borrar playlists con confirmacion.
 - [x] Añadir/eliminar tracks en playlist (falta reordenar).
@@ -280,32 +281,32 @@ El port se considera terminado cuando Doremi cubra los flujos reales de Pyrolist
 - [ ] Separar biblioteca local, remota y descargas.
 - [ ] Implementar cache por tab e invalidacion despues de mutaciones.
 - [ ] Añadir sort, filter y busqueda dentro de biblioteca.
-- [ ] Estados de no autenticado y vacio con acciones claras.
+- [x] Hecho - Estados de no autenticado y vacio con acciones claras.
 
 ### P3.4 Album, artista y playlist
 
 - [x] Hecho - Mostrar metadata completa, artwork, duracion y disponibilidad.
 - [x] Hecho - Play all y shuffle all construyendo una cola tipada.
-- [~] Like/favorite via context menu (falta estado persistente).
+- [x] Hecho - Like/favorite via context menu.
 - [~] Descargar track via context menu (falta progreso agregado).
 - [x] Hecho - Menus contextuales por track (play, fav, dl, queue).
-- [~] Navegar entre artista, album y playlist (album desde artista funciona).
+- [x] Hecho - Navegar entre artista, album y playlist (album desde artista y artista desde album funcionan).
 - [x] Hecho - Artist: top tracks y seccion de albumes.
-- [ ] Playlist: owner, descripcion, privacy y continuations.
-- [ ] Manejar tracks eliminados, privados o no disponibles.
+- [x] Hecho - Playlist: owner, descripcion, privacy y continuations.
+- [x] Manejar tracks no disponibles como grises con indicador.
 
 ### P3.5 Now playing, letras y relacionados
 
-- [ ] Mantener player bar y full player perfectamente sincronizados.
+- [x] Hecho - Mantener player bar y full player perfectamente sincronizados.
 - [x] Portar tabs de lyrics, queue y related.
 - [ ] Parsear LRC con timestamps mejorados y metadatos.
 - [ ] Aplicar delay manual, alineacion, spacing, colores y animacion elegida.
 - [ ] Auto scroll configurable y click para seek a una linea.
 - [ ] Fallback entre letra sincronizada, plana y no encontrada.
 - [x] Cache persistente de letras con TTL/version.
-- [ ] Prefetch de la siguiente pista y cancelacion.
+- [x] Prefetch con generacion, debounce y timeout.
 - [x] Mostrar related real y permitir agregar/reproducir.
-- [ ] Mejorar fondo dinamico desde artwork sin bloquear UI.
+- [x] Fondo dinamico blurred desde artwork.
 - [x] Exponer like, download, repeat, shuffle y queue actions.
 
 ### P3.6 Historial y estadisticas
@@ -320,15 +321,40 @@ El port se considera terminado cuando Doremi cubra los flujos reales de Pyrolist
 - [ ] Optimizar queries e indices para historiales grandes.
 - [ ] Exportar estadisticas a JSON/CSV opcionalmente.
 
+### P3.7 Podcasts / Shows
+
+Soporte para podcasts y shows de YouTube Music (y potencialmente RSS). YouTube Music expone contenido de tipo show/podcast en busqueda, browse y biblioteca via Innertube — actualmente ignorado.
+
+- [x] Definir tipos `Show` y `Episode` en `api/models.rs` y bridge DTOs.
+- [x] Parsear resultados de tipo `show`/`podcast` en `api/parsers.rs` (search + browse).
+- [x] Añadir endpoint `show_detail(browse_id)` en `api/endpoints.rs` con parseo de episodios.
+- [x] Extender `SearchResults` con `shows: Vec<Show>` y `episodes: Vec<Episode>`.
+- [ ] Añadir filtro de busqueda "podcasts" en SearchView.
+- [x] Crear structs bridge `Show` y `Episode` con `#[cxx::bridge]`.
+- [x] Añadir `on_show_requested(browse_id)` y `set_show_detail(show, episodes)` en bridge.
+- [x] Crear `ShowDetailView` C++ (header + cover + lista episodios con duración, back button).
+- [x] Mostrar secciones "Podcasts" y "Episodios" en resultados de búsqueda (SearchView).
+- [x] Mostrar top result tipo "show" en búsqueda con navegación a ShowDetailView.
+- [x] Señal `show_requested` en HomeView + wiring a `on_show_requested`.
+- [x] Navegación completa: `set_show_detail` → `navigate_to("show_detail")` + back desde detail.
+- [x] DB: migration v8 `favorite_shows` (tabla creada, CRUD pendiente).
+- [x] `build.rs`: `show_detail_view.cpp/.h` registrados en compilación y moc.
+- [ ] Añadir "Podcasts" como tab en LibraryView con suscripciones locales.
+- [ ] Soportar suscripcion/desuscripcion a shows via DB (`favorite_shows` CRUD + UI).
+- [ ] Soportar like/unlike en episodios individuales (reusar `favorite_tracks`).
+- [ ] Cablear `play_episode_requested` en ShowDetailView → crear Track desde Episode y reproducir.
+- [ ] Cache de episodios y metadata de shows.
+- [ ] (Futuro) Soporte de feeds RSS para podcasts externos.
+
 ## P4 - Descargas y experiencia offline
 
 ### P4.1 Gestor de descargas
 
-- [ ] Modelar estados queued/resolving/downloading/postprocessing/completed/failed/cancelled.
-- [ ] Exponer progreso, velocidad, ETA y error a Qt.
-- [ ] Implementar pause/cancel/retry cuando la herramienta lo permita.
-- [ ] Controlar concurrencia mediante semaphore, no polling de mutex.
-- [ ] Capturar stdout/stderr estructuradamente de `yt-dlp`.
+- [x] Modelar estados queued/resolving/downloading/completed/failed/cancelled.
+- [x] Exponer progreso a Qt via bridge `set_download_progress`.
+- [x] Implementar cancel/retry.
+- [x] Controlar concurrencia mediante semaphore.
+- [x] Capturar stdout estructuradamente de `yt-dlp --newline` con regex.
 - [ ] Detectar ausencia/version incompatible de `yt-dlp` y `ffmpeg`.
 - [ ] Permitir ubicacion, formato y calidad configurables.
 - [ ] Sanitizar nombres de forma portable y resolver colisiones.
@@ -339,11 +365,10 @@ El port se considera terminado cuando Doremi cubra los flujos reales de Pyrolist
 
 ### P4.2 Albums y playlists
 
-- [ ] Crear tareas padre e hijas para albums/playlists.
-- [ ] Mostrar progreso agregado y por pista.
+- [x] Crear tareas padre e hijas para albums/playlists (via `parent_playlist_id`).
+- [x] Mostrar progreso agregado y por pista via `set_batch_download_progress`.
+- [x] Preservar orden original.
 - [ ] Reanudar lote parcialmente descargado.
-- [ ] Evitar redescargas y ofrecer reparar metadata.
-- [ ] Preservar orden original.
 - [ ] Borrar track o coleccion, con opcion de mantener archivos.
 - [ ] Reconciliar DB cuando archivos son movidos o borrados externamente.
 

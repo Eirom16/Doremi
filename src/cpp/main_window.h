@@ -3,6 +3,7 @@
 
 #include <QMainWindow>
 #include <QStackedWidget>
+#include <QScrollArea>
 #include "components/fade_stack.h"
 #include <QLabel>
 #include <QTimer>
@@ -18,6 +19,8 @@ struct Track;
 struct Album;
 struct Artist;
 struct Playlist;
+struct Show;
+struct Episode;
 struct StatsData;
 struct HomeCard;
 struct TopResult;
@@ -37,6 +40,7 @@ class HistoryView;
 class AlbumDetailView;
 class ArtistDetailView;
 class PlaylistDetailView;
+class ShowDetailView;
 class WelcomeView;
 class ThemeTransitionOverlay;
 class QNetworkCookie;
@@ -80,8 +84,10 @@ public:
     AlbumDetailView* album_detail_view() const { return album_detail_view_; }
     ArtistDetailView* artist_detail_view() const { return artist_detail_view_; }
     PlaylistDetailView* playlist_detail_view() const { return playlist_detail_view_; }
+    ShowDetailView* show_detail_view() const { return show_detail_view_; }
     WelcomeView* welcome_view() const { return welcome_view_; }
     ThemeTransitionOverlay* theme_transition() const { return theme_transition_; }
+    std::string current_route() const { return current_route_; }
 
     void set_stop_on_close(bool stop) { stop_on_close_ = stop; }
     void setup_tray();
@@ -109,6 +115,7 @@ private:
     TitleBar *title_bar_;
     NavSidebar *nav_sidebar_;
     FadeStack *stack_;
+    QScrollArea *body_scroll_;
     PlayerBar *player_bar_;
     HomeView *home_view_;
     SearchView *search_view_;
@@ -122,6 +129,7 @@ private:
     AlbumDetailView *album_detail_view_;
     ArtistDetailView *artist_detail_view_;
     PlaylistDetailView *playlist_detail_view_;
+    ShowDetailView *show_detail_view_;
     WelcomeView *welcome_view_;
 
     QSystemTrayIcon *tray_icon_;
@@ -154,10 +162,11 @@ void set_window_title(rust::Str title);
 void set_playing(bool playing);
 void set_player_volume(int32_t volume);
 void run_event_loop();
-void set_search_results(TopResult top_result, bool has_top_result,
-                        rust::Vec<Track> songs, rust::Vec<Track> videos, rust::Vec<Artist> artists,
-                        rust::Vec<Album> albums, rust::Vec<Playlist> playlists);
-void add_home_section(rust::Str title, rust::Vec<HomeCard> items);
+    void set_search_results(TopResult top_result, bool has_top_result,
+                            rust::Vec<Track> songs, rust::Vec<Track> videos, rust::Vec<Artist> artists,
+                            rust::Vec<Album> albums, rust::Vec<Playlist> playlists,
+                            rust::Vec<Show> shows, rust::Vec<Episode> episodes);
+    void add_home_section(rust::Str title, rust::Vec<HomeCard> items);
 void clear_home_sections();
 void set_home_state(rust::Str state, rust::Str message);
 void set_library_songs(rust::Vec<Track> songs);
@@ -200,13 +209,19 @@ void set_trending_items(rust::Vec<HomeCard> items);
 void set_trending_state(rust::Str state, rust::Str message);
 void set_downloads_list(rust::Vec<rust::String> titles,
                         rust::Vec<rust::String> artists,
-                        rust::Vec<rust::String> thumbnails);
+                        rust::Vec<rust::String> thumbnails,
+                        rust::Vec<rust::String> video_ids,
+                        rust::Vec<rust::String> statuses,
+                        rust::Vec<double> progresses);
+void set_download_progress(rust::Str video_id, double percent, rust::Str status);
+void set_batch_download_progress(rust::Str parent_id, int32_t total, int32_t completed, double percent);
 
 void set_dominant_colors(rust::Vec<rust::String> colors);
 void set_playback_queue(rust::Vec<Track> queue, int32_t current_index);
 void set_context_playlists(rust::Vec<Playlist> playlists);
 void set_related_tracks(rust::Vec<Track> tracks);
 void set_current_track(Track track);
+void set_prefetch_status(rust::Str track_id, rust::Str status);
 void set_stats_data(StatsData stats);
 
 void set_history_data(rust::Vec<Track> history, rust::Vec<rust::String> played_at);
@@ -216,6 +231,7 @@ void set_album_detail(Album album, rust::Vec<Track> tracks);
 void set_artist_detail(Artist artist, rust::Vec<Track> tracks, rust::Vec<Album> albums);
 
 void set_playlist_detail(Playlist playlist, rust::Vec<Track> tracks);
+void set_show_detail(Show show, rust::Vec<Episode> episodes);
 
 void update_youtube_auth_state(bool authenticated, rust::Str name, rust::Str avatar_url);
 

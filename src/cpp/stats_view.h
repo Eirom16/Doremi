@@ -2,7 +2,6 @@
 #define DOREMI_STATS_VIEW_H
 
 #include <QWidget>
-#include <QScrollArea>
 #include <QVBoxLayout>
 #include <QLabel>
 #include "components/stat_card.h"
@@ -43,8 +42,6 @@ private:
     void setupLayout();
     void buildTopTracks(const std::vector<Track> &tracks, int total_plays);
 
-    QScrollArea *scroll_area_;
-    QWidget *scroll_content_;
     QVBoxLayout *main_layout_;
 
     StatCard *card_time_;

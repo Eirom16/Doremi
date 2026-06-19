@@ -32,6 +32,12 @@ fn qt_moc_headers(build: &mut cc::Build, header: &str, out_dir: &std::path::Path
     let stem = std::path::Path::new(header).file_stem().unwrap().to_str().unwrap();
     let moc_out = out_dir.join(format!("moc_{stem}.cpp"));
     let cxx_include = out_dir.join("cxxbridge").join("include");
+    
+    // Ensure parent directory exists
+    if let Some(parent) = moc_out.parent() {
+        std::fs::create_dir_all(parent).unwrap_or_default();
+    }
+    
     let status = std::process::Command::new(moc_path)
         .arg(&header_path)
         .arg("-o")

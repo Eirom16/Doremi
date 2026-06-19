@@ -2,12 +2,13 @@
 #include "design_tokens.h"
 #include "icon_provider.h"
 #include <QHBoxLayout>
-#include <QScrollBar>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPainterPath>
 #include <QDateTime>
 #include <QTimeZone>
+#include <QPushButton>
+#include <QMessageBox>
 #include "doremi/src/bridge.rs.h"
 
 HistoryRow::HistoryRow(const Track &track,
@@ -141,39 +142,49 @@ void HistoryView::setupLayout() {
     main_vbox->setContentsMargins(0, 0, 0, 0);
     main_vbox->setSpacing(0);
 
-    scroll_area_ = new QScrollArea(this);
-    scroll_area_->setWidgetResizable(true);
-    scroll_area_->setFrameShape(QFrame::NoFrame);
-    scroll_area_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    scroll_area_->setStyleSheet("background: transparent;");
-
-    scroll_content_ = new QWidget(scroll_area_);
-    scroll_content_->setStyleSheet("background: transparent;");
-
-    content_layout_ = new QVBoxLayout(scroll_content_);
+    content_layout_ = new QVBoxLayout();
     content_layout_->setContentsMargins(24, 24, 24, 24);
     content_layout_->setSpacing(4);
     content_layout_->setAlignment(Qt::AlignTop);
 
-    auto *title = new QLabel("Historial", scroll_content_);
+    auto *header_row = new QHBoxLayout();
+    auto *title = new QLabel("Historial", this);
     title->setFont(DesignTokens::getFont("display", 22));
     title->setStyleSheet(QString("color: %1; font-weight: bold;").arg(c.text_primary.name()));
-    content_layout_->addWidget(title);
+    header_row->addWidget(title);
+    header_row->addStretch();
+    auto *clear_btn = new QPushButton("Limpiar historial", this);
+    clear_btn->setFixedHeight(30);
+    clear_btn->setCursor(Qt::PointingHandCursor);
+    clear_btn->setStyleSheet(QString(
+        "QPushButton { background: transparent; border: 1px solid %1; border-radius: 15px; padding: 0 16px; color: %2; font-size: 12px; }"
+        "QPushButton:hover { background: rgba(%3, %4, %5, 0.08); }")
+        .arg(c.border.name()).arg(c.text_secondary.name())
+        .arg(c.text_primary.red()).arg(c.text_primary.green()).arg(c.text_primary.blue()));
+    connect(clear_btn, &QPushButton::clicked, this, [this]() {
+        auto reply = QMessageBox::question(this, "Limpiar historial",
+            "¿Estás seguro de que deseas eliminar todo el historial de reproducción?",
+            QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+        if (reply == QMessageBox::Yes) {
+            on_clear_history();
+        }
+    });
+    header_row->addWidget(clear_btn);
+    content_layout_->addLayout(header_row);
 
-    auto *subtitle = new QLabel("Reproducido recientemente", scroll_content_);
+    auto *subtitle = new QLabel("Reproducido recientemente", this);
     subtitle->setFont(DesignTokens::getFont("caption", 12));
     subtitle->setStyleSheet(QString("color: %1; margin-bottom: 12px;").arg(c.text_secondary.name()));
     content_layout_->addWidget(subtitle);
 
-    empty_label_ = new QLabel("Tu historial está vacío\n\nLas canciones que reproduzcas aparecerán aquí", scroll_content_);
+    empty_label_ = new QLabel("Tu historial está vacío\n\nLas canciones que reproduzcas aparecerán aquí", this);
     empty_label_->setAlignment(Qt::AlignCenter);
     empty_label_->setFont(DesignTokens::getFont("body", 13));
     empty_label_->setStyleSheet(QString("color: %1; padding: 60px 0;").arg(c.text_muted.name()));
     empty_label_->setWordWrap(true);
     content_layout_->addWidget(empty_label_);
 
-    scroll_area_->setWidget(scroll_content_);
-    main_vbox->addWidget(scroll_area_);
+    main_vbox->addLayout(content_layout_);
     setLayout(main_vbox);
 }
 
@@ -215,7 +226,7 @@ void HistoryView::set_history(const std::vector<Track> &tracks,
     const auto &c = DesignTokens::current();
 
     if (tracks.empty()) {
-        empty_label_ = new QLabel("Tu historial está vacío\n\nLas canciones que reproduzcas aparecerán aquí", scroll_content_);
+        empty_label_ = new QLabel("Tu historial está vacío\n\nLas canciones que reproduzcas aparecerán aquí", this);
         empty_label_->setAlignment(Qt::AlignCenter);
         empty_label_->setFont(DesignTokens::getFont("body", 13));
         empty_label_->setStyleSheet(QString("color: %1; padding: 60px 0;").arg(c.text_muted.name()));
@@ -234,14 +245,14 @@ void HistoryView::set_history(const std::vector<Track> &tracks,
         QString group = getGroupLabel(QString::fromStdString(pa));
         if (group != last_group) {
             last_group = group;
-            auto *group_lbl = new QLabel(group, scroll_content_);
+            auto *group_lbl = new QLabel(group, this);
             group_lbl->setFont(DesignTokens::getFont("heading_sm", 13));
             group_lbl->setStyleSheet(QString("color: %1; font-weight: bold; margin-top: 16px; margin-bottom: 4px;")
                 .arg(c.accent.name()));
             content_layout_->addWidget(group_lbl);
         }
 
-        auto *row = new HistoryRow(t, pa, scroll_content_);
+        auto *row = new HistoryRow(t, pa, this);
         connect(row, &HistoryRow::play_requested, this, &HistoryView::play_requested);
         content_layout_->addWidget(row);
     }

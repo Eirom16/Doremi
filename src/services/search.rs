@@ -78,6 +78,35 @@ impl SearchService {
                 description: playlist.description.clone().unwrap_or_default(),
                 thumbnail: playlist.thumbnail.clone(),
                 track_count: playlist.track_count.unwrap_or_default(),
+                owner: playlist.owner.clone().unwrap_or_default(),
+                privacy: String::new(),
+            })
+            .collect();
+
+        let shows: Vec<crate::bridge::bridge::Show> = results
+            .shows
+            .iter()
+            .map(|s| crate::bridge::bridge::Show {
+                id: s.id.clone(),
+                title: s.title.clone(),
+                author: s.author.clone(),
+                description: s.description.clone(),
+                thumbnail: s.thumbnail.clone(),
+                episode_count: s.episode_count.unwrap_or(0),
+            })
+            .collect();
+
+        let episodes: Vec<crate::bridge::bridge::Episode> = results
+            .episodes
+            .iter()
+            .map(|e| crate::bridge::bridge::Episode {
+                id: e.id.clone(),
+                title: e.title.clone(),
+                show: e.show.clone(),
+                show_id: e.show_id.clone(),
+                description: e.description.clone(),
+                thumbnail: e.thumbnail.clone(),
+                duration_ms: e.duration_ms,
             })
             .collect();
 
@@ -120,6 +149,15 @@ impl SearchService {
                             item_type: "playlist".to_string(),
                         }
                     }
+                    crate::api::models::TopResultItem::Show(s) => {
+                        crate::bridge::bridge::TopResult {
+                            id: s.id.clone(),
+                            title: s.title.clone(),
+                            subtitle: s.author.clone(),
+                            thumbnail: s.thumbnail.clone(),
+                            item_type: "show".to_string(),
+                        }
+                    }
                 };
                 (ffi_top, true)
             }
@@ -145,6 +183,8 @@ impl SearchService {
             artists,
             albums,
             playlists,
+            shows,
+            episodes,
         );
     }
 }

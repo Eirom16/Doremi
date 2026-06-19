@@ -107,13 +107,16 @@ void LyricsWidget::setLyrics(const QString &plain, const QString &synced) {
 void LyricsWidget::updatePosition(int position_ms) {
     if (!has_synced_lyrics_ || lines_.isEmpty()) return;
 
-    // Binary search for current line
+    // Binary search for last line with time_ms <= position_ms
+    int lo = 0, hi = lines_.size() - 1;
     int idx = -1;
-    for (int i = 0; i < lines_.size(); ++i) {
-        if (lines_[i].time_ms <= position_ms) {
-            idx = i;
+    while (lo <= hi) {
+        int mid = lo + (hi - lo) / 2;
+        if (lines_[mid].time_ms <= position_ms) {
+            idx = mid;
+            lo = mid + 1;
         } else {
-            break;
+            hi = mid - 1;
         }
     }
 
@@ -229,6 +232,15 @@ void LyricsWidget::buildLyricsLayout() {
     bottom_spacer_->setFixedHeight(mid_h);
     bottom_spacer_->setStyleSheet("background: transparent;");
     layout_->addWidget(bottom_spacer_);
+
+    // Sync time caption (hidden by default)
+    time_caption_ = new QLabel(container_);
+    time_caption_->setFont(DesignTokens::getFont("caption", 10));
+    time_caption_->setStyleSheet(QString("color: %1;").arg(c.text_muted.name()));
+    time_caption_->setAlignment(Qt::AlignCenter);
+    time_caption_->setFixedHeight(20);
+    time_caption_->hide();
+    layout_->addWidget(time_caption_);
 }
 
 void LyricsWidget::highlightLine(int index) {
@@ -237,7 +249,7 @@ void LyricsWidget::highlightLine(int index) {
 
     const auto &c = DesignTokens::current();
 
-    // 1. Reset old active line
+    // 1. Reset old active line and its neighbors
     if (active_index_ >= 0 && active_index_ < lines_.size()) {
         auto &old_line = lines_[active_index_];
         if (old_line.label) {
@@ -261,7 +273,29 @@ void LyricsWidget::highlightLine(int index) {
     // 2. Set new active index
     active_index_ = index;
 
-    // 3. Highlight new active line
+    const int stagger_range = 2;
+    // 3. Stagger animation for surrounding lines
+    for (int offset = -stagger_range; offset <= stagger_range; ++offset) {
+        if (offset == 0) continue;
+        int idx = index + offset;
+        if (idx < 0 || idx >= lines_.size()) continue;
+        auto &line = lines_[idx];
+        if (!line.label || !line.opacity_effect) continue;
+
+        float target_opacity = 0.4 + (stagger_range - abs(offset) + 1) * 0.15f;
+        if (target_opacity > 0.95f) target_opacity = 0.95f;
+
+        auto *o_anim = new QPropertyAnimation(line.opacity_effect, "opacity", this);
+        o_anim->setDuration(200);
+        o_anim->setStartValue(line.opacity_effect->opacity());
+        o_anim->setEndValue(target_opacity);
+        o_anim->setEasingCurve(QEasingCurve::OutCubic);
+        int delay = (abs(offset) - 1) * 40;
+        if (delay > 0) o_anim->setLoopCount(1);
+        o_anim->start(QAbstractAnimation::DeleteWhenStopped);
+    }
+
+    // 4. Highlight new active line
     auto &new_line = lines_[active_index_];
     if (new_line.label) {
         auto *f_anim = new QPropertyAnimation(new_line.label, "fontSize", this);
@@ -286,7 +320,17 @@ void LyricsWidget::highlightLine(int index) {
             new_line.label->setStyleSheet(QString("color: %1; font-weight: bold;").arg(c.text_primary.name()));
         }
 
-        // 4. Center scroll view on new active label
+        // 5. Update sync time caption
+        if (has_synced_lyrics_ && time_caption_) {
+            int ms = new_line.time_ms;
+            int mins = ms / 60000;
+            int secs = (ms % 60000) / 1000;
+            int cent = (ms % 1000) / 10;
+            time_caption_->setText(QString("[%1:%2.%3]").arg(mins).arg(secs, 2, 10, QChar('0')).arg(cent, 2, 10, QChar('0')));
+            time_caption_->show();
+        }
+
+        // 6. Center scroll view on new active label
         if (auto_scroll_enabled_) {
             int target_y = new_line.label->geometry().center().y() - viewport()->height() / 2;
             smoothScrollTo(target_y);

@@ -18,6 +18,8 @@ impl ApiClient {
                 albums: vec![],
                 artists: vec![],
                 playlists: vec![],
+                shows: vec![],
+                episodes: vec![],
             };
         }
         match super::innertube::search(query, filter).await {
@@ -44,6 +46,8 @@ impl ApiClient {
                     albums: vec![],
                     artists: vec![],
                     playlists: vec![],
+                    shows: vec![],
+                    episodes: vec![],
                 }
             }
         }

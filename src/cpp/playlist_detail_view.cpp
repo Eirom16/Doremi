@@ -1,7 +1,6 @@
 #include "playlist_detail_view.h"
 #include "design_tokens.h"
 #include "icon_provider.h"
-#include <QScrollBar>
 #include <QPainter>
 #include <QPainterPath>
 #include <QPushButton>
@@ -18,8 +17,9 @@ PlaylistTrackRow::PlaylistTrackRow(int num, const QString &title, const QString 
     : QWidget(parent), track_(std::move(track))
 {
     const auto &c = DesignTokens::current();
+    bool unavailable = track_.id.empty();
     setFixedHeight(48);
-    setCursor(Qt::PointingHandCursor);
+    setCursor(unavailable ? Qt::ArrowCursor : Qt::PointingHandCursor);
 
     auto *layout = new QHBoxLayout(this);
     layout->setContentsMargins(16, 4, 16, 4);
@@ -39,13 +39,16 @@ PlaylistTrackRow::PlaylistTrackRow(int num, const QString &title, const QString 
     text_l->setContentsMargins(0, 0, 0, 0);
     text_l->setSpacing(1);
 
-    auto *t_lbl = new QLabel(title, this);
+    QString title_text = title;
+    if (unavailable) title_text = "No disponible";
+    auto *t_lbl = new QLabel(title_text, this);
     t_lbl->setFont(DesignTokens::getFont("body", 13));
-    t_lbl->setStyleSheet(QString("color: %1; font-weight: 600;").arg(c.text_primary.name()));
+    QString title_color = unavailable ? c.text_muted.name() : c.text_primary.name();
+    t_lbl->setStyleSheet(QString("color: %1; font-weight: 600;").arg(title_color));
 
-    auto *a_lbl = new QLabel(artist, this);
+    auto *a_lbl = new QLabel(unavailable ? "" : artist, this);
     a_lbl->setFont(DesignTokens::getFont("caption", 11));
-    a_lbl->setStyleSheet(QString("color: %1;").arg(c.text_secondary.name()));
+    a_lbl->setStyleSheet(QString("color: %1;").arg(c.text_muted.name()));
 
     text_l->addWidget(t_lbl);
     text_l->addWidget(a_lbl);
@@ -60,19 +63,49 @@ PlaylistTrackRow::PlaylistTrackRow(int num, const QString &title, const QString 
         layout->addWidget(dur);
     }
 
-    setObjectName("PlaylistTrackRow");
-    setStyleSheet("QWidget#PlaylistTrackRow { background-color: transparent; border-radius: 6px; }");
+    // Favorite button (only for available tracks)
+    if (!unavailable) {
+        auto *fav_btn = new QPushButton(this);
+        fav_btn->setFixedSize(28, 28);
+        fav_btn->setCursor(Qt::PointingHandCursor);
+        bool is_fav = get_track_favorite_state(static_cast<std::string>(track_.id));
+        fav_btn->setIcon(IconProvider::getIcon(
+            is_fav ? "favorite" : "favorite_border",
+            is_fav ? c.accent : c.text_muted, 16));
+        fav_btn->setStyleSheet("QPushButton { background: transparent; border: none; }");
+        connect(fav_btn, &QPushButton::clicked, this, [this, fav_btn, is_fav]() {
+            if (is_fav) {
+                on_remove_favorite(static_cast<std::string>(track_.id));
+            } else {
+                on_add_favorite(track_);
+            }
+        });
+        layout->addWidget(fav_btn);
+    }
+
+    setObjectName(unavailable ? "PlaylistTrackRow_unavailable" : "PlaylistTrackRow");
+    if (unavailable) {
+        setStyleSheet(QString("QWidget#PlaylistTrackRow_unavailable { background-color: transparent; border-radius: 6px; }"
+                              "QWidget#PlaylistTrackRow_unavailable:hover { background-color: rgba(%1, %2, %3, 0.03); }")
+            .arg(c.text_primary.red()).arg(c.text_primary.green()).arg(c.text_primary.blue()));
+    } else {
+        setStyleSheet("QWidget#PlaylistTrackRow { background-color: transparent; border-radius: 6px; }");
+    }
 }
 
 void PlaylistTrackRow::mousePressEvent(QMouseEvent *event) {
     QWidget::mousePressEvent(event);
-    if (event->button() == Qt::LeftButton) emit play_requested(track_);
+    if (event->button() == Qt::LeftButton && !track_.id.empty())
+        emit play_requested(track_);
 }
 
 void PlaylistTrackRow::contextMenuEvent(QContextMenuEvent *event) {
     QMenu menu;
     QAction *play = menu.addAction("Reproducir");
-    QAction *fav = menu.addAction("Agregar a favoritos");
+    
+    bool is_fav = get_track_favorite_state(static_cast<std::string>(track_.id));
+    QAction *fav = menu.addAction(is_fav ? "Quitar de favoritos" : "Agregar a favoritos");
+    
     QAction *dl = menu.addAction("Descargar");
     menu.addSeparator();
     QAction *next = menu.addAction("Reproducir siguiente");
@@ -85,7 +118,11 @@ void PlaylistTrackRow::contextMenuEvent(QContextMenuEvent *event) {
     if (chosen == play) {
         emit play_requested(track_);
     } else if (chosen == fav) {
-        on_add_favorite(track_);
+        if (is_fav) {
+            on_remove_favorite(static_cast<std::string>(track_.id));
+        } else {
+            on_add_favorite(track_);
+        }
     } else if (chosen == dl) {
         on_download_requested(track_);
     } else if (chosen == next) {
@@ -126,16 +163,7 @@ void PlaylistDetailView::setupLayout() {
     main_vbox->setContentsMargins(0, 0, 0, 0);
     main_vbox->setSpacing(0);
 
-    scroll_area_ = new QScrollArea(this);
-    scroll_area_->setWidgetResizable(true);
-    scroll_area_->setFrameShape(QFrame::NoFrame);
-    scroll_area_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    scroll_area_->setStyleSheet("background: transparent;");
-
-    scroll_content_ = new QWidget(scroll_area_);
-    scroll_content_->setStyleSheet("background: transparent;");
-
-    content_layout_ = new QVBoxLayout(scroll_content_);
+    content_layout_ = new QVBoxLayout();
     content_layout_->setContentsMargins(24, 16, 24, 24);
     content_layout_->setSpacing(8);
     content_layout_->setAlignment(Qt::AlignTop);
@@ -165,7 +193,7 @@ void PlaylistDetailView::setupLayout() {
     auto *header = new QHBoxLayout();
     header->setSpacing(24);
 
-    cover_label_ = new QLabel(scroll_content_);
+    cover_label_ = new QLabel(this);
     cover_label_->setFixedSize(160, 160);
     cover_label_->setStyleSheet(QString("background-color: %1; border-radius: 12px;").arg(c.bg_elevated.name()));
     cover_label_->setAlignment(Qt::AlignCenter);
@@ -174,18 +202,18 @@ void PlaylistDetailView::setupLayout() {
     auto *info = new QVBoxLayout();
     info->setSpacing(6);
 
-    auto *type_lbl = new QLabel("PLAYLIST", scroll_content_);
+    auto *type_lbl = new QLabel("PLAYLIST", this);
     type_lbl->setFont(DesignTokens::getFont("caption", 10));
     type_lbl->setStyleSheet(QString("color: %1; font-weight: bold; letter-spacing: 2px;").arg(c.text_muted.name()));
     info->addWidget(type_lbl);
 
-    title_label_ = new QLabel("Playlist", scroll_content_);
+    title_label_ = new QLabel("Playlist", this);
     title_label_->setFont(DesignTokens::getFont("display", 24));
     title_label_->setStyleSheet(QString("color: %1; font-weight: bold;").arg(c.text_primary.name()));
     title_label_->setWordWrap(true);
     info->addWidget(title_label_);
 
-    desc_label_ = new QLabel("", scroll_content_);
+    desc_label_ = new QLabel("", this);
     desc_label_->setFont(DesignTokens::getFont("caption", 11));
     desc_label_->setStyleSheet(QString("color: %1;").arg(c.text_secondary.name()));
     desc_label_->setWordWrap(true);
@@ -193,7 +221,7 @@ void PlaylistDetailView::setupLayout() {
     desc_label_->hide();
     info->addWidget(desc_label_);
 
-    meta_label_ = new QLabel("", scroll_content_);
+    meta_label_ = new QLabel("", this);
     meta_label_->setFont(DesignTokens::getFont("caption", 12));
     meta_label_->setStyleSheet(QString("color: %1;").arg(c.text_muted.name()));
     info->addWidget(meta_label_);
@@ -203,7 +231,7 @@ void PlaylistDetailView::setupLayout() {
     actions->setSpacing(10);
 
     // Play all
-    auto *play_btn = new QPushButton(scroll_content_);
+    auto *play_btn = new QPushButton(this);
     auto *play_l = new QHBoxLayout(play_btn);
     play_l->setContentsMargins(16, 8, 20, 8);
     play_l->setSpacing(8);
@@ -225,7 +253,7 @@ void PlaylistDetailView::setupLayout() {
     actions->addWidget(play_btn);
 
     // Shuffle
-    auto *shuffle_btn = new QPushButton(scroll_content_);
+    auto *shuffle_btn = new QPushButton(this);
     auto *shuffle_l = new QHBoxLayout(shuffle_btn);
     shuffle_l->setContentsMargins(16, 8, 20, 8);
     shuffle_l->setSpacing(8);
@@ -247,8 +275,37 @@ void PlaylistDetailView::setupLayout() {
     });
     actions->addWidget(shuffle_btn);
 
+    // Download all
+    auto *dl_btn = new QPushButton(this);
+    auto *dl_l = new QHBoxLayout(dl_btn);
+    dl_l->setContentsMargins(16, 8, 20, 8);
+    dl_l->setSpacing(8);
+    dl_l->addWidget(IconProvider::createIconLabel("download", 18, c.accent, false, dl_btn));
+    auto *dl_t = new QLabel("Descargar todo", dl_btn);
+    dl_t->setFont(DesignTokens::getFont("body", 13));
+    dl_t->setStyleSheet(QString("color: %1; background: transparent; font-weight: 600;").arg(c.accent.name()));
+    dl_l->addWidget(dl_t);
+    dl_btn->setLayout(dl_l);
+    dl_btn->setFixedHeight(40);
+    dl_btn->setCursor(Qt::PointingHandCursor);
+    dl_btn->setStyleSheet(QString(
+        "QPushButton { background: transparent; border: 1px solid %1; border-radius: 20px; }"
+        "QPushButton:hover { background: rgba(%2, %3, %4, 0.08); }")
+        .arg(c.accent.name())
+        .arg(c.accent.red()).arg(c.accent.green()).arg(c.accent.blue()));
+    connect(dl_btn, &QPushButton::clicked, this, [this]() {
+        if (!tracks_.empty()) {
+            const auto &p = current_playlist_;
+            std::string pid = static_cast<std::string>(p.id);
+            std::string pt = static_cast<std::string>(p.name);
+            std::string pth = static_cast<std::string>(p.thumbnail);
+            emit download_all_requested(tracks_, pid, pt, pth);
+        }
+    });
+    actions->addWidget(dl_btn);
+
     // Edit
-    edit_btn_ = new QPushButton(scroll_content_);
+    edit_btn_ = new QPushButton(this);
     edit_btn_->setFixedSize(36, 36);
     edit_btn_->setCursor(Qt::PointingHandCursor);
     edit_btn_->setToolTip("Editar playlist");
@@ -263,11 +320,20 @@ void PlaylistDetailView::setupLayout() {
         if (ok && !new_name.trimmed().isEmpty()) {
             emit rename_playlist_requested(playlist_id_, new_name.trimmed().toStdString());
         }
+
+        QString new_desc = QInputDialog::getText(this, "Editar descripción",
+            "Nueva descripción:", QLineEdit::Normal,
+            desc_label_->isVisible() ? desc_label_->text() : "", &ok);
+        if (ok) {
+            // TODO: emit signal for description update when backend supports it
+            desc_label_->setText(new_desc);
+            desc_label_->setVisible(!new_desc.isEmpty());
+        }
     });
     actions->addWidget(edit_btn_);
 
     // Delete
-    delete_btn_ = new QPushButton(scroll_content_);
+    delete_btn_ = new QPushButton(this);
     delete_btn_->setFixedSize(36, 36);
     delete_btn_->setCursor(Qt::PointingHandCursor);
     delete_btn_->setToolTip("Eliminar playlist");
@@ -294,7 +360,7 @@ void PlaylistDetailView::setupLayout() {
     content_layout_->addLayout(header);
 
     // Separator
-    auto *sep = new QWidget(scroll_content_);
+    auto *sep = new QWidget(this);
     sep->setFixedHeight(1);
     sep->setStyleSheet(QString("background-color: %1;").arg(c.border.name()));
     content_layout_->addSpacing(8);
@@ -302,19 +368,19 @@ void PlaylistDetailView::setupLayout() {
     content_layout_->addSpacing(4);
 
     // Tracks container
-    tracks_widget_ = new QWidget(scroll_content_);
+    tracks_widget_ = new QWidget(this);
     tracks_widget_->setStyleSheet("background: transparent;");
     tracks_layout_ = new QVBoxLayout(tracks_widget_);
     tracks_layout_->setContentsMargins(0, 0, 0, 0);
     tracks_layout_->setSpacing(2);
     content_layout_->addWidget(tracks_widget_);
 
-    scroll_area_->setWidget(scroll_content_);
-    main_vbox->addWidget(scroll_area_);
+    main_vbox->addLayout(content_layout_);
     setLayout(main_vbox);
 }
 
 void PlaylistDetailView::set_playlist_info(const Playlist &playlist) {
+    current_playlist_ = playlist;
     const auto &c = DesignTokens::current();
     playlist_id_ = static_cast<std::string>(playlist.id);
     title_label_->setText(QString::fromStdString(static_cast<std::string>(playlist.name)));
@@ -326,7 +392,23 @@ void PlaylistDetailView::set_playlist_info(const Playlist &playlist) {
         desc_label_->hide();
     }
 
-    meta_label_->setText(playlist.track_count > 0 ? QString("%1 canciones").arg(playlist.track_count) : "");
+    QString meta_text;
+    if (!playlist.owner.empty()) {
+        meta_text += QString("Creada por %1").arg(QString::fromStdString(static_cast<std::string>(playlist.owner)));
+    }
+    if (!playlist.privacy.empty()) {
+        if (!meta_text.isEmpty()) meta_text += " • ";
+        QString priv_es = QString::fromStdString(static_cast<std::string>(playlist.privacy));
+        if (priv_es == "PUBLIC") priv_es = "Pública";
+        else if (priv_es == "PRIVATE") priv_es = "Privada";
+        else if (priv_es == "UNLISTED") priv_es = "No listada";
+        meta_text += priv_es;
+    }
+    if (playlist.track_count > 0) {
+        if (!meta_text.isEmpty()) meta_text += " • ";
+        meta_text += QString("%1 canciones").arg(playlist.track_count);
+    }
+    meta_label_->setText(meta_text);
 
     QPixmap pm;
     if (!playlist.thumbnail.empty() && pm.load(QString::fromStdString(static_cast<std::string>(playlist.thumbnail)))) {

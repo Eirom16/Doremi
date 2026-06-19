@@ -2,7 +2,6 @@
 #define DOREMI_ARTIST_DETAIL_VIEW_H
 
 #include <QWidget>
-#include <QScrollArea>
 #include <QVBoxLayout>
 #include <QLabel>
 #include <QHBoxLayout>
@@ -54,8 +53,6 @@ signals:
 private:
     void setupLayout();
 
-    QScrollArea *scroll_area_;
-    QWidget *scroll_content_;
     QVBoxLayout *content_layout_;
 
     // Header widgets

@@ -1,7 +1,6 @@
 #include "album_detail_view.h"
 #include "design_tokens.h"
 #include "icon_provider.h"
-#include <QScrollBar>
 #include <QPainter>
 #include <QPainterPath>
 #include <QPushButton>
@@ -60,6 +59,24 @@ AlbumTrackRow::AlbumTrackRow(int num, const QString &title, const QString &artis
         layout->addWidget(dur);
     }
 
+    // Favorite button
+    auto *fav_btn = new QPushButton(this);
+    fav_btn->setFixedSize(28, 28);
+    fav_btn->setCursor(Qt::PointingHandCursor);
+    bool is_fav = get_track_favorite_state(static_cast<std::string>(track_.id));
+    fav_btn->setIcon(IconProvider::getIcon(
+        is_fav ? "favorite" : "favorite_border",
+        is_fav ? c.accent : c.text_muted, 16));
+    fav_btn->setStyleSheet("QPushButton { background: transparent; border: none; }");
+    connect(fav_btn, &QPushButton::clicked, this, [this, fav_btn, is_fav]() {
+        if (is_fav) {
+            on_remove_favorite(static_cast<std::string>(track_.id));
+        } else {
+            on_add_favorite(track_);
+        }
+    });
+    layout->addWidget(fav_btn);
+
     setObjectName("AlbumTrackRow");
     setStyleSheet("QWidget#AlbumTrackRow { background-color: transparent; border-radius: 6px; }");
 }
@@ -73,7 +90,10 @@ void AlbumTrackRow::mousePressEvent(QMouseEvent *event) {
 void AlbumTrackRow::contextMenuEvent(QContextMenuEvent *event) {
     QMenu menu;
     QAction *play = menu.addAction("Reproducir");
-    QAction *fav = menu.addAction("Agregar a favoritos");
+    
+    bool is_fav = get_track_favorite_state(static_cast<std::string>(track_.id));
+    QAction *fav = menu.addAction(is_fav ? "Quitar de favoritos" : "Agregar a favoritos");
+    
     QAction *dl = menu.addAction("Descargar");
     menu.addSeparator();
     QAction *next = menu.addAction("Reproducir siguiente");
@@ -83,7 +103,11 @@ void AlbumTrackRow::contextMenuEvent(QContextMenuEvent *event) {
     if (chosen == play) {
         emit play_requested(track_);
     } else if (chosen == fav) {
-        on_add_favorite(track_);
+        if (is_fav) {
+            on_remove_favorite(static_cast<std::string>(track_.id));
+        } else {
+            on_add_favorite(track_);
+        }
     } else if (chosen == dl) {
         on_download_requested(track_);
     } else if (chosen == next) {
@@ -122,16 +146,7 @@ void AlbumDetailView::setupLayout() {
     main_vbox->setContentsMargins(0, 0, 0, 0);
     main_vbox->setSpacing(0);
 
-    scroll_area_ = new QScrollArea(this);
-    scroll_area_->setWidgetResizable(true);
-    scroll_area_->setFrameShape(QFrame::NoFrame);
-    scroll_area_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    scroll_area_->setStyleSheet("background: transparent;");
-
-    scroll_content_ = new QWidget(scroll_area_);
-    scroll_content_->setStyleSheet("background: transparent;");
-
-    content_layout_ = new QVBoxLayout(scroll_content_);
+    content_layout_ = new QVBoxLayout();
     content_layout_->setContentsMargins(24, 16, 24, 24);
     content_layout_->setSpacing(8);
     content_layout_->setAlignment(Qt::AlignTop);
@@ -161,7 +176,7 @@ void AlbumDetailView::setupLayout() {
     auto *header = new QHBoxLayout();
     header->setSpacing(24);
 
-    cover_label_ = new QLabel(scroll_content_);
+    cover_label_ = new QLabel(this);
     cover_label_->setFixedSize(180, 180);
     cover_label_->setStyleSheet(QString("background-color: %1; border-radius: 12px;").arg(c.bg_elevated.name()));
     cover_label_->setAlignment(Qt::AlignCenter);
@@ -170,13 +185,13 @@ void AlbumDetailView::setupLayout() {
     auto *info = new QVBoxLayout();
     info->setSpacing(6);
 
-    title_label_ = new QLabel("Álbum", scroll_content_);
+    title_label_ = new QLabel("Álbum", this);
     title_label_->setFont(DesignTokens::getFont("display", 24));
     title_label_->setStyleSheet(QString("color: %1; font-weight: bold;").arg(c.text_primary.name()));
     title_label_->setWordWrap(true);
     info->addWidget(title_label_);
 
-    artist_label_ = new QLabel("Artista", scroll_content_);
+    artist_label_ = new QLabel("Artista", this);
     artist_label_->setFont(DesignTokens::getFont("body", 14));
     artist_label_->setStyleSheet(QString(
         "QLabel { color: %1; background: transparent; }\n"
@@ -186,13 +201,13 @@ void AlbumDetailView::setupLayout() {
     artist_label_->installEventFilter(this);
     info->addWidget(artist_label_);
 
-    meta_label_ = new QLabel("", scroll_content_);
+    meta_label_ = new QLabel("", this);
     meta_label_->setFont(DesignTokens::getFont("caption", 12));
     meta_label_->setStyleSheet(QString("color: %1;").arg(c.text_muted.name()));
     info->addWidget(meta_label_);
 
     // Play all button
-    auto *play_all_btn = new QPushButton(scroll_content_);
+    auto *play_all_btn = new QPushButton(this);
     auto *play_all_layout = new QHBoxLayout(play_all_btn);
     play_all_layout->setContentsMargins(16, 8, 20, 8);
     play_all_layout->setSpacing(8);
@@ -216,13 +231,45 @@ void AlbumDetailView::setupLayout() {
 
     info->addSpacing(8);
     info->addWidget(play_all_btn, 0, Qt::AlignLeft);
+
+    // Download all button
+    auto *dl_all_btn = new QPushButton(this);
+    auto *dl_layout = new QHBoxLayout(dl_all_btn);
+    dl_layout->setContentsMargins(16, 8, 20, 8);
+    dl_layout->setSpacing(8);
+    auto *dl_icon = IconProvider::createIconLabel("download", 18, c.accent, false, dl_all_btn);
+    auto *dl_text = new QLabel("Descargar todo", dl_all_btn);
+    dl_text->setFont(DesignTokens::getFont("body", 13));
+    dl_text->setStyleSheet(QString("color: %1; background: transparent; font-weight: 600;").arg(c.accent.name()));
+    dl_layout->addWidget(dl_icon);
+    dl_layout->addWidget(dl_text);
+    dl_all_btn->setLayout(dl_layout);
+    dl_all_btn->setFixedHeight(40);
+    dl_all_btn->setCursor(Qt::PointingHandCursor);
+    dl_all_btn->setStyleSheet(QString(
+        "QPushButton { background: transparent; border: 1px solid %1; border-radius: 20px; }"
+        "QPushButton:hover { background: rgba(%2, %3, %4, 0.08); }")
+        .arg(c.accent.name())
+        .arg(c.accent.red()).arg(c.accent.green()).arg(c.accent.blue()));
+    connect(dl_all_btn, &QPushButton::clicked, this, [this]() {
+        if (!tracks_.empty()) {
+            const auto &a = current_album_;
+            std::string pid = static_cast<std::string>(a.id);
+            std::string pt = static_cast<std::string>(a.title);
+            std::string pth = static_cast<std::string>(a.thumbnail);
+            emit download_all_requested(tracks_, pid, pt, pth);
+        }
+    });
+
+    info->addSpacing(8);
+    info->addWidget(dl_all_btn, 0, Qt::AlignLeft);
     info->addStretch();
 
     header->addLayout(info, 1);
     content_layout_->addLayout(header);
 
     // Separator
-    auto *sep = new QWidget(scroll_content_);
+    auto *sep = new QWidget(this);
     sep->setFixedHeight(1);
     sep->setStyleSheet(QString("background-color: %1;").arg(c.border.name()));
     content_layout_->addSpacing(8);
@@ -230,19 +277,19 @@ void AlbumDetailView::setupLayout() {
     content_layout_->addSpacing(4);
 
     // Tracks container
-    tracks_widget_ = new QWidget(scroll_content_);
+    tracks_widget_ = new QWidget(this);
     tracks_widget_->setStyleSheet("background: transparent;");
     tracks_layout_ = new QVBoxLayout(tracks_widget_);
     tracks_layout_->setContentsMargins(0, 0, 0, 0);
     tracks_layout_->setSpacing(2);
     content_layout_->addWidget(tracks_widget_);
 
-    scroll_area_->setWidget(scroll_content_);
-    main_vbox->addWidget(scroll_area_);
+    main_vbox->addLayout(content_layout_);
     setLayout(main_vbox);
 }
 
 void AlbumDetailView::set_album_info(const Album &album) {
+    current_album_ = album;
     const auto &c = DesignTokens::current();
     title_label_->setText(QString::fromStdString(static_cast<std::string>(album.title)));
     artist_label_->setText(QString::fromStdString(static_cast<std::string>(album.artist)));

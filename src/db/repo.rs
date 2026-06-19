@@ -48,6 +48,7 @@ pub struct Playlist {
     pub artwork: String,
     pub created_at: String,
     pub updated_at: String,
+    pub privacy: i32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -73,6 +74,9 @@ pub struct RecentTrack {
     pub duration_ms: i64,
     pub thumbnail: String,
     pub played_at: String,
+    pub play_count: i32,
+    pub progress_ms: i64,
+    pub skipped: i32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -96,6 +100,10 @@ pub struct DownloadTrack {
     pub parent_playlist_id: Option<String>,
     pub parent_playlist_title: Option<String>,
     pub parent_playlist_thumbnail_url: Option<String>,
+    pub status: String,
+    pub progress: f64,
+    pub error: String,
+    pub cancelled: bool,
 }
 
 // ── Repositories ──
@@ -270,7 +278,7 @@ impl PlaylistRepo {
         let id = uuid_v4();
         with_db(|conn| {
             conn.execute(
-                "INSERT INTO playlists (id, name, description) VALUES (?1, ?2, ?3)",
+                "INSERT INTO playlists (id, name, description, privacy) VALUES (?1, ?2, ?3, 1)",
                 params![id, name, description],
             )
         })?;
@@ -297,7 +305,7 @@ impl PlaylistRepo {
     pub fn all() -> SqlResult<Vec<Playlist>> {
         with_db(|conn| {
             let mut stmt = conn.prepare(
-                "SELECT id, name, description, artwork, created_at, updated_at FROM playlists ORDER BY updated_at DESC"
+                "SELECT id, name, description, artwork, created_at, updated_at, privacy FROM playlists ORDER BY updated_at DESC"
             )?;
             let rows = stmt.query_map([], |r| {
                 Ok(Playlist {
@@ -307,9 +315,42 @@ impl PlaylistRepo {
                     artwork: r.get(3)?,
                     created_at: r.get(4)?,
                     updated_at: r.get(5)?,
+                    privacy: r.get(6)?,
                 })
             })?;
             rows.collect()
+        })
+    }
+
+    pub fn get(playlist_id: &str) -> SqlResult<Playlist> {
+        with_db(|conn| {
+            conn.query_row(
+                "SELECT id, name, description, artwork, created_at, updated_at, privacy
+                 FROM playlists WHERE id = ?1",
+                params![playlist_id],
+                |r| {
+                    Ok(Playlist {
+                        id: r.get(0)?,
+                        name: r.get(1)?,
+                        description: r.get(2)?,
+                        artwork: r.get(3)?,
+                        created_at: r.get(4)?,
+                        updated_at: r.get(5)?,
+                        privacy: r.get(6)?,
+                    })
+                },
+            )
+        })
+    }
+
+    pub fn update(playlist: &Playlist) -> SqlResult<()> {
+        with_db(|conn| {
+            conn.execute(
+                "UPDATE playlists SET name = ?1, description = ?2, privacy = ?3, updated_at = datetime('now')
+                 WHERE id = ?4",
+                params![playlist.name, playlist.description, playlist.privacy, playlist.id],
+            )
+            .map(|_| ())
         })
     }
 
@@ -358,9 +399,9 @@ impl PlaylistRepo {
     }
 }
 
-pub struct RecentlyPlayedRepo;
+pub struct PlayHistoryRepo;
 
-impl RecentlyPlayedRepo {
+impl PlayHistoryRepo {
     pub fn record(
         track_id: &str,
         title: &str,
@@ -368,12 +409,24 @@ impl RecentlyPlayedRepo {
         album: &str,
         duration_ms: i64,
         thumbnail: &str,
+        progress_ms: i64,
+        skipped: bool,
     ) -> SqlResult<()> {
         with_db(|conn| {
             conn.execute(
-                "INSERT INTO recently_played (track_id, title, artist, album, duration_ms, thumbnail)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-                params![track_id, title, artist, album, duration_ms, thumbnail],
+                "INSERT INTO recently_played (track_id, title, artist, album, duration_ms, thumbnail, play_count, progress_ms, skipped)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, 1, ?7, ?8)
+                 ON CONFLICT(track_id) DO UPDATE SET
+                     play_count = play_count + 1,
+                     played_at = datetime('now'),
+                     progress_ms = ?7,
+                     skipped = ?8,
+                     title = ?2,
+                     artist = ?3,
+                     album = ?4,
+                     duration_ms = ?5,
+                     thumbnail = ?6",
+                params![track_id, title, artist, album, duration_ms, thumbnail, progress_ms, skipped as i32],
             ).map(|_| ())
         })
     }
@@ -381,7 +434,8 @@ impl RecentlyPlayedRepo {
     pub fn recent(limit: i64) -> SqlResult<Vec<RecentTrack>> {
         with_db(|conn| {
             let mut stmt = conn.prepare(
-                "SELECT id, track_id, title, artist, album, duration_ms, thumbnail, played_at
+                "SELECT id, track_id, title, artist, album, duration_ms, thumbnail, played_at,
+                        play_count, progress_ms, skipped
                  FROM recently_played ORDER BY played_at DESC LIMIT ?1",
             )?;
             let rows = stmt.query_map(params![limit], |r| {
@@ -394,6 +448,9 @@ impl RecentlyPlayedRepo {
                     duration_ms: r.get(5)?,
                     thumbnail: r.get(6)?,
                     played_at: r.get(7)?,
+                    play_count: r.get(8)?,
+                    progress_ms: r.get(9)?,
+                    skipped: r.get(10)?,
                 })
             })?;
             rows.collect()
@@ -402,6 +459,71 @@ impl RecentlyPlayedRepo {
 
     pub fn clear() -> SqlResult<()> {
         with_db(|conn| conn.execute("DELETE FROM recently_played", []).map(|_| ()))
+    }
+
+    pub fn total_play_time(days: i64) -> SqlResult<i64> {
+        with_db(|conn| {
+            conn.query_row(
+                "SELECT COALESCE(SUM(duration_ms), 0) FROM recently_played
+                 WHERE played_at >= datetime('now', ?1)",
+                params![format!("-{} days", days)],
+                |r| r.get(0),
+            )
+        })
+    }
+
+    pub fn unique_artists(days: i64) -> SqlResult<i64> {
+        with_db(|conn| {
+            conn.query_row(
+                "SELECT COUNT(DISTINCT artist) FROM recently_played
+                 WHERE played_at >= datetime('now', ?1)",
+                params![format!("-{} days", days)],
+                |r| r.get(0),
+            )
+        })
+    }
+
+    pub fn top_tracks(limit: i64, days: i64) -> SqlResult<Vec<RecentTrack>> {
+        with_db(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT id, track_id, title, artist, album, duration_ms, thumbnail, played_at,
+                        play_count, progress_ms, skipped
+                 FROM recently_played
+                 WHERE played_at >= datetime('now', ?1)
+                 ORDER BY play_count DESC LIMIT ?2",
+            )?;
+            let rows = stmt.query_map(params![format!("-{} days", days), limit], |r| {
+                Ok(RecentTrack {
+                    id: r.get(0)?,
+                    track_id: r.get(1)?,
+                    title: r.get(2)?,
+                    artist: r.get(3)?,
+                    album: r.get(4)?,
+                    duration_ms: r.get(5)?,
+                    thumbnail: r.get(6)?,
+                    played_at: r.get(7)?,
+                    play_count: r.get(8)?,
+                    progress_ms: r.get(9)?,
+                    skipped: r.get(10)?,
+                })
+            })?;
+            rows.collect()
+        })
+    }
+
+    pub fn weekly_activity() -> SqlResult<Vec<(String, i64)>> {
+        with_db(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT DATE(played_at) as day, COUNT(*) as plays
+                 FROM recently_played
+                 WHERE played_at >= datetime('now', '-7 days')
+                 GROUP BY day ORDER BY day",
+            )?;
+            let rows = stmt.query_map([], |r| {
+                Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?))
+            })?;
+            rows.collect()
+        })
     }
 }
 
@@ -460,8 +582,9 @@ impl DownloadsRepo {
     pub fn get(video_id: &str) -> SqlResult<Option<DownloadTrack>> {
         with_db(|conn| {
             let mut stmt = conn.prepare(
-                "SELECT video_id, title, artist, album, file_path, thumbnail_url, duration_ms, downloaded_at,
-                        parent_playlist_id, parent_playlist_title, parent_playlist_thumbnail_url
+                "SELECT video_id, title, artist, album, file_path, thumbnail_url, duration_ms,
+                        downloaded_at, parent_playlist_id, parent_playlist_title,
+                        parent_playlist_thumbnail_url, status, progress, error, cancelled
                  FROM downloads WHERE video_id = ?1 LIMIT 1"
             )?;
             let mut rows = stmt.query_map(params![video_id], |r| {
@@ -477,6 +600,10 @@ impl DownloadsRepo {
                     parent_playlist_id: r.get(8)?,
                     parent_playlist_title: r.get(9)?,
                     parent_playlist_thumbnail_url: r.get(10)?,
+                    status: r.get(11)?,
+                    progress: r.get(12)?,
+                    error: r.get(13)?,
+                    cancelled: r.get::<_, i32>(14)? != 0,
                 })
             })?;
             if let Some(res) = rows.next() {
@@ -503,8 +630,9 @@ impl DownloadsRepo {
             conn.execute(
                 "INSERT OR REPLACE INTO downloads (
                     video_id, title, artist, album, file_path, thumbnail_url, duration_ms,
-                    parent_playlist_id, parent_playlist_title, parent_playlist_thumbnail_url
-                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                    parent_playlist_id, parent_playlist_title, parent_playlist_thumbnail_url,
+                    status, progress, error, cancelled
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
                 params![
                     track.video_id,
                     track.title,
@@ -515,10 +643,86 @@ impl DownloadsRepo {
                     track.duration_ms,
                     track.parent_playlist_id,
                     track.parent_playlist_title,
-                    track.parent_playlist_thumbnail_url
+                    track.parent_playlist_thumbnail_url,
+                    track.status,
+                    track.progress,
+                    track.error,
+                    if track.cancelled { 1 } else { 0 },
                 ],
             )
             .map(|_| ())
+        })
+    }
+
+    pub fn update_status(video_id: &str, status: &str, progress: f64, error: &str) -> SqlResult<()> {
+        with_db(|conn| {
+            conn.execute(
+                "UPDATE downloads SET status = ?1, progress = ?2, error = ?3 WHERE video_id = ?4",
+                params![status, progress, error, video_id],
+            )
+            .map(|_| ())
+        })
+    }
+
+    pub fn mark_cancelled(video_id: &str) -> SqlResult<()> {
+        with_db(|conn| {
+            conn.execute(
+                "UPDATE downloads SET status = 'cancelled', cancelled = 1 WHERE video_id = ?1",
+                params![video_id],
+            )
+            .map(|_| ())
+        })
+    }
+
+    pub fn batch_progress(parent_playlist_id: &str) -> SqlResult<(i64, i64, f64)> {
+        with_db(|conn| {
+            let total: i64 = conn.query_row(
+                "SELECT COUNT(*) FROM downloads WHERE parent_playlist_id = ?1",
+                params![parent_playlist_id],
+                |r| r.get(0),
+            )?;
+            let completed: i64 = conn.query_row(
+                "SELECT COUNT(*) FROM downloads WHERE parent_playlist_id = ?1 AND status = 'completed'",
+                params![parent_playlist_id],
+                |r| r.get(0),
+            )?;
+            let avg_progress: f64 = conn.query_row(
+                "SELECT COALESCE(AVG(progress), 0.0) FROM downloads WHERE parent_playlist_id = ?1",
+                params![parent_playlist_id],
+                |r| r.get(0),
+            )?;
+            Ok((total, completed, avg_progress))
+        })
+    }
+
+    pub fn find_queued() -> SqlResult<Vec<DownloadTrack>> {
+        with_db(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT video_id, title, artist, album, file_path, thumbnail_url, duration_ms,
+                        downloaded_at, parent_playlist_id, parent_playlist_title,
+                        parent_playlist_thumbnail_url, status, progress, error, cancelled
+                 FROM downloads WHERE status = 'queued' ORDER BY downloaded_at ASC"
+            )?;
+            let rows = stmt.query_map([], |r| {
+                Ok(DownloadTrack {
+                    video_id: r.get(0)?,
+                    title: r.get(1)?,
+                    artist: r.get(2)?,
+                    album: r.get(3)?,
+                    file_path: r.get(4)?,
+                    thumbnail_url: r.get(5)?,
+                    duration_ms: r.get(6)?,
+                    downloaded_at: r.get(7)?,
+                    parent_playlist_id: r.get(8)?,
+                    parent_playlist_title: r.get(9)?,
+                    parent_playlist_thumbnail_url: r.get(10)?,
+                    status: r.get(11)?,
+                    progress: r.get(12)?,
+                    error: r.get(13)?,
+                    cancelled: r.get::<_, i32>(14)? != 0,
+                })
+            })?;
+            rows.collect()
         })
     }
 
@@ -539,8 +743,9 @@ impl DownloadsRepo {
     pub fn all() -> SqlResult<Vec<DownloadTrack>> {
         with_db(|conn| {
             let mut stmt = conn.prepare(
-                "SELECT video_id, title, artist, album, file_path, thumbnail_url, duration_ms, downloaded_at,
-                        parent_playlist_id, parent_playlist_title, parent_playlist_thumbnail_url
+                "SELECT video_id, title, artist, album, file_path, thumbnail_url, duration_ms,
+                        downloaded_at, parent_playlist_id, parent_playlist_title,
+                        parent_playlist_thumbnail_url, status, progress, error, cancelled
                  FROM downloads ORDER BY downloaded_at DESC"
             )?;
             let rows = stmt.query_map([], |r| {
@@ -556,6 +761,10 @@ impl DownloadsRepo {
                     parent_playlist_id: r.get(8)?,
                     parent_playlist_title: r.get(9)?,
                     parent_playlist_thumbnail_url: r.get(10)?,
+                    status: r.get(11)?,
+                    progress: r.get(12)?,
+                    error: r.get(13)?,
+                    cancelled: r.get::<_, i32>(14)? != 0,
                 })
             })?;
             rows.collect()

@@ -1,6 +1,6 @@
 use super::models::{
-    Album, Artist, ArtistDetail, HomeItem, HomeSection, LikeStatus, Playlist, PlaylistDetail,
-    RemoteHistoryItem, SearchResults, TopResultItem, Track,
+    Album, Artist, ArtistDetail, Episode, HomeItem, HomeSection, LikeStatus, Playlist,
+    PlaylistDetail, RemoteHistoryItem, SearchResults, Show, ShowDetail, TopResultItem, Track,
 };
 use serde_json::Value;
 use std::collections::HashSet;
@@ -121,6 +121,10 @@ fn search_category(title: &str) -> &'static str {
         "artists"
     } else if title.contains("playlist") || title.contains("lista") {
         "playlists"
+    } else if title.contains("episodio") || title.contains("episode") {
+        "episodes"
+    } else if title.contains("podcast") || title.contains("show") {
+        "shows"
     } else {
         "songs"
     }
@@ -217,6 +221,24 @@ fn find_library_contents(json: &Value) -> Option<&Value> {
         }
     }
     None
+}
+
+fn parse_duration(s: &str) -> Option<i64> {
+    let parts: Vec<&str> = s.trim().split(':').collect();
+    match parts.len() {
+        2 => {
+            let mins = parts[0].parse::<i64>().ok()?;
+            let secs = parts[1].parse::<i64>().ok()?;
+            Some((mins * 60 + secs) * 1000)
+        }
+        3 => {
+            let hrs = parts[0].parse::<i64>().ok()?;
+            let mins = parts[1].parse::<i64>().ok()?;
+            let secs = parts[2].parse::<i64>().ok()?;
+            Some((hrs * 3600 + mins * 60 + secs) * 1000)
+        }
+        _ => None,
+    }
 }
 
 fn parse_item_common(
@@ -603,6 +625,8 @@ pub(crate) fn parse_search_page(
         albums: Vec::new(),
         artists: Vec::new(),
         playlists: Vec::new(),
+        shows: Vec::new(),
+        episodes: Vec::new(),
     };
     for section in sections {
         if let Some(card) = section.get("musicCardShelfRenderer") {
@@ -707,6 +731,50 @@ pub(crate) fn parse_search_page(
                     thumbnail: image,
                     track_count: None,
                 }),
+                "shows" if !browse_id.is_empty() => {
+                    let author = subtitle.split('•').next().map(|s| s.trim()).unwrap_or("").to_string();
+                    let ep_count = subtitle.split('•').nth(1).and_then(|s| {
+                        let s = s.trim().trim_end_matches("episodios").trim_end_matches("episodes").trim();
+                        s.parse::<i32>().ok()
+                    });
+                    result.shows.push(Show {
+                        id: browse_id,
+                        title,
+                        author,
+                        description: String::new(),
+                        thumbnail: image,
+                        episode_count: ep_count,
+                        subscriber_count: None,
+                    });
+                }
+                "episodes" => {
+                    let id = video_id(renderer);
+                    if id.is_empty() {
+                        continue;
+                    }
+                    let show_name = subtitle.split('•').next().map(|s| s.trim()).unwrap_or("").to_string();
+                    let duration = renderer
+                        .pointer("/fixedColumns/0/musicResponsiveListItemFixedColumnRenderer/text/runs")
+                        .and_then(Value::as_array)
+                        .and_then(|runs| {
+                            runs.get(0)
+                                .and_then(|r| r.get("text"))
+                                .and_then(Value::as_str)
+                                .and_then(parse_duration)
+                        })
+                        .unwrap_or(0);
+                    result.episodes.push(Episode {
+                        id,
+                        title,
+                        show: show_name,
+                        show_id: browse_id,
+                        description: String::new(),
+                        thumbnail: image,
+                        duration_ms: duration,
+                        published_at: String::new(),
+                        position: None,
+                    });
+                }
                 _ => {}
             }
         }
@@ -843,6 +911,66 @@ pub fn parse_album_detail(json: &Value, browse_id: &str) -> Result<(Album, Vec<T
         });
     }
     Ok((album, tracks))
+}
+
+pub fn parse_show_detail(json: &Value, browse_id: &str) -> Result<ShowDetail, String> {
+    let header = json
+        .pointer("/contents/twoColumnBrowseResultsRenderer/tabs/0/tabRenderer/content/sectionListRenderer/contents/0/musicImmersiveHeaderRenderer")
+        .ok_or_else(|| {
+            schema_error("browse/show", "musicImmersiveHeaderRenderer", json)
+        })?;
+    let title = text(&header["title"]);
+    let author = text(&header["subtitle"]);
+    let description = text(&header["description"]);
+    let thumbnail = thumbnail(header);
+
+    let show = Show {
+        id: browse_id.to_string(),
+        title,
+        author,
+        description: description.clone(),
+        thumbnail: thumbnail.clone(),
+        episode_count: None,
+        subscriber_count: None,
+    };
+
+    let mut episodes = Vec::new();
+    if let Some(contents) = json
+        .pointer("/contents/twoColumnBrowseResultsRenderer/tabs/0/tabRenderer/content/sectionListRenderer/contents/1/musicShelfRenderer/contents")
+        .or_else(|| json.pointer("/contents/twoColumnBrowseResultsRenderer/tabs/0/tabRenderer/content/sectionListRenderer/contents/0/musicShelfRenderer/contents"))
+        .and_then(Value::as_array)
+    {
+        for item in contents {
+            let renderer = &item["musicResponsiveListItemRenderer"];
+            if renderer.is_null() {
+                continue;
+            }
+            let ep_title = runs(&renderer["flexColumns"][0]["musicResponsiveListItemFlexColumnRenderer"]["text"]);
+            let id = video_id(renderer);
+            if id.is_empty() || ep_title.is_empty() {
+                continue;
+            }
+            let subtitle_text = runs(&renderer["flexColumns"][1]["musicResponsiveListItemFlexColumnRenderer"]["text"]);
+            let duration = text(&renderer["fixedColumns"][0]["musicResponsiveListItemFixedColumnRenderer"]["text"]);
+            episodes.push(Episode {
+                id,
+                title: ep_title,
+                show: show.title.clone(),
+                show_id: browse_id.to_string(),
+                description: subtitle_text,
+                thumbnail: thumbnail.clone(),
+                duration_ms: duration_ms(&duration),
+                published_at: String::new(),
+                position: None,
+            });
+        }
+    }
+
+    Ok(ShowDetail {
+        show,
+        episodes,
+        description: if description.is_empty() { None } else { Some(description) },
+    })
 }
 
 fn artist_section_title(section: &Value) -> String {

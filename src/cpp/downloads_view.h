@@ -6,7 +6,10 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QPushButton>
+#include <QProgressBar>
 #include <QScrollArea>
+#include <QMap>
+#include <QSet>
 #include <vector>
 #include <string>
 #include "doremi/src/bridge.rs.h"
@@ -17,15 +20,27 @@ public:
     explicit DownloadsView(QWidget *parent = nullptr);
     void set_downloads(const std::vector<std::string> &titles,
                        const std::vector<std::string> &artists,
-                       const std::vector<std::string> &thumbnails);
+                       const std::vector<std::string> &thumbnails,
+                       const std::vector<std::string> &video_ids,
+                       const std::vector<std::string> &statuses,
+                       const std::vector<double> &progresses);
+    void set_progress(const std::string &video_id, double percent, const std::string &status);
+    void set_batch_progress(const std::string &parent_id, int total, int completed, double percent);
     void clear_downloads();
 signals:
     void play_requested(Track track);
 private:
-    QWidget *make_download_row(const std::string &title, const std::string &artist,
-                               const std::string &thumbnail_path);
+    QWidget *make_download_row(const std::string &video_id, const std::string &title,
+                               const std::string &artist, const std::string &thumbnail_path,
+                               double progress, const std::string &status);
+    QWidget *make_batch_row(const std::string &parent_id, const std::string &parent_title,
+                            int total, int completed, double percent);
+    void update_row(QWidget *row, double percent, const std::string &status);
+    void update_batch_row(QWidget *row, int total, int completed, double percent);
     QVBoxLayout *list_;
     QLabel *status_label_;
+    QMap<std::string, QWidget*> row_map_;
+    QMap<std::string, QWidget*> batch_row_map_;
 };
 
 #endif

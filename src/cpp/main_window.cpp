@@ -13,6 +13,7 @@
 #include <QPixmap>
 #include <QPainter>
 #include <QPointer>
+#include <QScrollArea>
 #include <QScrollBar>
 #include <QFile>
 #include <QCryptographicHash>
@@ -42,7 +43,9 @@
 #include "album_detail_view.h"
 #include "artist_detail_view.h"
 #include "playlist_detail_view.h"
+#include "show_detail_view.h"
 #include "welcome_view.h"
+#include "login_dialog.h"
 #include "components/theme_transition.h"
 #include "ffi_utils.h"
 #include "doremi/src/bridge.rs.h"
@@ -99,6 +102,7 @@ DoremiMainWindow::DoremiMainWindow(QWidget *parent)
     album_detail_view_ = new AlbumDetailView(stack_);
     artist_detail_view_ = new ArtistDetailView(stack_);
     playlist_detail_view_ = new PlaylistDetailView(stack_);
+    show_detail_view_ = new ShowDetailView(stack_);
     welcome_view_ = new WelcomeView(stack_);
 
     // Index 0
@@ -117,11 +121,17 @@ DoremiMainWindow::DoremiMainWindow(QWidget *parent)
     stack_->addWidget(album_detail_view_);      // idx 9
     stack_->addWidget(artist_detail_view_);     // idx 10
     stack_->addWidget(playlist_detail_view_);   // idx 11
-    stack_->addWidget(welcome_view_);           // idx 12
+    stack_->addWidget(show_detail_view_);        // idx 12
+    stack_->addWidget(welcome_view_);           // idx 13
 
 
     stack_->setCurrentIndex(1); // start at home
-    body->addWidget(stack_, 1);
+    body_scroll_ = new QScrollArea(central);
+    body_scroll_->setWidgetResizable(true);
+    body_scroll_->setFrameShape(QFrame::NoFrame);
+    body_scroll_->setStyleSheet("background: transparent; border: none;");
+    body_scroll_->setWidget(stack_);
+    body->addWidget(body_scroll_, 1);
 
     root->addLayout(body, 1);
 
@@ -319,8 +329,6 @@ void DoremiMainWindow::connect_signals() {
         [](Track track) { on_search_item_clicked(track); });
     QObject::connect(now_playing_view_, &NowPlayingView::related_add_to_queue_requested, this,
         [](Track track) { on_add_to_queue_end(track); });
-    QObject::connect(now_playing_view_, &NowPlayingView::like_clicked, this,
-        [](Track track) { on_add_favorite(track); });
     QObject::connect(now_playing_view_, &NowPlayingView::download_clicked, this,
         [](Track track) { on_download_requested(track); });
 
@@ -360,6 +368,8 @@ void DoremiMainWindow::connect_signals() {
         [](const std::string &browse_id) { on_artist_requested(browse_id); });
     QObject::connect(search_view_, &SearchView::playlist_requested, this,
         [](const std::string &playlist_id) { on_playlist_requested(playlist_id); });
+    QObject::connect(search_view_, &SearchView::show_requested, this,
+        [](const std::string &browse_id) { on_show_requested(browse_id); });
     QObject::connect(search_view_, &SearchView::add_favorite_requested, this,
         [](Track track) {
             on_add_favorite(track);
@@ -385,6 +395,8 @@ void DoremiMainWindow::connect_signals() {
         [](const std::string &id) { on_artist_requested(id); });
     QObject::connect(home_view_, &HomeView::playlist_requested, this,
         [](const std::string &id) { on_playlist_requested(id); });
+    QObject::connect(home_view_, &HomeView::show_requested, this,
+        [](const std::string &id) { on_show_requested(id); });
     QObject::connect(home_view_, &HomeView::retry_requested, this,
         []() { on_home_retry_requested(); });
     QObject::connect(home_view_, &HomeView::load_more_requested, this,
@@ -429,6 +441,11 @@ void DoremiMainWindow::connect_signals() {
         [](const std::string &name, const std::string &desc, const std::string &privacy) {
             on_create_playlist(name, desc, privacy);
         });
+    QObject::connect(library_view_, &LibraryView::login_requested, this, [this]() {
+        auto *dialog = new WebLoginDialog(this);
+        dialog->exec();
+        dialog->deleteLater();
+    });
 
     QObject::connect(trending_view_, &TrendingView::play_requested, this,
         [](Track track) {
@@ -481,6 +498,21 @@ void DoremiMainWindow::connect_signals() {
     QObject::connect(playlist_detail_view_, &PlaylistDetailView::back_requested, this,
         [this]() { navigate_back_from_detail(); });
 
+    // Show detail view
+    QObject::connect(show_detail_view_, &ShowDetailView::back_requested, this,
+        [this]() { navigate_back_from_detail(); });
+    QObject::connect(show_detail_view_, &ShowDetailView::play_episode_requested, this,
+        [](Episode ep) {
+            Track t;
+            t.id = ep.id;
+            t.title = ep.title;
+            t.artist = ep.show;
+            t.album = "";
+            t.duration_ms = ep.duration_ms;
+            t.thumbnail = ep.thumbnail;
+            on_search_item_clicked(t);
+        });
+
     // Play all / shuffle buttons on detail views
     QObject::connect(album_detail_view_, &AlbumDetailView::play_all_requested, this,
         [](std::vector<Track> tracks) {
@@ -488,11 +520,23 @@ void DoremiMainWindow::connect_signals() {
             for (const auto &t : tracks) v.push_back(t);
             on_play_all(v, false);
         });
+    QObject::connect(album_detail_view_, &AlbumDetailView::download_all_requested, this,
+        [](std::vector<Track> tracks, std::string parent_id, std::string parent_title, std::string parent_thumbnail) {
+            rust::Vec<Track> v;
+            for (const auto &t : tracks) v.push_back(t);
+            on_batch_download_requested(v, parent_id, parent_title, parent_thumbnail);
+        });
     QObject::connect(playlist_detail_view_, &PlaylistDetailView::play_all_requested, this,
         [](std::vector<Track> tracks) {
             rust::Vec<Track> v;
             for (const auto &t : tracks) v.push_back(t);
             on_play_all(v, false);
+        });
+    QObject::connect(playlist_detail_view_, &PlaylistDetailView::download_all_requested, this,
+        [](std::vector<Track> tracks, std::string parent_id, std::string parent_title, std::string parent_thumbnail) {
+            rust::Vec<Track> v;
+            for (const auto &t : tracks) v.push_back(t);
+            on_batch_download_requested(v, parent_id, parent_title, parent_thumbnail);
         });
     QObject::connect(playlist_detail_view_, &PlaylistDetailView::shuffle_requested, this,
         [](std::vector<Track> tracks) {
@@ -514,7 +558,7 @@ void DoremiMainWindow::connect_signals() {
     QObject::connect(playlist_detail_view_, &PlaylistDetailView::remove_track_from_playlist_requested, this,
         [](const std::string &pl_id, const std::string &t_id) {
             on_remove_playlist_track(pl_id, t_id);
-        });
+    });
 }
 
 
@@ -533,9 +577,10 @@ void DoremiMainWindow::closeEvent(QCloseEvent *event) {
 
 void DoremiMainWindow::navigate_to(const std::string &route) {
     const bool opens_detail = route == "album_detail" || route == "artist_detail" ||
-                              route == "playlist_detail";
+                              route == "playlist_detail" || route == "show_detail";
     if (opens_detail && current_route_ != "album_detail" &&
-        current_route_ != "artist_detail" && current_route_ != "playlist_detail") {
+        current_route_ != "artist_detail" && current_route_ != "playlist_detail" &&
+        current_route_ != "show_detail") {
         detail_return_route_ = current_route_;
     }
     nav_sidebar_->set_active_route(route);
@@ -543,48 +588,38 @@ void DoremiMainWindow::navigate_to(const std::string &route) {
         stack_->setCurrentIndex(1);
     } else if (route == "search") {
         stack_->setCurrentIndex(2);
-        auto *sa = search_view_->findChild<QScrollArea *>();
-        if (sa) sa->verticalScrollBar()->setValue(0);
     } else if (route == "library") {
         stack_->setCurrentIndex(3);
-        auto *sa = library_view_->findChild<QScrollArea *>();
-        if (sa) sa->verticalScrollBar()->setValue(0);
+        std::string tab = library_view_->current_tab();
+        if (tab.empty()) tab = "playlists";
+        emit library_view_->tab_changed(tab);
     } else if (route == "settings") {
         stack_->setCurrentIndex(4);
     } else if (route == "trending") {
         stack_->setCurrentIndex(5);
     } else if (route == "downloads") {
         stack_->setCurrentIndex(6);
-        auto *sa = downloads_view_->findChild<QScrollArea *>();
-        if (sa) sa->verticalScrollBar()->setValue(0);
     } else if (route == "stats") {
         stack_->setCurrentIndex(7);
-        auto *sa = stats_view_->findChild<QScrollArea *>();
-        if (sa) sa->verticalScrollBar()->setValue(0);
     } else if (route == "history") {
         stack_->setCurrentIndex(8);
-        auto *sa = history_view_->findChild<QScrollArea *>();
-        if (sa) sa->verticalScrollBar()->setValue(0);
     } else if (route == "album_detail") {
         stack_->setCurrentIndex(9);
-        auto *sa = album_detail_view_->findChild<QScrollArea *>();
-        if (sa) sa->verticalScrollBar()->setValue(0);
     } else if (route == "artist_detail") {
         stack_->setCurrentIndex(10);
-        auto *sa = artist_detail_view_->findChild<QScrollArea *>();
-        if (sa) sa->verticalScrollBar()->setValue(0);
     } else if (route == "playlist_detail") {
         stack_->setCurrentIndex(11);
-        auto *sa = playlist_detail_view_->findChild<QScrollArea *>();
-        if (sa) sa->verticalScrollBar()->setValue(0);
-    } else if (route == "welcome") {
+    } else if (route == "show_detail") {
         stack_->setCurrentIndex(12);
-        auto *sa = welcome_view_->findChild<QScrollArea *>();
-        if (sa) sa->verticalScrollBar()->setValue(0);
+    } else if (route == "welcome") {
+        stack_->setCurrentIndex(13);
     } else {
         stack_->setCurrentIndex(1);
     }
     current_route_ = route;
+    if (body_scroll_) {
+        body_scroll_->verticalScrollBar()->setValue(0);
+    }
 }
 
 void DoremiMainWindow::navigate_back_from_detail() {
@@ -948,7 +983,8 @@ void set_search_suggestions(rust::Str query, rust::Vec<rust::String> suggestions
 
 void set_search_results(TopResult top_result, bool has_top_result,
                         rust::Vec<Track> songs, rust::Vec<Track> videos, rust::Vec<Artist> artists,
-                        rust::Vec<Album> albums, rust::Vec<Playlist> playlists) {
+                        rust::Vec<Album> albums, rust::Vec<Playlist> playlists,
+                        rust::Vec<Show> shows, rust::Vec<Episode> episodes) {
     std::vector<Track> s;
     for (const auto &x : songs) s.push_back(x);
     std::vector<Track> v;
@@ -959,8 +995,12 @@ void set_search_results(TopResult top_result, bool has_top_result,
     for (const auto &x : albums) al.push_back(x);
     std::vector<Playlist> p;
     for (const auto &x : playlists) p.push_back(x);
-    mutate_main_window("set_search_results", [top_result, has_top_result, s = std::move(s), v = std::move(v), a = std::move(a), al = std::move(al), p = std::move(p)](DoremiMainWindow &window) {
-        if (window.search_view()) window.search_view()->set_results(top_result, has_top_result, s, v, a, al, p);
+    std::vector<Show> sh;
+    for (const auto &x : shows) sh.push_back(x);
+    std::vector<Episode> e;
+    for (const auto &x : episodes) e.push_back(x);
+    mutate_main_window("set_search_results", [top_result, has_top_result, s = std::move(s), v = std::move(v), a = std::move(a), al = std::move(al), p = std::move(p), sh = std::move(sh), e = std::move(e)](DoremiMainWindow &window) {
+        if (window.search_view()) window.search_view()->set_results(top_result, has_top_result, s, v, a, al, p, sh, e);
     });
 }
 
@@ -1276,13 +1316,42 @@ void set_trending_state(rust::Str state, rust::Str message) {
 
 void set_downloads_list(rust::Vec<rust::String> titles,
                          rust::Vec<rust::String> artists,
-                         rust::Vec<rust::String> thumbnails) {
-    std::vector<std::string> t, a, th;
+                         rust::Vec<rust::String> thumbnails,
+                         rust::Vec<rust::String> video_ids,
+                         rust::Vec<rust::String> statuses,
+                         rust::Vec<double> progresses) {
+    std::vector<std::string> t, a, th, v, st;
+    std::vector<double> pr;
     for (auto &x : titles) t.push_back(Ffi::to_std_string(x));
     for (auto &x : artists) a.push_back(Ffi::to_std_string(x));
     for (auto &x : thumbnails) th.push_back(Ffi::to_std_string(x));
-    mutate_main_window("set_downloads_list", [t = std::move(t), a = std::move(a), th = std::move(th)](DoremiMainWindow &window) {
-        if (window.downloads_view()) window.downloads_view()->set_downloads(t, a, th);
+    for (auto &x : video_ids) v.push_back(Ffi::to_std_string(x));
+    for (auto &x : statuses) st.push_back(Ffi::to_std_string(x));
+    for (auto &x : progresses) pr.push_back(x);
+    mutate_main_window("set_downloads_list", [t = std::move(t), a = std::move(a), th = std::move(th),
+                                               v = std::move(v), st = std::move(st), pr = std::move(pr)](DoremiMainWindow &window) {
+        if (window.downloads_view()) window.downloads_view()->set_downloads(t, a, th, v, st, pr);
+    });
+}
+
+void set_download_progress(rust::Str video_id, double percent, rust::Str status) {
+    std::string vid = Ffi::to_std_string(video_id);
+    std::string st = Ffi::to_std_string(status);
+    qDebug() << "Download" << vid.c_str() << ":" << st.c_str() << percent << "%";
+    mutate_main_window("set_download_progress", [vid, percent, st](DoremiMainWindow &window) {
+        if (window.downloads_view()) {
+            window.downloads_view()->set_progress(vid, percent, st);
+        }
+    });
+}
+
+void set_batch_download_progress(rust::Str parent_id, int32_t total, int32_t completed, double percent) {
+    std::string pid = Ffi::to_std_string(parent_id);
+    qDebug() << "Batch" << pid.c_str() << ":" << completed << "/" << total << "(" << percent << "%)";
+    mutate_main_window("set_batch_download_progress", [pid, total, completed, percent](DoremiMainWindow &window) {
+        if (window.downloads_view()) {
+            window.downloads_view()->set_batch_progress(pid, total, completed, percent);
+        }
     });
 }
 
@@ -1351,6 +1420,23 @@ void set_playlist_detail(Playlist playlist, rust::Vec<Track> tracks) {
     });
 }
 
+void set_show_detail(Show show, rust::Vec<Episode> episodes) {
+    std::vector<Episode> ee;
+    for (const auto &x : episodes) ee.push_back(x);
+    mutate_main_window("set_show_detail", [show = std::move(show), ee = std::move(ee)](DoremiMainWindow &window) mutable {
+        if (!window.show_detail_view()) return;
+        window.show_detail_view()->set_show_info(show);
+        window.show_detail_view()->set_episodes(ee);
+        window.navigate_to("show_detail");
+    });
+}
+
+void set_prefetch_status(rust::Str track_id, rust::Str status) {
+    std::string tid = Ffi::to_std_string(track_id);
+    std::string st = Ffi::to_std_string(status);
+    qDebug() << "Prefetch" << tid.c_str() << ":" << st.c_str();
+}
+
 void update_youtube_auth_state(bool authenticated, rust::Str name, rust::Str avatar_url) {
     const std::string name_copy = Ffi::to_std_string(name);
     const std::string avatar_copy = Ffi::to_std_string(avatar_url);
@@ -1359,6 +1445,14 @@ void update_youtube_auth_state(bool authenticated, rust::Str name, rust::Str ava
             window.nav_sidebar()->update_profile(authenticated, name_copy, avatar_copy);
         }
         if (window.welcome_view()) window.welcome_view()->update_theme();
+        if (window.library_view()) {
+            window.library_view()->set_authenticated(authenticated);
+            if (window.current_route() == "library") {
+                std::string tab = window.library_view()->current_tab();
+                if (tab.empty()) tab = "playlists";
+                emit window.library_view()->tab_changed(tab);
+            }
+        }
         if (!authenticated) {
             auto *profile = QWebEngineProfile::defaultProfile();
             if (profile) {

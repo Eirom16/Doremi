@@ -17,18 +17,11 @@ SettingsView::SettingsView(QWidget *parent)
 {
     const auto &c = DesignTokens::current();
 
-    auto *scroll = new QScrollArea(this);
-    scroll->setWidgetResizable(true);
-    scroll->setFrameShape(QFrame::NoFrame);
-    scroll->setStyleSheet("background: transparent; border: none;");
-
-    auto *inner = new QWidget();
-    inner->setStyleSheet("background: transparent;");
-    auto *content = new QVBoxLayout(inner);
+    auto *content = new QVBoxLayout();
     content->setContentsMargins(32, 24, 32, 24);
     content->setSpacing(10);
 
-    auto *title = new QLabel(QString::fromStdString(std::string(doremi_tr("settings_title"))), inner);
+    auto *title = new QLabel(QString::fromStdString(std::string(doremi_tr("settings_title"))), this);
     title->setFont(DesignTokens::getFont("display", 24));
     title->setStyleSheet(QString("font-weight: bold; color: %1; background: transparent;").arg(c.text_primary.name()));
     content->addWidget(title);
@@ -70,23 +63,23 @@ SettingsView::SettingsView(QWidget *parent)
     content->addWidget(section_header(std::string(doremi_tr("settings_appearance"))));
     content->addSpacing(4);
 
-    theme_cmb_ = new QComboBox(inner);
+    theme_cmb_ = new QComboBox(this);
     theme_cmb_->addItems({"dark", "light"});
     theme_cmb_->setStyleSheet(comboStyle);
     content->addWidget(combo_row(std::string(doremi_tr("theme")), theme_cmb_));
 
-    accent_cmb_ = new QComboBox(inner);
+    accent_cmb_ = new QComboBox(this);
     accent_cmb_->addItems({"#7C4DFF", "#A78BFA", "#22D3EE", "#F472B6", "#34D399"});
     accent_cmb_->setStyleSheet(comboStyle);
     content->addWidget(combo_row(std::string(doremi_tr("accent_color")), accent_cmb_));
 
-    font_cmb_ = new QComboBox(inner);
+    font_cmb_ = new QComboBox(this);
     font_cmb_->addItems({"12", "13", "14", "15", "16"});
     font_cmb_->setStyleSheet(comboStyle);
     content->addWidget(combo_row(std::string(doremi_tr("font_size")), font_cmb_));
 
     content->addSpacing(12);
-    auto *sep = new QFrame(inner);
+    auto *sep = new QFrame(this);
     sep->setFrameShape(QFrame::HLine);
     sep->setStyleSheet(QString("color: %1;").arg(c.border.name()));
     content->addWidget(sep);
@@ -95,16 +88,16 @@ SettingsView::SettingsView(QWidget *parent)
     content->addWidget(section_header(std::string(doremi_tr("settings_playback"))));
     content->addSpacing(4);
 
-    normalize_cb_ = new AnimatedToggle(inner);
+    normalize_cb_ = new AnimatedToggle(this);
     content->addWidget(check_row(std::string(doremi_tr("normalize_audio")), normalize_cb_));
 
-    crossfade_cb_ = new AnimatedToggle(inner);
+    crossfade_cb_ = new AnimatedToggle(this);
     content->addWidget(check_row(std::string(doremi_tr("crossfade_songs")), crossfade_cb_));
 
-    stop_on_close_cb_ = new AnimatedToggle(inner);
+    stop_on_close_cb_ = new AnimatedToggle(this);
     content->addWidget(check_row(std::string(doremi_tr("stop_on_close")), stop_on_close_cb_));
 
-    sleep_timer_cmb_ = new QComboBox(inner);
+    sleep_timer_cmb_ = new QComboBox(this);
     sleep_timer_cmb_->addItems({
         QString::fromStdString(std::string(doremi_tr("sleep_disabled"))),
         QString::fromStdString(std::string(doremi_tr("minutes_5"))),
@@ -118,7 +111,7 @@ SettingsView::SettingsView(QWidget *parent)
     content->addWidget(combo_row(std::string(doremi_tr("sleep_timer")), sleep_timer_cmb_));
 
     content->addSpacing(12);
-    auto *sep2 = new QFrame(inner);
+    auto *sep2 = new QFrame(this);
     sep2->setFrameShape(QFrame::HLine);
     sep2->setStyleSheet(QString("color: %1;").arg(c.border.name()));
     content->addWidget(sep2);
@@ -127,15 +120,15 @@ SettingsView::SettingsView(QWidget *parent)
     content->addWidget(section_header(std::string(doremi_tr("settings_equalizer"))));
     content->addSpacing(4);
 
-    equalizer_cb_ = new AnimatedToggle(inner);
+    equalizer_cb_ = new AnimatedToggle(this);
     content->addWidget(check_row(std::string(doremi_tr("enable_equalizer")), equalizer_cb_));
 
-    eq_preset_cmb_ = new QComboBox(inner);
+    eq_preset_cmb_ = new QComboBox(this);
     eq_preset_cmb_->addItems({"Flat", "Bass Boost", "Treble Boost", "Vocal", "Classical", "Electronic", "Hip-Hop", "Rock", "Jazz", "Pop", "Custom"});
     eq_preset_cmb_->setStyleSheet(comboStyle);
     content->addWidget(combo_row(std::string(doremi_tr("preset")), eq_preset_cmb_));
 
-    auto *preamp_row = new QWidget(inner);
+    auto *preamp_row = new QWidget(this);
     auto *preamp_layout = new QHBoxLayout(preamp_row);
     preamp_layout->setContentsMargins(12, 4, 12, 4);
     auto *preamp_label = new QLabel("Preamp", preamp_row);
@@ -149,7 +142,7 @@ SettingsView::SettingsView(QWidget *parent)
     preamp_layout->addWidget(eq_preamp_value_);
     content->addWidget(preamp_row);
 
-    auto *bands_widget = new QWidget(inner);
+    auto *bands_widget = new QWidget(this);
     auto *bands_layout = new QGridLayout(bands_widget);
     bands_layout->setContentsMargins(12, 4, 12, 4);
     bands_layout->setHorizontalSpacing(8);
@@ -171,12 +164,12 @@ SettingsView::SettingsView(QWidget *parent)
     }
     content->addWidget(bands_widget);
 
-    eq_reset_btn_ = new QPushButton("Reset Flat", inner);
+    eq_reset_btn_ = new QPushButton("Reset Flat", this);
     eq_reset_btn_->setCursor(Qt::PointingHandCursor);
     content->addWidget(eq_reset_btn_, 0, Qt::AlignRight);
 
     content->addSpacing(12);
-    auto *sep3 = new QFrame(inner);
+    auto *sep3 = new QFrame(this);
     sep3->setFrameShape(QFrame::HLine);
     sep3->setStyleSheet(QString("color: %1;").arg(c.border.name()));
     content->addWidget(sep3);
@@ -185,17 +178,17 @@ SettingsView::SettingsView(QWidget *parent)
     content->addWidget(section_header(std::string(doremi_tr("settings_integrations"))));
     content->addSpacing(4);
 
-    discord_rpc_cb_ = new AnimatedToggle(inner);
+    discord_rpc_cb_ = new AnimatedToggle(this);
     content->addWidget(check_row(std::string(doremi_tr("activate_discord_rpc")), discord_rpc_cb_));
 
-    lastfm_cb_ = new AnimatedToggle(inner);
+    lastfm_cb_ = new AnimatedToggle(this);
     content->addWidget(check_row(std::string(doremi_tr("activate_lastfm")), lastfm_cb_));
 
-    mpris_cb_ = new AnimatedToggle(inner);
+    mpris_cb_ = new AnimatedToggle(this);
     content->addWidget(check_row(std::string(doremi_tr("activate_mpris")), mpris_cb_));
 
     // Last.fm Auth container (styled as a premium card)
-    lastfm_auth_widget_ = new QWidget(inner);
+    lastfm_auth_widget_ = new QWidget(this);
     auto *lf_layout = new QVBoxLayout(lastfm_auth_widget_);
     lf_layout->setContentsMargins(16, 16, 16, 16);
     lf_layout->setSpacing(12);
@@ -262,7 +255,7 @@ SettingsView::SettingsView(QWidget *parent)
     lastfm_auth_widget_->setVisible(false);
 
     content->addSpacing(12);
-    auto *sep_lf = new QFrame(inner);
+    auto *sep_lf = new QFrame(this);
     sep_lf->setFrameShape(QFrame::HLine);
     sep_lf->setStyleSheet(QString("color: %1;").arg(c.border.name()));
     content->addWidget(sep_lf);
@@ -271,7 +264,7 @@ SettingsView::SettingsView(QWidget *parent)
     content->addWidget(section_header(std::string(doremi_tr("settings_subtitles"))));
     content->addSpacing(4);
 
-    sub_alignment_cmb_ = new QComboBox(inner);
+    sub_alignment_cmb_ = new QComboBox(this);
     sub_alignment_cmb_->addItems({
         QString::fromStdString(std::string(doremi_tr("align_left"))),
         QString::fromStdString(std::string(doremi_tr("align_center"))),
@@ -280,26 +273,26 @@ SettingsView::SettingsView(QWidget *parent)
     sub_alignment_cmb_->setStyleSheet(comboStyle);
     content->addWidget(combo_row(std::string(doremi_tr("subtitle_alignment")), sub_alignment_cmb_));
 
-    sub_font_size_cmb_ = new QComboBox(inner);
+    sub_font_size_cmb_ = new QComboBox(this);
     for (int size = 10; size <= 36; size += 2) {
         sub_font_size_cmb_->addItem(QString::number(size) + " px", size);
     }
     sub_font_size_cmb_->setStyleSheet(comboStyle);
     content->addWidget(combo_row(std::string(doremi_tr("subtitle_font_size")), sub_font_size_cmb_));
 
-    sub_line_spacing_cmb_ = new QComboBox(inner);
+    sub_line_spacing_cmb_ = new QComboBox(this);
     sub_line_spacing_cmb_->addItems({"1.0", "1.2", "1.5", "1.8", "2.0"});
     sub_line_spacing_cmb_->setStyleSheet(comboStyle);
     content->addWidget(combo_row(std::string(doremi_tr("subtitle_line_spacing")), sub_line_spacing_cmb_));
 
-    sub_auto_scroll_cb_ = new AnimatedToggle(inner);
+    sub_auto_scroll_cb_ = new AnimatedToggle(this);
     content->addWidget(check_row(std::string(doremi_tr("subtitle_auto_scroll")), sub_auto_scroll_cb_));
 
-    sub_glow_cb_ = new AnimatedToggle(inner);
+    sub_glow_cb_ = new AnimatedToggle(this);
     content->addWidget(check_row(std::string(doremi_tr("subtitle_glow_effect")), sub_glow_cb_));
 
     content->addSpacing(12);
-    auto *sep_sub = new QFrame(inner);
+    auto *sep_sub = new QFrame(this);
     sep_sub->setFrameShape(QFrame::HLine);
     sep_sub->setStyleSheet(QString("color: %1;").arg(c.border.name()));
     content->addWidget(sep_sub);
@@ -308,10 +301,10 @@ SettingsView::SettingsView(QWidget *parent)
     content->addWidget(section_header(std::string(doremi_tr("settings_storage"))));
     content->addSpacing(4);
 
-    db_size_lbl_ = new QLabel("0.00 MB", inner);
+    db_size_lbl_ = new QLabel("0.00 MB", this);
     db_size_lbl_->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
     db_size_lbl_->setFont(DesignTokens::getFont("body", 13));
-    auto *db_widget = new QWidget(inner);
+    auto *db_widget = new QWidget(this);
     db_widget->setFixedHeight(36);
     auto *db_lay = new QHBoxLayout(db_widget);
     db_lay->setContentsMargins(0, 0, 0, 0);
@@ -323,24 +316,24 @@ SettingsView::SettingsView(QWidget *parent)
     db_lay->addWidget(db_size_lbl_);
     content->addWidget(db_widget);
 
-    cache_size_lbl_ = new QLabel("0.00 MB", inner);
+    cache_size_lbl_ = new QLabel("0.00 MB", this);
     cache_size_lbl_->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
     cache_size_lbl_->setFont(DesignTokens::getFont("body", 13));
-    clean_cache_btn_ = new RippleButton(QString::fromStdString(std::string(doremi_tr("clean_cache"))), inner, RippleButton::Variant::Secondary);
+    clean_cache_btn_ = new RippleButton(QString::fromStdString(std::string(doremi_tr("clean_cache"))), this, RippleButton::Variant::Secondary);
     clean_cache_btn_->setFixedWidth(140);
     clean_cache_btn_->setFixedHeight(28);
     content->addWidget(storage_row(std::string(doremi_tr("cache_size")), cache_size_lbl_, clean_cache_btn_));
 
-    downloads_size_lbl_ = new QLabel("0.00 MB", inner);
+    downloads_size_lbl_ = new QLabel("0.00 MB", this);
     downloads_size_lbl_->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
     downloads_size_lbl_->setFont(DesignTokens::getFont("body", 13));
-    clear_downloads_btn_ = new RippleButton(QString::fromStdString(std::string(doremi_tr("clear_downloads"))), inner, RippleButton::Variant::Danger);
+    clear_downloads_btn_ = new RippleButton(QString::fromStdString(std::string(doremi_tr("clear_downloads"))), this, RippleButton::Variant::Danger);
     clear_downloads_btn_->setFixedWidth(140);
     clear_downloads_btn_->setFixedHeight(28);
     content->addWidget(storage_row(std::string(doremi_tr("downloads_size")), downloads_size_lbl_, clear_downloads_btn_));
 
     // Backup actions row
-    auto *backup_widget = new QWidget(inner);
+    auto *backup_widget = new QWidget(this);
     auto *backup_lay = new QHBoxLayout(backup_widget);
     backup_lay->setContentsMargins(0, 8, 0, 0);
     backup_lay->setSpacing(12);
@@ -357,7 +350,7 @@ SettingsView::SettingsView(QWidget *parent)
     content->addWidget(backup_widget);
 
     content->addSpacing(12);
-    auto *sep_stor = new QFrame(inner);
+    auto *sep_stor = new QFrame(this);
     sep_stor->setFrameShape(QFrame::HLine);
     sep_stor->setStyleSheet(QString("color: %1;").arg(c.border.name()));
     content->addWidget(sep_stor);
@@ -366,18 +359,18 @@ SettingsView::SettingsView(QWidget *parent)
     content->addWidget(section_header(std::string(doremi_tr("language"))));
     content->addSpacing(4);
 
-    lang_cmb_ = new QComboBox(inner);
+    lang_cmb_ = new QComboBox(this);
     lang_cmb_->addItems({"es", "en"});
     lang_cmb_->setStyleSheet(comboStyle);
     content->addWidget(combo_row(std::string(doremi_tr("language")), lang_cmb_));
 
-    region_cmb_ = new QComboBox(inner);
+    region_cmb_ = new QComboBox(this);
     region_cmb_->addItems({"US", "DO", "MX", "ES", "AR", "CO", "CL", "PE", "BR", "CA"});
     region_cmb_->setStyleSheet(comboStyle);
     content->addWidget(combo_row(std::string(doremi_tr("region")), region_cmb_));
 
     content->addSpacing(12);
-    auto *sep_about = new QFrame(inner);
+    auto *sep_about = new QFrame(this);
     sep_about->setFrameShape(QFrame::HLine);
     sep_about->setStyleSheet(QString("color: %1;").arg(c.border.name()));
     content->addWidget(sep_about);
@@ -386,17 +379,17 @@ SettingsView::SettingsView(QWidget *parent)
     content->addWidget(section_header(std::string(doremi_tr("settings_about"))));
     content->addSpacing(8);
 
-    auto *about_logo = IconProvider::createIconLabel("album", 64, c.accent, true, inner);
+    auto *about_logo = IconProvider::createIconLabel("album", 64, c.accent, true, this);
     about_logo->setAlignment(Qt::AlignCenter);
     content->addWidget(about_logo);
 
-    auto *about_name = new QLabel("Doremi", inner);
+    auto *about_name = new QLabel("Doremi", this);
     about_name->setFont(DesignTokens::getFont("display", 20));
     about_name->setStyleSheet(QString("font-weight: bold; color: %1; background: transparent;").arg(c.accent.name()));
     about_name->setAlignment(Qt::AlignCenter);
     content->addWidget(about_name);
 
-    auto *about_ver = new QLabel(QString("Versión %1").arg(QString::fromStdString(std::string(get_app_version()))), inner);
+    auto *about_ver = new QLabel(QString("Versión %1").arg(QString::fromStdString(std::string(get_app_version()))), this);
     about_ver->setFont(DesignTokens::getFont("body", 12));
     about_ver->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
     about_ver->setAlignment(Qt::AlignCenter);
@@ -404,7 +397,7 @@ SettingsView::SettingsView(QWidget *parent)
 
     auto *about_desc = new QLabel(
         QString::fromStdString(std::string(doremi_tr("about_desc"))),
-        inner
+        this
     );
     about_desc->setFont(DesignTokens::getFont("body", 13));
     about_desc->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
@@ -413,7 +406,7 @@ SettingsView::SettingsView(QWidget *parent)
     content->addWidget(about_desc);
 
     // Changelog card
-    auto *changelog_card = new QFrame(inner);
+    auto *changelog_card = new QFrame(this);
     changelog_card->setStyleSheet(QString(
         "QFrame {"
         "    background-color: %1;"
@@ -476,7 +469,7 @@ SettingsView::SettingsView(QWidget *parent)
     content->addWidget(changelog_card);
 
     // Update Check button
-    auto *check_updates_btn = new RippleButton(QString::fromStdString(std::string(doremi_tr("check_updates"))), inner, RippleButton::Variant::Secondary);
+    auto *check_updates_btn = new RippleButton(QString::fromStdString(std::string(doremi_tr("check_updates"))), this, RippleButton::Variant::Secondary);
     check_updates_btn->setIcon(IconProvider::getIcon("sync", c.accent, 20));
     check_updates_btn->setMinimumHeight(44);
     
@@ -496,11 +489,7 @@ SettingsView::SettingsView(QWidget *parent)
     content->addWidget(check_updates_btn);
 
     content->addStretch(1);
-    scroll->setWidget(inner);
-
-    auto *root = new QVBoxLayout(this);
-    root->setContentsMargins(0, 0, 0, 0);
-    root->addWidget(scroll);
+    setLayout(content);
     setStyleSheet("background: transparent;");
 
     // Emit signals on changes

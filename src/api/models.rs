@@ -168,6 +168,7 @@ pub enum TopResultItem {
     Artist(Artist),
     Album(Album),
     Playlist(Playlist),
+    Show(Show),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -179,6 +180,8 @@ pub struct SearchResults {
     pub albums: Vec<Album>,
     pub artists: Vec<Artist>,
     pub playlists: Vec<Playlist>,
+    pub shows: Vec<Show>,
+    pub episodes: Vec<Episode>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -197,4 +200,35 @@ pub struct HomeItem {
     pub browse_id: Option<String>,
     pub playlist_id: Option<String>,
     pub video_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Show {
+    pub id: String,
+    pub title: String,
+    pub author: String,
+    pub description: String,
+    pub thumbnail: String,
+    pub episode_count: Option<i32>,
+    pub subscriber_count: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Episode {
+    pub id: String,
+    pub title: String,
+    pub show: String,
+    pub show_id: String,
+    pub description: String,
+    pub thumbnail: String,
+    pub duration_ms: i64,
+    pub published_at: String,
+    pub position: Option<i32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ShowDetail {
+    pub show: Show,
+    pub episodes: Vec<Episode>,
+    pub description: Option<String>,
 }

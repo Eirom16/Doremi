@@ -22,6 +22,7 @@ protected:
     void enterEvent(QEnterEvent *event) override;
     void leaveEvent(QEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
+    QSize sizeHint() const override;
 
 private:
     QScrollArea *m_scrollArea = nullptr;
@@ -30,7 +31,8 @@ private:
     QPushButton *m_leftBtn = nullptr;
     QPushButton *m_rightBtn = nullptr;
     QVariantAnimation *m_scrollAnim = nullptr;
-    
+    int m_minContentHeight = 0;
+
     void init();
     void scroll(int delta);
     void updateButtonVisibility();

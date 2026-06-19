@@ -85,7 +85,10 @@ private:
     // Spacers to allow centering top/bottom lines
     QWidget *top_spacer_;
     QWidget *bottom_spacer_;
-    
+
+    // Sync time caption
+    QLabel *time_caption_;
+
     bool has_synced_lyrics_ = false;
 
     std::string alignment_ = "center";

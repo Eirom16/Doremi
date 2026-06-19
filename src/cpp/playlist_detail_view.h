@@ -2,7 +2,6 @@
 #define DOREMI_PLAYLIST_DETAIL_VIEW_H
 
 #include <QWidget>
-#include <QScrollArea>
 #include <QVBoxLayout>
 #include <QLabel>
 #include <QHBoxLayout>
@@ -52,6 +51,7 @@ signals:
     void play_requested(Track track);
     void play_all_requested(std::vector<Track> tracks);
     void shuffle_requested(std::vector<Track> tracks);
+    void download_all_requested(std::vector<Track> tracks, std::string parent_id, std::string parent_title, std::string parent_thumbnail);
     void back_requested();
     void rename_playlist_requested(const std::string &playlist_id, const std::string &name);
     void delete_playlist_requested(const std::string &playlist_id);
@@ -63,8 +63,6 @@ signals:
 private:
     void setupLayout();
 
-    QScrollArea *scroll_area_;
-    QWidget *scroll_content_;
     QVBoxLayout *content_layout_;
 
     // Header
@@ -82,6 +80,7 @@ private:
     QWidget *tracks_widget_;
     QVBoxLayout *tracks_layout_;
     std::vector<Track> tracks_;
+    Playlist current_playlist_;
 };
 
 #endif

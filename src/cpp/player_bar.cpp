@@ -233,7 +233,8 @@ PlayerBar::PlayerBar(QWidget *parent)
     setFixedHeight(64);
 
     // Set panel background
-    setStyleSheet(QString("background-color: %1; border-top: 1px solid %2;")
+    setAttribute(Qt::WA_StyledBackground, true);
+    setStyleSheet(QString("PlayerBar { background-color: %1; border-top: 1px solid %2; }")
         .arg(c.bg_surface.name())
         .arg(QString("rgba(%1, %2, %3, %4)").arg(c.border.red()).arg(c.border.green()).arg(c.border.blue()).arg(c.border.alpha() / 255.0))
     );

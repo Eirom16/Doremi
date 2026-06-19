@@ -3,11 +3,12 @@
 #include "icon_provider.h"
 #include <QHBoxLayout>
 #include <QGridLayout>
-#include <QScrollBar>
 #include <QEvent>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPainterPath>
+#include <QPushButton>
+#include <QButtonGroup>
 #include <algorithm>
 #include "doremi/src/bridge.rs.h"
 
@@ -135,43 +136,62 @@ void StatsView::setupLayout() {
     main_vbox->setContentsMargins(0, 0, 0, 0);
     main_vbox->setSpacing(0);
 
-    scroll_area_ = new QScrollArea(this);
-    scroll_area_->setWidgetResizable(true);
-    scroll_area_->setFrameShape(QFrame::NoFrame);
-    scroll_area_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    scroll_area_->setStyleSheet("background: transparent;");
-
-    scroll_content_ = new QWidget(scroll_area_);
-    scroll_content_->setStyleSheet("background: transparent;");
-
-    main_layout_ = new QVBoxLayout(scroll_content_);
+    main_layout_ = new QVBoxLayout();
     main_layout_->setContentsMargins(24, 24, 24, 24);
     main_layout_->setSpacing(24);
     main_layout_->setAlignment(Qt::AlignTop);
 
-    auto *title = new QLabel("Estadísticas de Escucha", scroll_content_);
+    auto *title = new QLabel("Estadísticas de Escucha", this);
     title->setFont(DesignTokens::getFont("display", 22));
     title->setStyleSheet(QString("color: %1; font-weight: bold;").arg(c.text_primary.name()));
     main_layout_->addWidget(title);
 
+    // Range selector
+    auto *range_layout = new QHBoxLayout();
+    range_layout->setSpacing(8);
+    auto *range_group = new QButtonGroup(this);
+    struct RangeOption { QString label; int days; };
+    RangeOption ranges[] = {{"7 días", 7}, {"30 días", 30}, {"1 año", 365}, {"Todo", -1}};
+    for (auto &opt : ranges) {
+        auto *btn = new QPushButton(opt.label, this);
+        btn->setCheckable(true);
+        btn->setFixedHeight(30);
+        btn->setCursor(Qt::PointingHandCursor);
+        btn->setStyleSheet(QString(
+            "QPushButton { background: transparent; border: 1px solid %1; border-radius: 15px; padding: 0 16px; color: %2; font-size: 12px; }"
+            "QPushButton:hover { background: rgba(%3, %4, %5, 0.08); }"
+            "QPushButton:checked { background: %1; color: %6; }")
+            .arg(c.border.name()).arg(c.text_secondary.name())
+            .arg(c.text_primary.red()).arg(c.text_primary.green()).arg(c.text_primary.blue())
+            .arg(c.bg_surface.name()));
+        range_group->addButton(btn, opt.days);
+        range_layout->addWidget(btn);
+    }
+    range_group->button(7)->setChecked(true);
+    connect(range_group, &QButtonGroup::idClicked, this, [](int days) {
+        on_stats_requested(days);
+    });
+    range_layout->addStretch();
+    main_layout_->addLayout(range_layout);
+
     auto *cards_layout = new QHBoxLayout();
     cards_layout->setSpacing(16);
 
-    card_time_ = new StatCard("Tiempo Escuchado", "schedule", scroll_content_);
-    card_plays_ = new StatCard("Reproducciones Totales", "play_arrow", scroll_content_);
-    card_artists_ = new StatCard("Artistas Escuchados", "person", scroll_content_);
+    card_time_ = new StatCard("Tiempo Escuchado", "schedule", this);
+    card_plays_ = new StatCard("Reproducciones Totales", "play_arrow", this);
+    card_artists_ = new StatCard("Artistas Escuchados", "person", this);
 
     cards_layout->addWidget(card_time_);
     cards_layout->addWidget(card_plays_);
     cards_layout->addWidget(card_artists_);
     main_layout_->addLayout(cards_layout);
 
-    auto *chart_header = new QLabel("Actividad Semanal", scroll_content_);
+    auto *chart_header = new QLabel("Actividad Semanal", this);
     chart_header->setFont(DesignTokens::getFont("heading_sm", 14));
     chart_header->setStyleSheet(QString("color: %1; font-weight: bold; margin-top: 8px;").arg(c.text_secondary.name()));
     main_layout_->addWidget(chart_header);
 
-    auto *chart_panel = new QWidget(scroll_content_);
+    auto *chart_panel = new QWidget(this);
     chart_panel->setStyleSheet(QString("background-color: %1; border: 1px solid %2; border-radius: 12px;")
         .arg(c.bg_surface.name())
         .arg(c.border.name()));
@@ -182,12 +202,12 @@ void StatsView::setupLayout() {
     chart_p_layout->addWidget(bar_chart_);
     main_layout_->addWidget(chart_panel);
 
-    auto *top_header = new QLabel("Tus Canciones Más Escuchadas", scroll_content_);
+    auto *top_header = new QLabel("Tus Canciones Más Escuchadas", this);
     top_header->setFont(DesignTokens::getFont("heading_sm", 14));
     top_header->setStyleSheet(QString("color: %1; font-weight: bold; margin-top: 8px;").arg(c.text_secondary.name()));
     main_layout_->addWidget(top_header);
 
-    top_tracks_widget_ = new QWidget(scroll_content_);
+    top_tracks_widget_ = new QWidget(this);
     top_tracks_widget_->setStyleSheet(QString("background-color: %1; border: 1px solid %2; border-radius: 12px;")
         .arg(c.bg_surface.name())
         .arg(c.border.name()));
@@ -198,14 +218,13 @@ void StatsView::setupLayout() {
 
     main_layout_->addWidget(top_tracks_widget_);
 
-    scroll_area_->setWidget(scroll_content_);
-    main_vbox->addWidget(scroll_area_);
+    main_vbox->addLayout(main_layout_);
     setLayout(main_vbox);
 }
 
 void StatsView::showEvent(QShowEvent *event) {
     QWidget::showEvent(event);
-    on_stats_requested();
+    on_stats_requested(7);
 }
 
 void StatsView::setStatsData(const StatsData &stats) {
