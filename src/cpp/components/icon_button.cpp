@@ -8,7 +8,12 @@ IconButton::IconButton(const QString &iconName, QWidget *parent, int iconSize)
 {
     setFixedSize(iconSize + 16, iconSize + 16);
     setCursor(Qt::PointingHandCursor);
-    setStyleSheet("QPushButton { background: transparent; border: none; }");
+    setFocusPolicy(Qt::StrongFocus);
+    setStyleSheet(DesignTokens::iconButtonStyle(6));
+
+    QString label = iconName;
+    label.replace('_', ' ');
+    DesignTokens::applyAccessible(this, label, QString(), label);
     
     m_hoverAnim = new QVariantAnimation(this);
     m_hoverAnim->setDuration(120);
@@ -46,6 +51,14 @@ void IconButton::paintEvent(QPaintEvent *) {
         painter.setBrush(bg);
         painter.setPen(Qt::NoPen);
         painter.drawRoundedRect(rect(), 6, 6);
+    }
+
+    if (hasFocus()) {
+        QPen focusPen(c.accent);
+        focusPen.setWidth(2);
+        painter.setPen(focusPen);
+        painter.setBrush(Qt::NoBrush);
+        painter.drawRoundedRect(rect().adjusted(1, 1, -1, -1), 6, 6);
     }
     
     // Calculate icon size with scale

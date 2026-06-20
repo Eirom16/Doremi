@@ -33,7 +33,15 @@ impl LyricsCache {
             )),
         );
         match row {
-            Ok((track_artist, track_title, plain_lyrics, synced_lyrics, source_version, cached_at, expires_at)) => {
+            Ok((
+                track_artist,
+                track_title,
+                plain_lyrics,
+                synced_lyrics,
+                source_version,
+                cached_at,
+                expires_at,
+            )) => {
                 if let Some(exp) = &expires_at {
                     if is_expired(exp) {
                         let _ = conn.execute(
@@ -57,7 +65,13 @@ impl LyricsCache {
         }
     }
 
-    pub fn set(artist: &str, title: &str, plain_lyrics: &str, synced_lyrics: &str, ttl_secs: Option<u64>) -> rusqlite::Result<()> {
+    pub fn set(
+        artist: &str,
+        title: &str,
+        plain_lyrics: &str,
+        synced_lyrics: &str,
+        ttl_secs: Option<u64>,
+    ) -> rusqlite::Result<()> {
         with_db(|conn| {
             let expires_at = ttl_secs.map(|secs| {
                 let expiry = SystemTime::now() + Duration::from_secs(secs);
@@ -92,7 +106,8 @@ impl LyricsCache {
             conn.execute(
                 "DELETE FROM lyrics_cache WHERE track_artist = ?1 AND track_title = ?2",
                 params![artist, title],
-            ).map(|_| ())
+            )
+            .map(|_| ())
         })
     }
 

@@ -26,8 +26,8 @@ PlayerBar::PlayerBar(QWidget *parent)
     const auto &c = DesignTokens::current();
 
     auto *main_layout = new QHBoxLayout(this);
-    main_layout->setContentsMargins(16, 8, 16, 8);
-    main_layout->setSpacing(16);
+    main_layout->setContentsMargins(18, 10, 18, 10);
+    main_layout->setSpacing(18);
 
     // ── LEFT: Track Info & Artwork ─────────────────────────────────────────
     auto *left_container = new QWidget(this);
@@ -43,12 +43,14 @@ PlayerBar::PlayerBar(QWidget *parent)
     
     QPixmap default_art = IconProvider::getIcon("music_note", c.text_secondary, 22).pixmap(44, 44);
     artwork_label_->setPixmap(getRoundedPixmap(default_art, 6));
+    artwork_label_->setAccessibleName("Artwork del track actual");
 
     track_label_ = new QLabel(this);
     track_label_->setFont(DesignTokens::getFont("body", 13));
     track_label_->setText("<b>Sin reproducción</b><br><font color=\"" + c.text_muted.name() + "\">Ningún track seleccionado</font>");
     track_label_->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     track_label_->setStyleSheet("background: transparent;");
+    track_label_->setAccessibleName("Track actual");
 
     artwork_label_->setAttribute(Qt::WA_TransparentForMouseEvents);
     track_label_->setAttribute(Qt::WA_TransparentForMouseEvents);
@@ -64,7 +66,7 @@ PlayerBar::PlayerBar(QWidget *parent)
     auto *center_container = new QWidget(this);
     auto *center_layout = new QVBoxLayout(center_container);
     center_layout->setContentsMargins(0, 0, 0, 0);
-    center_layout->setSpacing(6);
+    center_layout->setSpacing(8);
 
     // Control Buttons Row
     auto *controls_widget = new QWidget(this);
@@ -72,61 +74,73 @@ PlayerBar::PlayerBar(QWidget *parent)
     controls_layout->setContentsMargins(0, 0, 0, 0);
     controls_layout->setSpacing(16);
     controls_layout->addStretch();
+    controls_widget->setFixedHeight(40);
 
     // Shuffle Button
     shuffle_btn_ = new QPushButton(this);
     shuffle_btn_->setFixedSize(32, 32);
     shuffle_btn_->setCheckable(true);
     shuffle_btn_->setCursor(Qt::PointingHandCursor);
+    shuffle_btn_->setFocusPolicy(Qt::StrongFocus);
     shuffle_btn_->setIcon(IconProvider::getIcon("shuffle", c.text_secondary, 20));
-    shuffle_btn_->setToolTip("Aleatorio");
-    shuffle_btn_->setStyleSheet("QPushButton { background: transparent; border: none; }");
+    DesignTokens::applyAccessible(
+        shuffle_btn_,
+        "Aleatorio",
+        "Activa o desactiva la reproduccion aleatoria.",
+        "Aleatorio");
+    shuffle_btn_->setStyleSheet(DesignTokens::iconButtonStyle());
 
     // Previous Button
     prev_btn_ = new QPushButton(this);
     prev_btn_->setFixedSize(32, 32);
     prev_btn_->setCursor(Qt::PointingHandCursor);
+    prev_btn_->setFocusPolicy(Qt::StrongFocus);
     prev_btn_->setIcon(IconProvider::getIcon("skip_previous", c.text_primary, 22));
-    prev_btn_->setStyleSheet("QPushButton { background: transparent; border: none; }");
+    DesignTokens::applyAccessible(
+        prev_btn_,
+        "Track anterior",
+        "Reproduce el track anterior.",
+        "Anterior (tecla multimedia)");
+    prev_btn_->setStyleSheet(DesignTokens::iconButtonStyle());
 
     // Play/Pause Button (Solid Rounded Circle)
     play_btn_ = new QPushButton(this);
     play_btn_->setFixedSize(40, 40);
     play_btn_->setCursor(Qt::PointingHandCursor);
+    play_btn_->setFocusPolicy(Qt::StrongFocus);
     play_btn_->setIcon(IconProvider::getIcon("play_arrow", QColor("#FFFFFF"), 24));
-    
-    QString play_style = QString(
-        "QPushButton {\n"
-        "    background-color: %1;\n"
-        "    border: none;\n"
-        "    border-radius: 20px;\n"
-        "}\n"
-        "QPushButton:hover {\n"
-        "    background-color: %2;\n"
-        "}\n"
-        "QPushButton:pressed {\n"
-        "    background-color: %3;\n"
-        "}\n"
-    )
-    .arg(c.accent.name())
-    .arg(c.accent_bright.name())
-    .arg(c.accent.darker(115).name());
-    play_btn_->setStyleSheet(play_style);
+    DesignTokens::applyAccessible(
+        play_btn_,
+        "Reproducir",
+        "Inicia o pausa la reproduccion.",
+        "Reproducir / pausar (Espacio)");
+    play_btn_->setStyleSheet(DesignTokens::primaryButtonStyle(20));
 
     // Next Button
     next_btn_ = new QPushButton(this);
     next_btn_->setFixedSize(32, 32);
     next_btn_->setCursor(Qt::PointingHandCursor);
+    next_btn_->setFocusPolicy(Qt::StrongFocus);
     next_btn_->setIcon(IconProvider::getIcon("skip_next", c.text_primary, 22));
-    next_btn_->setStyleSheet("QPushButton { background: transparent; border: none; }");
+    DesignTokens::applyAccessible(
+        next_btn_,
+        "Track siguiente",
+        "Reproduce el siguiente track.",
+        "Siguiente (tecla multimedia)");
+    next_btn_->setStyleSheet(DesignTokens::iconButtonStyle());
 
     // Repeat Button
     repeat_btn_ = new QPushButton(this);
     repeat_btn_->setFixedSize(32, 32);
     repeat_btn_->setCursor(Qt::PointingHandCursor);
+    repeat_btn_->setFocusPolicy(Qt::StrongFocus);
     repeat_btn_->setIcon(IconProvider::getIcon("repeat", c.text_secondary, 20));
-    repeat_btn_->setToolTip("Repetir: Desactivado");
-    repeat_btn_->setStyleSheet("QPushButton { background: transparent; border: none; }");
+    DesignTokens::applyAccessible(
+        repeat_btn_,
+        "Repetir desactivado",
+        "Cambia el modo de repeticion.",
+        "Repetir: Desactivado");
+    repeat_btn_->setStyleSheet(DesignTokens::iconButtonStyle());
 
     controls_layout->addWidget(shuffle_btn_);
     controls_layout->addWidget(prev_btn_);
@@ -140,39 +154,20 @@ PlayerBar::PlayerBar(QWidget *parent)
     // Progress Bar Row
     auto *progress_widget = new QWidget(this);
     auto *progress_layout = new QHBoxLayout(progress_widget);
-    progress_layout->setContentsMargins(0, 0, 0, 0);
+    progress_layout->setContentsMargins(0, 2, 0, 0);
     progress_layout->setSpacing(8);
+    progress_widget->setFixedHeight(22);
 
     progress_ = new QSlider(Qt::Horizontal, this);
     progress_->setRange(0, 0);
     progress_->setCursor(Qt::PointingHandCursor);
-    
-    QString progress_style = QString(
-        "QSlider::groove:horizontal {\n"
-        "    height: 4px;\n"
-        "    background: rgba(255, 255, 255, 0.1);\n"
-        "    border-radius: 2px;\n"
-        "}\n"
-        "QSlider::sub-page:horizontal {\n"
-        "    background: %1;\n"
-        "    border-radius: 2px;\n"
-        "}\n"
-        "QSlider::handle:horizontal {\n"
-        "    background: %2;\n"
-        "    width: 10px;\n"
-        "    height: 10px;\n"
-        "    margin: -3px 0;\n"
-        "    border-radius: 5px;\n"
-        "}\n"
-        "QSlider::handle:horizontal:hover {\n"
-        "    background: %3;\n"
-        "}\n"
-    )
-    .arg(c.accent.name())
-    .arg(c.accent_bright.name())
-    .arg(c.accent_bright.name());
-    
-    progress_->setStyleSheet(progress_style);
+    progress_->setFocusPolicy(Qt::StrongFocus);
+    DesignTokens::applyAccessible(
+        progress_,
+        "Progreso de reproduccion",
+        "Permite mover la posicion del track actual.",
+        "Progreso (←/→ para saltar 5s)");
+    progress_->setStyleSheet(DesignTokens::sliderStyle(true));
 
     time_label_ = new QLabel("0:00 / 0:00", this);
     time_label_->setFont(DesignTokens::getFont("caption", 11));
@@ -200,29 +195,13 @@ PlayerBar::PlayerBar(QWidget *parent)
     volume_slider_->setValue(75);
     volume_slider_->setFixedWidth(80);
     volume_slider_->setCursor(Qt::PointingHandCursor);
-    
-    QString volume_style = QString(
-        "QSlider::groove:horizontal {\n"
-        "    height: 3px;\n"
-        "    background: rgba(255, 255, 255, 0.1);\n"
-        "    border-radius: 1px;\n"
-        "}\n"
-        "QSlider::sub-page:horizontal {\n"
-        "    background: %1;\n"
-        "    border-radius: 1px;\n"
-        "}\n"
-        "QSlider::handle:horizontal {\n"
-        "    background: %2;\n"
-        "    width: 8px;\n"
-        "    height: 8px;\n"
-        "    margin: -3px 0;\n"
-        "    border-radius: 4px;\n"
-        "}\n"
-    )
-    .arg(c.text_secondary.name())
-    .arg(c.text_primary.name());
-    
-    volume_slider_->setStyleSheet(volume_style);
+    volume_slider_->setFocusPolicy(Qt::StrongFocus);
+    DesignTokens::applyAccessible(
+        volume_slider_,
+        "Volumen",
+        "Ajusta el volumen de reproduccion.",
+        "Volumen (↑/↓)");
+    volume_slider_->setStyleSheet(DesignTokens::sliderStyle(false));
 
     right_layout->addWidget(volume_icon);
     right_layout->addWidget(volume_slider_);
@@ -230,14 +209,22 @@ PlayerBar::PlayerBar(QWidget *parent)
     main_layout->addWidget(right_container, 1);
 
     setLayout(main_layout);
-    setFixedHeight(64);
+    setFixedHeight(86);
 
     // Set panel background
     setAttribute(Qt::WA_StyledBackground, true);
-    setStyleSheet(QString("PlayerBar { background-color: %1; border-top: 1px solid %2; }")
+    setStyleSheet(QString(
+        "PlayerBar {"
+        "    background-color: %1;"
+        "    border: 1px solid %2;"
+        "    border-radius: 18px;"
+        "}"
+    )
         .arg(c.bg_surface.name())
-        .arg(QString("rgba(%1, %2, %3, %4)").arg(c.border.red()).arg(c.border.green()).arg(c.border.blue()).arg(c.border.alpha() / 255.0))
+        .arg(DesignTokens::rgba(c.border))
     );
+
+    QWidget::setTabOrder({shuffle_btn_, prev_btn_, play_btn_, next_btn_, repeat_btn_, progress_, volume_slider_});
 
     // Connections
     connect(play_btn_, &QPushButton::clicked, this, &PlayerBar::play_pause_clicked);
@@ -250,6 +237,11 @@ PlayerBar::PlayerBar(QWidget *parent)
         const auto &c = DesignTokens::current();
         shuffle_on_ = on;
         shuffle_btn_->setIcon(IconProvider::getIcon("shuffle", on ? c.accent : c.text_secondary, 20));
+        DesignTokens::applyAccessible(
+            shuffle_btn_,
+            on ? "Aleatorio activado" : "Aleatorio desactivado",
+            "Activa o desactiva la reproduccion aleatoria.",
+            on ? "Aleatorio: Activado" : "Aleatorio: Desactivado");
         emit shuffle_toggled(on);
     });
 
@@ -273,6 +265,8 @@ void PlayerBar::set_track_info(const std::string &title, const std::string &arti
         .arg(c.text_secondary.name())
         .arg(artist_str)
     );
+    track_label_->setAccessibleName(QString("Track actual: %1").arg(title_str));
+    track_label_->setAccessibleDescription(QString("Artista: %1").arg(artist_str));
 
     // Load artwork
     QPixmap art_pix;
@@ -299,6 +293,8 @@ void PlayerBar::set_progress(int32_t pos_ms, int32_t dur_ms) {
             return QString("%1:%2").arg(m).arg(s, 2, 10, QChar('0'));
         };
         time_label_->setText(fmt(pos_ms) + " / " + fmt(dur_ms));
+        progress_->setAccessibleDescription(
+            QString("Posicion %1 de %2").arg(fmt(pos_ms), fmt(dur_ms)));
     }
 }
 
@@ -308,6 +304,11 @@ void PlayerBar::set_playing(bool playing) {
         QColor("#FFFFFF"),
         24
     ));
+    DesignTokens::applyAccessible(
+        play_btn_,
+        playing ? "Pausar" : "Reproducir",
+        "Inicia o pausa la reproduccion.",
+        playing ? "Pausar (Espacio)" : "Reproducir (Espacio)");
 }
 
 void PlayerBar::set_volume_value(int32_t volume) {
@@ -322,6 +323,11 @@ void PlayerBar::set_shuffle(bool on) {
     shuffle_btn_->blockSignals(true);
     shuffle_btn_->setChecked(on);
     shuffle_btn_->setIcon(IconProvider::getIcon("shuffle", on ? c.accent : c.text_secondary, 20));
+    DesignTokens::applyAccessible(
+        shuffle_btn_,
+        on ? "Aleatorio activado" : "Aleatorio desactivado",
+        "Activa o desactiva la reproduccion aleatoria.",
+        on ? "Aleatorio: Activado" : "Aleatorio: Desactivado");
     shuffle_btn_->blockSignals(false);
 }
 
@@ -331,13 +337,25 @@ void PlayerBar::set_repeat_mode(int mode) {
     
     if (mode == 0) {
         repeat_btn_->setIcon(IconProvider::getIcon("repeat", c.text_secondary, 20));
-        repeat_btn_->setToolTip("Repetir: Desactivado");
+        DesignTokens::applyAccessible(
+            repeat_btn_,
+            "Repetir desactivado",
+            "Cambia el modo de repeticion.",
+            "Repetir: Desactivado");
     } else if (mode == 1) {
         repeat_btn_->setIcon(IconProvider::getIcon("repeat", c.accent, 20));
-        repeat_btn_->setToolTip("Repetir: Todas");
+        DesignTokens::applyAccessible(
+            repeat_btn_,
+            "Repetir todas",
+            "Repite todos los tracks de la cola.",
+            "Repetir: Todas");
     } else {
         repeat_btn_->setIcon(IconProvider::getIcon("repeat_one", c.accent, 20));
-        repeat_btn_->setToolTip("Repetir: Una");
+        DesignTokens::applyAccessible(
+            repeat_btn_,
+            "Repetir una",
+            "Repite solo el track actual.",
+            "Repetir: Una");
     }
 }
 
@@ -354,49 +372,8 @@ void PlayerBar::update_theme() {
     artwork_label_->setStyleSheet(QString("background-color: %1; border-radius: 6px;")
         .arg(c.bg_elevated.name()));
     
-    QString play_style = QString(
-        "QPushButton {\n"
-        "    background-color: %1;\n"
-        "    border: none;\n"
-        "    border-radius: 20px;\n"
-        "}\n"
-        "QPushButton:hover {\n"
-        "    background-color: %2;\n"
-        "}\n"
-        "QPushButton:pressed {\n"
-        "    background-color: %3;\n"
-        "}\n"
-    )
-    .arg(c.accent.name())
-    .arg(c.accent_bright.name())
-    .arg(c.accent.darker(115).name());
-    play_btn_->setStyleSheet(play_style);
-    
-    QString progress_style = QString(
-        "QSlider::groove:horizontal {\n"
-        "    height: 4px;\n"
-        "    background: rgba(255, 255, 255, 0.1);\n"
-        "    border-radius: 2px;\n"
-        "}\n"
-        "QSlider::sub-page:horizontal {\n"
-        "    background: %1;\n"
-        "    border-radius: 2px;\n"
-        "}\n"
-        "QSlider::handle:horizontal {\n"
-        "    background: %2;\n"
-        "    width: 10px;\n"
-        "    height: 10px;\n"
-        "    margin: -3px 0;\n"
-        "    border-radius: 5px;\n"
-        "}\n"
-        "QSlider::handle:horizontal:hover {\n"
-        "    background: %3;\n"
-        "}\n"
-    )
-    .arg(c.accent.name())
-    .arg(c.accent_bright.name())
-    .arg(c.accent_bright.name());
-    progress_->setStyleSheet(progress_style);
+    play_btn_->setStyleSheet(DesignTokens::primaryButtonStyle(20));
+    progress_->setStyleSheet(DesignTokens::sliderStyle(true));
     
     time_label_->setStyleSheet(QString("color: %1;").arg(c.text_muted.name()));
     
@@ -407,24 +384,18 @@ void PlayerBar::update_theme() {
     QColor rep_color = repeat_mode_ > 0 ? c.accent : c.text_secondary;
     repeat_btn_->setIcon(IconProvider::getIcon(repeat_mode_ == 2 ? "repeat_one" : "repeat", rep_color, 20));
     
-    QString volume_style = QString(
-        "QSlider::groove:horizontal {\n"
-        "    height: 4px;\n"
-        "    background: rgba(255, 255, 255, 0.1);\n"
-        "    border-radius: 2px;\n"
-        "}\n"
-        "QSlider::sub-page:horizontal {\n"
-        "    background: %1;\n"
-        "    border-radius: 2px;\n"
-        "}\n"
-        "QSlider::handle:horizontal {\n"
-        "    background: %2;\n"
-        "    width: 8px;\n"
-        "    height: 8px;\n"
-        "    margin: -2px 0;\n"
-        "    border-radius: 4px;\n"
-        "}\n"
-    ).arg(c.accent.name()).arg(c.accent_bright.name());
-    volume_slider_->setStyleSheet(volume_style);
+    setStyleSheet(QString(
+        "PlayerBar {"
+        "    background-color: %1;"
+        "    border: 1px solid %2;"
+        "    border-radius: 18px;"
+        "}"
+    )
+        .arg(c.bg_surface.name())
+        .arg(DesignTokens::rgba(c.border)));
+    shuffle_btn_->setStyleSheet(DesignTokens::iconButtonStyle());
+    prev_btn_->setStyleSheet(DesignTokens::iconButtonStyle());
+    next_btn_->setStyleSheet(DesignTokens::iconButtonStyle());
+    repeat_btn_->setStyleSheet(DesignTokens::iconButtonStyle());
+    volume_slider_->setStyleSheet(DesignTokens::sliderStyle(false));
 }
-

@@ -17,6 +17,7 @@ public:
     void set_search_text(const std::string &text);
     void set_search_suggestions(const std::string &query, const std::vector<std::string> &suggestions);
     std::string search_text() const;
+    void focus_search();
     void update_theme();
 signals:
     void search_submitted(const std::string &query);

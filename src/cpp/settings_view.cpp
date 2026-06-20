@@ -2,9 +2,11 @@
 #include "ffi_utils.h"
 #include "design_tokens.h"
 #include "icon_provider.h"
+#include <QButtonGroup>
 #include <QHBoxLayout>
 #include <QGridLayout>
 #include <QFrame>
+#include <QStackedWidget>
 #include <QTimer>
 #include <QFileDialog>
 #include <QMessageBox>
@@ -17,15 +19,110 @@ SettingsView::SettingsView(QWidget *parent)
 {
     const auto &c = DesignTokens::current();
 
-    auto *content = new QVBoxLayout();
-    content->setContentsMargins(32, 24, 32, 24);
-    content->setSpacing(10);
+    auto *root = new QHBoxLayout(this);
+    root->setContentsMargins(24, 24, 24, 24);
+    root->setSpacing(20);
 
-    auto *title = new QLabel(QString::fromStdString(std::string(doremi_tr("settings_title"))), this);
+    auto *sidebar = new QWidget(this);
+    sidebar->setFixedWidth(220);
+    sidebar->setAttribute(Qt::WA_StyledBackground, true);
+    sidebar->setStyleSheet(QString(
+        "QWidget {"
+        "    background-color: %1;"
+        "    border: 1px solid %2;"
+        "    border-radius: 16px;"
+        "}"
+    ).arg(c.bg_surface.name()).arg(DesignTokens::rgba(c.border)));
+
+    auto *sidebar_layout = new QVBoxLayout(sidebar);
+    sidebar_layout->setContentsMargins(14, 16, 14, 16);
+    sidebar_layout->setSpacing(8);
+
+    auto *title = new QLabel(QString::fromStdString(std::string(doremi_tr("settings_title"))), sidebar);
     title->setFont(DesignTokens::getFont("display", 24));
     title->setStyleSheet(QString("font-weight: bold; color: %1; background: transparent;").arg(c.text_primary.name()));
-    content->addWidget(title);
-    content->addSpacing(8);
+    sidebar_layout->addWidget(title);
+    sidebar_layout->addSpacing(8);
+
+    auto *pages = new QStackedWidget(this);
+    pages->setStyleSheet("background: transparent;");
+
+    auto *tab_group = new QButtonGroup(this);
+    tab_group->setExclusive(true);
+    QString tab_style = QString(
+        "QPushButton {"
+        "    background: transparent;"
+        "    border: 1px solid transparent;"
+        "    border-radius: 10px;"
+        "    color: %1;"
+        "    padding: 10px 12px;"
+        "    text-align: left;"
+        "    font-weight: 600;"
+        "}"
+        "QPushButton:hover {"
+        "    background: %2;"
+        "    color: %3;"
+        "}"
+        "QPushButton:checked {"
+        "    background: %2;"
+        "    border-color: %4;"
+        "    color: %5;"
+        "}"
+        "QPushButton:focus {"
+        "    border: 2px solid %5;"
+        "}"
+    )
+        .arg(c.text_secondary.name())
+        .arg(DesignTokens::rgba(c.accent_dim))
+        .arg(c.text_primary.name())
+        .arg(DesignTokens::rgba(c.border_accent))
+        .arg(c.accent.name());
+
+    auto add_page = [&](const QString &label, const QString &iconName) {
+        auto *page = new QWidget(pages);
+        auto *layout = new QVBoxLayout(page);
+        layout->setContentsMargins(8, 0, 8, 0);
+        layout->setSpacing(10);
+        pages->addWidget(page);
+
+        auto *button = new QPushButton(label, sidebar);
+        button->setCheckable(true);
+        button->setCursor(Qt::PointingHandCursor);
+        button->setFocusPolicy(Qt::StrongFocus);
+        button->setIcon(IconProvider::getIcon(iconName, c.text_secondary, 18));
+        button->setStyleSheet(tab_style);
+        DesignTokens::applyAccessible(
+            button,
+            QString("Abrir ajustes de %1").arg(label),
+            QString("Muestra la categoria de configuracion %1").arg(label),
+            label);
+        const int index = pages->count() - 1;
+        tab_group->addButton(button, index);
+        QObject::connect(button, &QPushButton::clicked, this, [pages, index]() {
+            pages->setCurrentIndex(index);
+        });
+        sidebar_layout->addWidget(button);
+        if (index == 0) {
+            button->setChecked(true);
+        }
+        return layout;
+    };
+
+    auto *appearance_content = add_page(QString::fromStdString(std::string(doremi_tr("settings_appearance"))), "palette");
+    auto *playback_content = add_page(QString::fromStdString(std::string(doremi_tr("settings_playback"))), "play_circle");
+    auto *equalizer_content = add_page(QString::fromStdString(std::string(doremi_tr("settings_equalizer"))), "equalizer");
+    auto *integrations_content = add_page(QString::fromStdString(std::string(doremi_tr("settings_integrations"))), "hub");
+    auto *subtitles_content = add_page(QString::fromStdString(std::string(doremi_tr("settings_subtitles"))), "subtitles");
+    auto *downloads_content = add_page(QString::fromStdString(std::string(doremi_tr("settings_downloads"))), "download");
+    auto *storage_content = add_page(QString::fromStdString(std::string(doremi_tr("settings_storage"))), "database");
+    auto *language_content = add_page(QString::fromStdString(std::string(doremi_tr("language"))), "language");
+    auto *about_content = add_page(QString::fromStdString(std::string(doremi_tr("settings_about"))), "info");
+    sidebar_layout->addStretch(1);
+
+    root->addWidget(sidebar);
+    root->addWidget(pages, 1);
+
+    auto *content = appearance_content;
 
     // Style for comboboxes
     QString comboStyle = QString(
@@ -85,6 +182,8 @@ SettingsView::SettingsView(QWidget *parent)
     content->addWidget(sep);
 
     // Playback section
+    content->addStretch(1);
+    content = playback_content;
     content->addWidget(section_header(std::string(doremi_tr("settings_playback"))));
     content->addSpacing(4);
 
@@ -117,6 +216,8 @@ SettingsView::SettingsView(QWidget *parent)
     content->addWidget(sep2);
 
     // Equalizer section
+    content->addStretch(1);
+    content = equalizer_content;
     content->addWidget(section_header(std::string(doremi_tr("settings_equalizer"))));
     content->addSpacing(4);
 
@@ -175,6 +276,8 @@ SettingsView::SettingsView(QWidget *parent)
     content->addWidget(sep3);
 
     // Integrations section
+    content->addStretch(1);
+    content = integrations_content;
     content->addWidget(section_header(std::string(doremi_tr("settings_integrations"))));
     content->addSpacing(4);
 
@@ -261,6 +364,8 @@ SettingsView::SettingsView(QWidget *parent)
     content->addWidget(sep_lf);
 
     // Subtitles section
+    content->addStretch(1);
+    content = subtitles_content;
     content->addWidget(section_header(std::string(doremi_tr("settings_subtitles"))));
     content->addSpacing(4);
 
@@ -298,6 +403,8 @@ SettingsView::SettingsView(QWidget *parent)
     content->addWidget(sep_sub);
 
     // Downloads section
+    content->addStretch(1);
+    content = downloads_content;
     content->addWidget(section_header(std::string(doremi_tr("settings_downloads"))));
     content->addSpacing(4);
 
@@ -354,6 +461,8 @@ SettingsView::SettingsView(QWidget *parent)
     content->addWidget(sep_dl);
 
     // Storage section
+    content->addStretch(1);
+    content = storage_content;
     content->addWidget(section_header(std::string(doremi_tr("settings_storage"))));
     content->addSpacing(4);
 
@@ -412,6 +521,8 @@ SettingsView::SettingsView(QWidget *parent)
     content->addWidget(sep_stor);
 
     // Language section
+    content->addStretch(1);
+    content = language_content;
     content->addWidget(section_header(std::string(doremi_tr("language"))));
     content->addSpacing(4);
 
@@ -432,6 +543,8 @@ SettingsView::SettingsView(QWidget *parent)
     content->addWidget(sep_about);
 
     // Acerca de section
+    content->addStretch(1);
+    content = about_content;
     content->addWidget(section_header(std::string(doremi_tr("settings_about"))));
     content->addSpacing(8);
 
@@ -545,7 +658,6 @@ SettingsView::SettingsView(QWidget *parent)
     content->addWidget(check_updates_btn);
 
     content->addStretch(1);
-    setLayout(content);
     setStyleSheet("background: transparent;");
 
     // Emit signals on changes

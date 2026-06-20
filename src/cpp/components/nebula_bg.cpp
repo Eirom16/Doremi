@@ -74,7 +74,9 @@ void NebulaBg::setColors(const QStringList &hex_colors) {
 }
 
 void NebulaBg::setPlaying(bool playing) {
+    if (playing_ == playing) return;
     playing_ = playing;
+    update();
 }
 
 void NebulaBg::onTick() {
@@ -89,8 +91,7 @@ void NebulaBg::onTick() {
             c4_ = target_c4_;
         }
         update();
-    } else {
-        // Only trigger paint if playing or animating colors to conserve CPU
+    } else if (playing_) {
         update();
     }
 }

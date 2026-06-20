@@ -1,8 +1,9 @@
 #include "design_tokens.h"
 #include <QCoreApplication>
-#include <QFontDatabase>
-#include <QDir>
 #include <QDebug>
+#include <QDir>
+#include <QFontDatabase>
+#include <QLocale>
 
 static DesignTokens::Theme g_active_theme = DesignTokens::Theme::Dark;
 
@@ -44,11 +45,61 @@ static ColorScheme g_light_colors = {
     QColor("#DC2626")  // error
 };
 
+static const SpacingTokens g_spacing = {
+    4,  // xs
+    8,  // sm
+    12, // md
+    16, // lg
+    24, // xl
+    32  // xxl
+};
+
+static const RadiusTokens g_radius = {
+    6,   // sm
+    8,   // md
+    12,  // lg
+    16,  // xl
+    999  // pill
+};
+
+static const MotionTokens g_motion = {
+    0,   // instant_ms
+    120, // fast_ms
+    180, // normal_ms
+    260  // slow_ms
+};
+
+static ElevationTokens makeElevationTokens(const ColorScheme &c) {
+    return {
+        QColor(0, 0, 0, g_active_theme == DesignTokens::Theme::Dark ? 35 : 18),
+        QColor(0, 0, 0, g_active_theme == DesignTokens::Theme::Dark ? 60 : 28),
+        QColor(c.accent.red(), c.accent.green(), c.accent.blue(), 46)
+    };
+}
+
 const ColorScheme &DesignTokens::current() {
     if (g_active_theme == Theme::Light) {
         return g_light_colors;
     }
     return g_dark_colors;
+}
+
+const SpacingTokens &DesignTokens::spacing() {
+    return g_spacing;
+}
+
+const RadiusTokens &DesignTokens::radius() {
+    return g_radius;
+}
+
+const ElevationTokens &DesignTokens::elevation() {
+    static ElevationTokens tokens = makeElevationTokens(current());
+    tokens = makeElevationTokens(current());
+    return tokens;
+}
+
+const MotionTokens &DesignTokens::motion() {
+    return g_motion;
 }
 
 void DesignTokens::setTheme(Theme theme) {
@@ -76,6 +127,14 @@ void DesignTokens::setAccentColor(const QString &hexColor) {
     g_light_colors.accent_dim = QColor(accent.red(), accent.green(), accent.blue(), 25);
     g_light_colors.accent_glow = QColor(accent.red(), accent.green(), accent.blue(), 38);
     g_light_colors.border_accent = QColor(accent.red(), accent.green(), accent.blue(), 38);
+}
+
+QString DesignTokens::rgba(const QColor &color) {
+    return QString("rgba(%1, %2, %3, %4)")
+        .arg(color.red())
+        .arg(color.green())
+        .arg(color.blue())
+        .arg(QLocale::c().toString(color.alphaF(), 'f', 3));
 }
 
 void DesignTokens::loadFonts() {
@@ -152,31 +211,34 @@ QString DesignTokens::getGlobalStyleSheet() {
     // Convert colors to css strings
     QString bg_base = c.bg_base.name();
     QString bg_surface = c.bg_surface.name();
-    QString bg_elevated = c.bg_elevated.name();
     QString accent = c.accent.name();
-    QString accent_bright = c.accent_bright.name();
     QString text_primary = c.text_primary.name();
     QString text_secondary = c.text_secondary.name();
     QString text_muted = c.text_muted.name();
     
-    QString border = QString("rgba(%1, %2, %3, %4)")
-        .arg(c.border.red()).arg(c.border.green()).arg(c.border.blue()).arg(c.border.alpha() / 255.0);
-    QString border_accent = QString("rgba(%1, %2, %3, %4)")
-        .arg(c.border_accent.red()).arg(c.border_accent.green()).arg(c.border_accent.blue()).arg(c.border_accent.alpha() / 255.0);
-    QString accent_dim = QString("rgba(%1, %2, %3, %4)")
-        .arg(c.accent_dim.red()).arg(c.accent_dim.green()).arg(c.accent_dim.blue()).arg(c.accent_dim.alpha() / 255.0);
+    QString border = rgba(c.border);
+    QString accent_dim = rgba(c.accent_dim);
 
-    return QString(
+    QString style = QString(
         "/* Global Style Sheet */\n"
         "QMainWindow {\n"
-        "    background-color: %1;\n"
-        "    color: %4;\n"
+        "    background-color: {{bg_base}};\n"
+        "    color: {{text_primary}};\n"
         "}\n"
         "\n"
         "QWidget {\n"
         "    font-family: 'Inter', sans-serif;\n"
         "    font-size: 14px;\n"
-        "    color: %4;\n"
+        "    color: {{text_primary}};\n"
+        "}\n"
+        "\n"
+        "QWidget:disabled {\n"
+        "    color: {{text_muted}};\n"
+        "}\n"
+        "\n"
+        "QPushButton:focus, QToolButton:focus, QLineEdit:focus, QComboBox:focus, QSlider:focus {\n"
+        "    outline: none;\n"
+        "    border-color: {{accent}};\n"
         "}\n"
         "\n"
         "/* Premium Scrollbar */\n"
@@ -187,12 +249,12 @@ QString DesignTokens::getGlobalStyleSheet() {
         "    margin: 0px 0px 0px 0px;\n"
         "}\n"
         "QScrollBar::handle:vertical {\n"
-        "    background: %6;\n"
+        "    background: {{text_muted}};\n"
         "    border-radius: 3px;\n"
         "    min-height: 20px;\n"
         "}\n"
         "QScrollBar::handle:vertical:hover {\n"
-        "    background: %3;\n"
+        "    background: {{accent}};\n"
         "}\n"
         "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {\n"
         "    height: 0px;\n"
@@ -209,12 +271,12 @@ QString DesignTokens::getGlobalStyleSheet() {
         "    margin: 0px 0px 0px 0px;\n"
         "}\n"
         "QScrollBar::handle:horizontal {\n"
-        "    background: %6;\n"
+        "    background: {{text_muted}};\n"
         "    border-radius: 3px;\n"
         "    min-width: 20px;\n"
         "}\n"
         "QScrollBar::handle:horizontal:hover {\n"
-        "    background: %3;\n"
+        "    background: {{accent}};\n"
         "}\n"
         "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {\n"
         "    width: 0px;\n"
@@ -226,9 +288,9 @@ QString DesignTokens::getGlobalStyleSheet() {
         "\n"
         "/* Tooltips */\n"
         "QToolTip {\n"
-        "    background-color: %2;\n"
-        "    color: %4;\n"
-        "    border: 1px solid %8;\n"
+        "    background-color: {{bg_surface}};\n"
+        "    color: {{text_primary}};\n"
+        "    border: 1px solid {{border}};\n"
         "    border-radius: 6px;\n"
         "    padding: 6px 10px;\n"
         "    font-size: 12px;\n"
@@ -236,33 +298,278 @@ QString DesignTokens::getGlobalStyleSheet() {
         "\n"
         "/* Glass Context Menus */\n"
         "QMenu {\n"
-        "    background-color: %2;\n"
-        "    border: 1px solid %8;\n"
+        "    background-color: {{bg_surface}};\n"
+        "    border: 1px solid {{border}};\n"
         "    border-radius: 10px;\n"
         "    padding: 6px 0px;\n"
         "}\n"
         "QMenu::item {\n"
         "    padding: 8px 20px 8px 12px;\n"
-        "    color: %5;\n"
+        "    color: {{text_secondary}};\n"
         "    font-size: 13px;\n"
         "}\n"
         "QMenu::item:selected {\n"
-        "    background-color: %9;\n"
-        "    color: %4;\n"
+        "    background-color: {{accent_dim}};\n"
+        "    color: {{text_primary}};\n"
         "}\n"
         "QMenu::separator {\n"
         "    height: 1px;\n"
-        "    background: %8;\n"
+        "    background: {{border}};\n"
         "    margin: 6px 0px;\n"
         "}\n"
+    );
+
+    style.replace("{{bg_base}}", bg_base);
+    style.replace("{{bg_surface}}", bg_surface);
+    style.replace("{{accent}}", accent);
+    style.replace("{{text_primary}}", text_primary);
+    style.replace("{{text_secondary}}", text_secondary);
+    style.replace("{{text_muted}}", text_muted);
+    style.replace("{{border}}", border);
+    style.replace("{{accent_dim}}", accent_dim);
+    return style;
+}
+
+QString DesignTokens::iconButtonStyle(int radiusValue) {
+    const auto &c = current();
+    const int r = radiusValue >= 0 ? radiusValue : radius().md;
+    return QString(
+        "QPushButton {\n"
+        "    background: transparent;\n"
+        "    border: 1px solid transparent;\n"
+        "    border-radius: %1px;\n"
+        "    color: %2;\n"
+        "}\n"
+        "QPushButton:hover {\n"
+        "    background: %3;\n"
+        "    border-color: %4;\n"
+        "    color: %5;\n"
+        "}\n"
+        "QPushButton:pressed {\n"
+        "    background: %6;\n"
+        "    border-color: %7;\n"
+        "}\n"
+        "QPushButton:checked {\n"
+        "    background: %3;\n"
+        "    border-color: %7;\n"
+        "    color: %7;\n"
+        "}\n"
+        "QPushButton:focus {\n"
+        "    border: 2px solid %7;\n"
+        "}\n"
+        "QPushButton:disabled {\n"
+        "    color: %8;\n"
+        "    background: transparent;\n"
+        "}\n"
     )
-    .arg(bg_base)       // %1
-    .arg(bg_surface)    // %2
-    .arg(accent)        // %3
-    .arg(text_primary)  // %4
-    .arg(text_secondary)// %5
-    .arg(text_muted)     // %6
-    .arg(accent_bright) // %7
-    .arg(border)        // %8
-    .arg(accent_dim);   // %9
+        .arg(r)
+        .arg(c.text_secondary.name())
+        .arg(rgba(c.accent_dim))
+        .arg(rgba(c.border))
+        .arg(c.text_primary.name())
+        .arg(rgba(c.accent_glow))
+        .arg(c.accent.name())
+        .arg(c.text_muted.name());
+}
+
+QString DesignTokens::primaryButtonStyle(int radiusValue) {
+    const auto &c = current();
+    const int r = radiusValue >= 0 ? radiusValue : radius().pill;
+    return QString(
+        "QPushButton {\n"
+        "    background-color: %1;\n"
+        "    border: 1px solid %1;\n"
+        "    border-radius: %2px;\n"
+        "    color: #FFFFFF;\n"
+        "    font-weight: 600;\n"
+        "}\n"
+        "QPushButton:hover {\n"
+        "    background-color: %3;\n"
+        "    border-color: %3;\n"
+        "}\n"
+        "QPushButton:pressed {\n"
+        "    background-color: %4;\n"
+        "    border-color: %4;\n"
+        "}\n"
+        "QPushButton:focus {\n"
+        "    border: 2px solid %5;\n"
+        "}\n"
+        "QPushButton:disabled {\n"
+        "    background-color: %6;\n"
+        "    border-color: %6;\n"
+        "    color: %7;\n"
+        "}\n"
+    )
+        .arg(c.accent.name())
+        .arg(r)
+        .arg(c.accent_bright.name())
+        .arg(c.accent.darker(115).name())
+        .arg(c.text_primary.name())
+        .arg(rgba(c.border_accent))
+        .arg(c.text_muted.name());
+}
+
+QString DesignTokens::navButtonStyle() {
+    const auto &c = current();
+    return QString(
+        "QPushButton {\n"
+        "    background: transparent;\n"
+        "    border: none;\n"
+        "    border-radius: 0px;\n"
+        "    border-left: 3px solid transparent;\n"
+        "    color: %1;\n"
+        "}\n"
+        "QPushButton:hover {\n"
+        "    background: %2;\n"
+        "    color: %3;\n"
+        "}\n"
+        "QPushButton:pressed {\n"
+        "    background: %4;\n"
+        "}\n"
+        "QPushButton:checked {\n"
+        "    background: %2;\n"
+        "    color: %5;\n"
+        "    border-left: 3px solid %5;\n"
+        "}\n"
+        "QPushButton:focus {\n"
+        "    border: 2px solid %5;\n"
+        "    border-left: 3px solid %5;\n"
+        "}\n"
+        "QPushButton:disabled {\n"
+        "    color: %6;\n"
+        "}\n"
+    )
+        .arg(c.text_secondary.name())
+        .arg(rgba(c.accent_dim))
+        .arg(c.text_primary.name())
+        .arg(rgba(c.accent_glow))
+        .arg(c.accent.name())
+        .arg(c.text_muted.name());
+}
+
+QString DesignTokens::profileButtonStyle() {
+    const auto &c = current();
+    return QString(
+        "QPushButton {\n"
+        "    background: transparent;\n"
+        "    border: 1px solid transparent;\n"
+        "    border-radius: %1px;\n"
+        "    text-align: left;\n"
+        "    padding-left: 20px;\n"
+        "    margin: 4px 8px;\n"
+        "    font-weight: bold;\n"
+        "    color: %2;\n"
+        "}\n"
+        "QPushButton:hover {\n"
+        "    background: %3;\n"
+        "    color: %4;\n"
+        "}\n"
+        "QPushButton:pressed {\n"
+        "    background: %5;\n"
+        "}\n"
+        "QPushButton:focus {\n"
+        "    border: 2px solid %6;\n"
+        "}\n"
+    )
+        .arg(radius().lg)
+        .arg(c.text_secondary.name())
+        .arg(rgba(c.accent_dim))
+        .arg(c.text_primary.name())
+        .arg(rgba(c.accent_glow))
+        .arg(c.accent.name());
+}
+
+QString DesignTokens::textInputStyle() {
+    const auto &c = current();
+    return QString(
+        "QLineEdit {\n"
+        "    background-color: %1;\n"
+        "    border: 1px solid %2;\n"
+        "    border-radius: %3px;\n"
+        "    padding: 6px 12px 6px 36px;\n"
+        "    color: %4;\n"
+        "    selection-background-color: %5;\n"
+        "}\n"
+        "QLineEdit:hover {\n"
+        "    border-color: %6;\n"
+        "}\n"
+        "QLineEdit:focus {\n"
+        "    border: 2px solid %7;\n"
+        "    background-color: %8;\n"
+        "}\n"
+        "QLineEdit:disabled {\n"
+        "    color: %9;\n"
+        "    background-color: %10;\n"
+        "}\n"
+    )
+        .arg(c.bg_base.name())
+        .arg(rgba(c.border))
+        .arg(radius().md)
+        .arg(c.text_primary.name())
+        .arg(rgba(c.accent_dim))
+        .arg(c.text_secondary.name())
+        .arg(c.accent.name())
+        .arg(c.bg_elevated.name())
+        .arg(c.text_muted.name())
+        .arg(rgba(c.border));
+}
+
+QString DesignTokens::sliderStyle(bool prominent) {
+    const auto &c = current();
+    const QColor groove = activeTheme() == Theme::Dark ? QColor(255, 255, 255, 26) : QColor(0, 0, 0, 20);
+    const QColor subPage = prominent ? c.accent : c.text_secondary;
+    const QColor handle = prominent ? c.accent_bright : c.text_primary;
+    const int grooveHeight = prominent ? 4 : 3;
+    const int handleSize = prominent ? 12 : 10;
+    const int margin = -(handleSize - grooveHeight) / 2;
+    return QString(
+        "QSlider::groove:horizontal {\n"
+        "    height: %1px;\n"
+        "    background: %2;\n"
+        "    border-radius: %3px;\n"
+        "}\n"
+        "QSlider::sub-page:horizontal {\n"
+        "    background: %4;\n"
+        "    border-radius: %3px;\n"
+        "}\n"
+        "QSlider::handle:horizontal {\n"
+        "    background: %5;\n"
+        "    width: %6px;\n"
+        "    height: %6px;\n"
+        "    margin: %7px 0;\n"
+        "    border-radius: %8px;\n"
+        "}\n"
+        "QSlider::handle:horizontal:hover {\n"
+        "    background: %9;\n"
+        "}\n"
+        "QSlider:focus::groove:horizontal {\n"
+        "    background: %10;\n"
+        "}\n"
+    )
+        .arg(grooveHeight)
+        .arg(rgba(groove))
+        .arg(grooveHeight / 2)
+        .arg(subPage.name())
+        .arg(handle.name())
+        .arg(handleSize)
+        .arg(margin)
+        .arg(handleSize / 2)
+        .arg(c.accent_bright.name())
+        .arg(rgba(c.accent_glow));
+}
+
+void DesignTokens::applyAccessible(QWidget *widget,
+                                   const QString &name,
+                                   const QString &description,
+                                   const QString &toolTip) {
+    if (!widget) {
+        return;
+    }
+    widget->setAccessibleName(name);
+    if (!description.isEmpty()) {
+        widget->setAccessibleDescription(description);
+    }
+    const QString resolvedToolTip = toolTip.isEmpty() ? name : toolTip;
+    widget->setToolTip(resolvedToolTip);
+    widget->setStatusTip(resolvedToolTip);
 }

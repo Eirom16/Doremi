@@ -386,11 +386,11 @@ Soporte para podcasts y shows de YouTube Music (y potencialmente RSS). YouTube M
 
 ### P5.1 Sistema de diseño
 
-- [ ] Consolidar tokens de color, tipografia, spacing, radius, elevacion y motion.
+- [x] Consolidar tokens de color, tipografia, spacing, radius, elevacion y motion.
 - [ ] Eliminar estilos duplicados y colores hardcodeados.
-- [ ] Definir componentes oficiales y variantes de estado.
+- [x] Definir componentes oficiales y variantes de estado.
 - [ ] Portar los componentes faltantes de Pyrolist solo cuando tengan uso real.
-- [ ] Añadir estados hover, pressed, focused, disabled, loading y selected.
+- [x] Añadir estados hover, pressed, focused, disabled, loading y selected.
 - [ ] Verificar dark/light y colores de acento con contraste adecuado.
 - [ ] Soportar escala HiDPI y distintos device pixel ratios.
 - [ ] Adaptar layouts a ventanas pequeñas y ultrawide.
@@ -410,11 +410,13 @@ Soporte para podcasts y shows de YouTube Music (y potencialmente RSS). YouTube M
 ### P5.3 Interaccion
 
 - [ ] Mini player flotante y modo compacto.
-- [ ] Navegacion atras/adelante con historial de rutas.
-- [ ] Restaurar scroll y foco al regresar.
-- [ ] Tooltips consistentes y shortcuts visibles.
+- [x] Corregir mini player flotante y solape del boton principal con la linea de tiempo.
+- [x] Navegacion atras/adelante con historial de rutas.
+- [x] Restaurar scroll y foco al regresar.
+- [x] Tooltips consistentes y shortcuts visibles.
+- [x] Sistema vertical de pestanas por categoria en configuracion.
 - [ ] Drag and drop para cola y playlists.
-- [ ] Toasts accionables con cola y deduplicacion.
+- [x] Toasts accionables con cola y deduplicacion.
 - [ ] Centro de notificaciones opcional.
 - [ ] Confirmaciones solo en acciones destructivas.
 - [ ] Errores con retry y detalle tecnico desplegable.
@@ -425,8 +427,8 @@ Soporte para podcasts y shows de YouTube Music (y potencialmente RSS). YouTube M
 - [ ] Alcanzar paridad de claves ES/EN y testear claves faltantes.
 - [ ] Soportar pluralizacion y parametros sin concatenar frases.
 - [ ] Preparar layout para traducciones mas largas y RTL futuro.
-- [ ] Definir accessible names/descriptions para botones de icono.
-- [ ] Orden de tab correcto y foco visible.
+- [x] Definir accessible names/descriptions para botones de icono.
+- [x] Orden de tab correcto y foco visible.
 - [ ] Operacion completa sin mouse.
 - [ ] Contraste WCAG AA para texto y controles esenciales.
 - [ ] Probar lectores de pantalla via AT-SPI.

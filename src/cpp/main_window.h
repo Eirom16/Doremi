@@ -11,8 +11,10 @@
 #include <QMenu>
 #include <QHBoxLayout>
 #include <QVBoxLayout>
+#include <QPointer>
 #include <cstdint>
 #include <map>
+#include <vector>
 #include "rust/cxx.h"
 
 struct Track;
@@ -111,7 +113,12 @@ private:
     void setup_session_cookie_refresh();
     void update_session_cookie(const QNetworkCookie &cookie, bool removed);
     void persist_session_cookies();
+    void navigate_to_internal(const std::string &route, bool record_history);
+    void save_route_view_state();
+    void restore_route_view_state(const std::string &route);
+    void navigate_back();
     void navigate_back_from_detail();
+    void navigate_forward();
     TitleBar *title_bar_;
     NavSidebar *nav_sidebar_;
     FadeStack *stack_;
@@ -137,6 +144,10 @@ private:
     bool stop_on_close_ = false;
     std::string current_route_ = "home";
     std::string detail_return_route_ = "home";
+    std::vector<std::string> back_routes_;
+    std::vector<std::string> forward_routes_;
+    std::map<std::string, int> route_scroll_positions_;
+    std::map<std::string, QPointer<QWidget>> route_focus_widgets_;
 
     QTimer *player_timer_;
     QTimer *session_cookie_timer_ = nullptr;

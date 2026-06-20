@@ -5,13 +5,30 @@
 #include <QHBoxLayout>
 #include <QPainter>
 #include <QPropertyAnimation>
+#include <QTimer>
 #include <algorithm>
 
 std::vector<ToastNotification*> ToastNotification::s_activeToasts;
+std::deque<ToastNotification::ToastRequest> ToastNotification::s_queuedToasts;
 
-ToastNotification::ToastNotification(QWidget *parent, const QString &message, Type type)
-    : GlassPanel(parent), m_type(type), m_message(message)
+ToastNotification::ToastNotification(QWidget *parent,
+                                     const QString &message,
+                                     Type type,
+                                     const QString &actionLabel,
+                                     std::function<void()> action)
+    : GlassPanel(parent),
+      m_type(type),
+      m_message(message),
+      m_actionLabel(actionLabel),
+      m_action(std::move(action))
 {
+    setFocusPolicy(Qt::StrongFocus);
+    DesignTokens::applyAccessible(
+        this,
+        "Notificacion",
+        m_message,
+        m_message);
+
     // Layout setup
     auto *lay = new QHBoxLayout(this);
     lay->setContentsMargins(12, 4, 12, 4);
@@ -52,6 +69,26 @@ ToastNotification::ToastNotification(QWidget *parent, const QString &message, Ty
     textLabel->setWordWrap(true);
     lay->addWidget(textLabel, 1);
 
+    if (!m_actionLabel.isEmpty() && m_action) {
+        m_actionButton = new QPushButton(m_actionLabel, this);
+        m_actionButton->setCursor(Qt::PointingHandCursor);
+        m_actionButton->setFocusPolicy(Qt::StrongFocus);
+        m_actionButton->setStyleSheet(DesignTokens::primaryButtonStyle(12));
+        m_actionButton->setMinimumWidth(76);
+        DesignTokens::applyAccessible(
+            m_actionButton,
+            m_actionLabel,
+            QString("Ejecuta la accion de la notificacion: %1").arg(m_message),
+            m_actionLabel);
+        lay->addWidget(m_actionButton);
+        connect(m_actionButton, &QPushButton::clicked, this, [this]() {
+            if (m_action) {
+                m_action();
+            }
+            dismiss();
+        });
+    }
+
     setLayout(lay);
 }
 
@@ -60,9 +97,40 @@ ToastNotification::~ToastNotification() {
     if (it != s_activeToasts.end()) {
         s_activeToasts.erase(it);
     }
+    QTimer::singleShot(0, []() {
+        ToastNotification::pumpQueue();
+    });
 }
 
 void ToastNotification::showToast(QWidget *parent, const QString &message, Type type) {
+    showOrQueue(parent, message, type, QString(), nullptr);
+}
+
+void ToastNotification::showToast(QWidget *parent,
+                                  const QString &message,
+                                  Type type,
+                                  const QString &actionLabel,
+                                  std::function<void()> action) {
+    showOrQueue(parent, message, type, actionLabel, std::move(action));
+}
+
+void ToastNotification::repositionActiveToasts() {
+    updateStackPositions();
+}
+
+QString ToastNotification::requestKey(const QString &message, Type type) {
+    return QString::number(static_cast<int>(type)) + ":" + message.simplified();
+}
+
+QString ToastNotification::key() const {
+    return requestKey(m_message, m_type);
+}
+
+void ToastNotification::showOrQueue(QWidget *parent,
+                                    const QString &message,
+                                    Type type,
+                                    const QString &actionLabel,
+                                    std::function<void()> action) {
     if (!parent) return;
     
     // Always attach to top-level window
@@ -70,10 +138,31 @@ void ToastNotification::showToast(QWidget *parent, const QString &message, Type 
         parent = parent->parentWidget();
     }
 
-    ToastNotification *toast = new ToastNotification(parent, message, type);
+    const QString newKey = requestKey(message, type);
+    for (auto *toast : s_activeToasts) {
+        if (toast && toast->key() == newKey) {
+            toast->refreshTimeout();
+            return;
+        }
+    }
+    for (const auto &queued : s_queuedToasts) {
+        if (requestKey(queued.message, queued.type) == newKey) {
+            return;
+        }
+    }
+
+    if (static_cast<int>(s_activeToasts.size()) >= MAX_ACTIVE_TOASTS) {
+        if (static_cast<int>(s_queuedToasts.size()) >= MAX_QUEUED_TOASTS) {
+            s_queuedToasts.pop_front();
+        }
+        s_queuedToasts.push_back({parent, message, type, actionLabel, std::move(action)});
+        return;
+    }
+
+    ToastNotification *toast = new ToastNotification(parent, message, type, actionLabel, std::move(action));
     s_activeToasts.insert(s_activeToasts.begin(), toast);
 
-    toast->resize(300, 52);
+    toast->resize(actionLabel.isEmpty() ? 320 : 420, 56);
     
     int parentWidth = parent->width();
     int parentHeight = parent->height();
@@ -112,18 +201,58 @@ void ToastNotification::startTimeout() {
     });
 
     connect(m_dismissTimer, &QTimer::timeout, this, [this]() {
-        auto it = std::find(s_activeToasts.begin(), s_activeToasts.end(), this);
-        if (it != s_activeToasts.end()) {
-            s_activeToasts.erase(it);
-            updateStackPositions();
-        }
-        
-        Animator::fadeOut(this, 250);
-        QTimer::singleShot(260, this, &QObject::deleteLater);
+        dismiss();
     });
 
     m_dismissTimer->start();
     m_progressAnim->start();
+}
+
+void ToastNotification::refreshTimeout() {
+    setProgress(1.0);
+    if (m_dismissTimer) {
+        m_dismissTimer->start(3500);
+    }
+    if (m_progressAnim) {
+        m_progressAnim->stop();
+        m_progressAnim->setStartValue(1.0);
+        m_progressAnim->setEndValue(0.0);
+        m_progressAnim->start();
+    }
+}
+
+void ToastNotification::dismiss() {
+    auto it = std::find(s_activeToasts.begin(), s_activeToasts.end(), this);
+    if (it != s_activeToasts.end()) {
+        s_activeToasts.erase(it);
+        updateStackPositions();
+    }
+
+    if (m_dismissTimer) {
+        m_dismissTimer->stop();
+    }
+    if (m_progressAnim) {
+        m_progressAnim->stop();
+    }
+
+    Animator::fadeOut(this, 250);
+    QTimer::singleShot(260, this, &QObject::deleteLater);
+}
+
+void ToastNotification::pumpQueue() {
+    while (!s_queuedToasts.empty() &&
+           static_cast<int>(s_activeToasts.size()) < MAX_ACTIVE_TOASTS) {
+        ToastRequest request = std::move(s_queuedToasts.front());
+        s_queuedToasts.pop_front();
+        if (!request.parent) {
+            continue;
+        }
+        showOrQueue(request.parent,
+                    request.message,
+                    request.type,
+                    request.actionLabel,
+                    std::move(request.action));
+    }
 }
 
 void ToastNotification::updateStackPositions() {
@@ -136,7 +265,7 @@ void ToastNotification::updateStackPositions() {
     int parentHeight = parent->height();
     int bottomMargin = 84;
     int rightMargin = 20;
-    int toastHeight = 52;
+    int toastHeight = 56;
     int spacing = 10;
 
     for (size_t i = 0; i < s_activeToasts.size(); ++i) {

@@ -46,6 +46,7 @@
 #include "show_detail_view.h"
 #include "welcome_view.h"
 #include "login_dialog.h"
+#include "components/toast_notification.h"
 #include "components/theme_transition.h"
 #include "ffi_utils.h"
 #include "doremi/src/bridge.rs.h"
@@ -135,8 +136,15 @@ DoremiMainWindow::DoremiMainWindow(QWidget *parent)
 
     root->addLayout(body, 1);
 
-    player_bar_ = new PlayerBar(central);
-    root->addWidget(player_bar_);
+    auto *player_shell = new QWidget(central);
+    player_shell->setAttribute(Qt::WA_StyledBackground, true);
+    player_shell->setStyleSheet("background: transparent;");
+    auto *player_shell_layout = new QHBoxLayout(player_shell);
+    player_shell_layout->setContentsMargins(16, 0, 16, 12);
+    player_shell_layout->setSpacing(0);
+    player_bar_ = new PlayerBar(player_shell);
+    player_shell_layout->addWidget(player_bar_);
+    root->addWidget(player_shell);
 
     setCentralWidget(central);
 
@@ -260,6 +268,22 @@ void DoremiMainWindow::setup_shortcuts() {
     QObject::connect(up, &QShortcut::activated, this, [this]() { emit volume_changed(5); });
     auto *down = new QShortcut(QKeySequence(Qt::Key_Down), this);
     QObject::connect(down, &QShortcut::activated, this, [this]() { emit volume_changed(-5); });
+    auto *focus_search = new QShortcut(QKeySequence("Ctrl+L"), this);
+    focus_search->setWhatsThis("Enfocar el buscador");
+    QObject::connect(focus_search, &QShortcut::activated, this, [this]() {
+        title_bar_->focus_search();
+    });
+    auto *focus_search_alt = new QShortcut(QKeySequence("Ctrl+K"), this);
+    focus_search_alt->setWhatsThis("Enfocar el buscador");
+    QObject::connect(focus_search_alt, &QShortcut::activated, this, [this]() {
+        title_bar_->focus_search();
+    });
+    auto *back = new QShortcut(QKeySequence::Back, this);
+    back->setWhatsThis("Volver a la pantalla anterior");
+    QObject::connect(back, &QShortcut::activated, this, [this]() { navigate_back(); });
+    auto *forward = new QShortcut(QKeySequence::Forward, this);
+    forward->setWhatsThis("Avanzar a la pantalla siguiente");
+    QObject::connect(forward, &QShortcut::activated, this, [this]() { navigate_forward(); });
 
     // Media Keys
     auto *media_play = new QShortcut(QKeySequence(Qt::Key_MediaPlay), this);
@@ -580,6 +604,23 @@ void DoremiMainWindow::closeEvent(QCloseEvent *event) {
 }
 
 void DoremiMainWindow::navigate_to(const std::string &route) {
+    navigate_to_internal(route, true);
+}
+
+void DoremiMainWindow::navigate_to_internal(const std::string &route, bool record_history) {
+    if (route.empty()) {
+        return;
+    }
+    save_route_view_state();
+
+    if (record_history && route != current_route_) {
+        back_routes_.push_back(current_route_);
+        if (back_routes_.size() > 80) {
+            back_routes_.erase(back_routes_.begin());
+        }
+        forward_routes_.clear();
+    }
+
     const bool opens_detail = route == "album_detail" || route == "artist_detail" ||
                               route == "playlist_detail" || route == "show_detail";
     if (opens_detail && current_route_ != "album_detail" &&
@@ -621,8 +662,54 @@ void DoremiMainWindow::navigate_to(const std::string &route) {
         stack_->setCurrentIndex(1);
     }
     current_route_ = route;
-    if (body_scroll_) {
-        body_scroll_->verticalScrollBar()->setValue(0);
+    restore_route_view_state(route);
+}
+
+void DoremiMainWindow::save_route_view_state() {
+    if (current_route_.empty()) {
+        return;
+    }
+    if (body_scroll_ && body_scroll_->verticalScrollBar()) {
+        route_scroll_positions_[current_route_] = body_scroll_->verticalScrollBar()->value();
+    }
+    if (auto *focused = QApplication::focusWidget()) {
+        if (focused == this || isAncestorOf(focused)) {
+            route_focus_widgets_[current_route_] = focused;
+        }
+    }
+}
+
+void DoremiMainWindow::restore_route_view_state(const std::string &route) {
+    const int scroll = route_scroll_positions_.count(route) ? route_scroll_positions_[route] : 0;
+    QPointer<QWidget> focus = route_focus_widgets_.count(route) ? route_focus_widgets_[route] : QPointer<QWidget>();
+    QTimer::singleShot(0, this, [this, route, scroll, focus]() {
+        if (route != current_route_) {
+            return;
+        }
+        if (body_scroll_ && body_scroll_->verticalScrollBar()) {
+            body_scroll_->verticalScrollBar()->setValue(scroll);
+        }
+        if (focus && focus->isVisible() && focus->isEnabled()) {
+            focus->setFocus(Qt::OtherFocusReason);
+        } else if (stack_) {
+            stack_->setFocus(Qt::OtherFocusReason);
+        }
+    });
+}
+
+void DoremiMainWindow::navigate_back() {
+    while (!back_routes_.empty() && back_routes_.back() == current_route_) {
+        back_routes_.pop_back();
+    }
+    if (back_routes_.empty()) {
+        return;
+    }
+    const std::string target = back_routes_.back();
+    back_routes_.pop_back();
+    forward_routes_.push_back(current_route_);
+    navigate_to_internal(target, false);
+    if (target == "search") {
+        on_search_history_requested();
     }
 }
 
@@ -630,11 +717,52 @@ void DoremiMainWindow::navigate_back_from_detail() {
     navigate_to(detail_return_route_.empty() ? "home" : detail_return_route_);
 }
 
+void DoremiMainWindow::navigate_forward() {
+    while (!forward_routes_.empty() && forward_routes_.back() == current_route_) {
+        forward_routes_.pop_back();
+    }
+    if (forward_routes_.empty()) {
+        return;
+    }
+    const std::string target = forward_routes_.back();
+    forward_routes_.pop_back();
+    back_routes_.push_back(current_route_);
+    navigate_to_internal(target, false);
+    if (target == "search") {
+        on_search_history_requested();
+    }
+}
+
 void DoremiMainWindow::show_notif(const std::string &message, const std::string &kind) {
+    const QString qMessage = QString::fromStdString(message);
+    ToastNotification::Type toastType = ToastNotification::Type::Info;
+    if (kind == "success") {
+        toastType = ToastNotification::Type::Success;
+    } else if (kind == "error") {
+        toastType = ToastNotification::Type::Error;
+    } else if (kind == "warning") {
+        toastType = ToastNotification::Type::Warning;
+    }
+
+    if (qMessage.startsWith("Reproduciendo:")) {
+        ToastNotification::showToast(
+            this,
+            qMessage,
+            toastType,
+            "Abrir",
+            [this]() {
+                if (now_playing_view_) {
+                    now_playing_view_->showView();
+                }
+            });
+    } else {
+        ToastNotification::showToast(this, qMessage, toastType);
+    }
+
     if (tray_icon_ && tray_icon_->isVisible() && tray_icon_->supportsMessages()) {
         tray_icon_->showMessage(
             kind == "error" ? "Doremi — Error" : "Doremi",
-            QString::fromStdString(message),
+            qMessage,
             kind == "error" ? QSystemTrayIcon::Critical :
             kind == "warning" ? QSystemTrayIcon::Warning :
                                 QSystemTrayIcon::Information,
@@ -684,6 +812,7 @@ void DoremiMainWindow::resizeEvent(QResizeEvent *event) {
     if (theme_transition_) {
         theme_transition_->setGeometry(rect());
     }
+    ToastNotification::repositionActiveToasts();
 }
 
 void DoremiMainWindow::set_dominant_colors(const std::vector<std::string> &colors) {

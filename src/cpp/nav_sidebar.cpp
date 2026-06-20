@@ -35,6 +35,13 @@ NavSidebar::NavSidebar(QWidget *parent)
         auto *btn = new QPushButton(this);
         btn->setCheckable(true);
         btn->setFixedHeight(44);
+        btn->setCursor(Qt::PointingHandCursor);
+        btn->setFocusPolicy(Qt::StrongFocus);
+        DesignTokens::applyAccessible(
+            btn,
+            QString("Ir a %1").arg(routeInfo.title),
+            QString("Abre la seccion %1").arg(routeInfo.title),
+            routeInfo.title);
         
         // Horizontal layout inside button to position icon and text nicely
         auto *btn_layout = new QHBoxLayout(btn);
@@ -42,9 +49,11 @@ NavSidebar::NavSidebar(QWidget *parent)
         btn_layout->setSpacing(12);
         
         auto *icon_label = IconProvider::createIconLabel(routeInfo.icon, 20, c.text_secondary, true, btn);
+        icon_label->setObjectName("nav_icon");
         auto *text_label = new QLabel(routeInfo.title, btn);
+        text_label->setObjectName("nav_text");
         text_label->setFont(DesignTokens::getFont("body", 13));
-        text_label->setStyleSheet("color: inherit; background: transparent;");
+        text_label->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
         
         btn_layout->addWidget(icon_label);
         btn_layout->addWidget(text_label);
@@ -52,32 +61,7 @@ NavSidebar::NavSidebar(QWidget *parent)
         
         btn->setLayout(btn_layout);
         
-        // Styling with tokens
-        QString style = QString(
-            "QPushButton {\n"
-            "    background: transparent;\n"
-            "    border: none;\n"
-            "    border-radius: 0px;\n"
-            "    border-left: 3px solid transparent;\n"
-            "    color: %1;\n"
-            "}\n"
-            "QPushButton:hover {\n"
-            "    background: %2;\n"
-            "    color: %3;\n"
-            "}\n"
-            "QPushButton:checked {\n"
-            "    background: %4;\n"
-            "    color: %5;\n"
-            "    border-left: 3px solid %5;\n"
-            "}\n"
-        )
-        .arg(c.text_secondary.name())
-        .arg(QString("rgba(%1, %2, %3, %4)").arg(c.accent_dim.red()).arg(c.accent_dim.green()).arg(c.accent_dim.blue()).arg(c.accent_dim.alpha() / 255.0))
-        .arg(c.text_primary.name())
-        .arg(QString("rgba(%1, %2, %3, %4)").arg(c.accent_dim.red()).arg(c.accent_dim.green()).arg(c.accent_dim.blue()).arg(c.accent_dim.alpha() / 255.0))
-        .arg(c.accent.name());
-        
-        btn->setStyleSheet(style);
+        btn->setStyleSheet(DesignTokens::navButtonStyle());
         
         layout->addWidget(btn);
         buttons_.push_back({routeInfo.route, btn});
@@ -93,29 +77,14 @@ NavSidebar::NavSidebar(QWidget *parent)
     profile_btn_ = new QPushButton(this);
     profile_btn_->setFixedHeight(44);
     profile_btn_->setCursor(Qt::PointingHandCursor);
+    profile_btn_->setFocusPolicy(Qt::StrongFocus);
     
-    // Style profile button nicely
-    QString profile_style = QString(
-        "QPushButton {\n"
-        "    background: transparent;\n"
-        "    border: none;\n"
-        "    border-radius: 12px;\n"
-        "    text-align: left;\n"
-        "    padding-left: 20px;\n"
-        "    margin: 4px 8px;\n"
-        "    font-weight: bold;\n"
-        "    color: %1;\n"
-        "}\n"
-        "QPushButton:hover {\n"
-        "    background: %2;\n"
-        "    color: %3;\n"
-        "}\n"
-    )
-    .arg(c.text_secondary.name())
-    .arg(QString("rgba(%1, %2, %3, %4)").arg(c.accent_dim.red()).arg(c.accent_dim.green()).arg(c.accent_dim.blue()).arg(c.accent_dim.alpha() / 255.0))
-    .arg(c.text_primary.name());
-    
-    profile_btn_->setStyleSheet(profile_style);
+    profile_btn_->setStyleSheet(DesignTokens::profileButtonStyle());
+    DesignTokens::applyAccessible(
+        profile_btn_,
+        "Cuenta de usuario",
+        "Abre la pantalla de inicio de sesion o el menu de cuenta.",
+        "Cuenta");
     connect(profile_btn_, &QPushButton::clicked, this, &NavSidebar::on_profile_clicked);
     layout->addWidget(profile_btn_);
 
@@ -125,7 +94,7 @@ NavSidebar::NavSidebar(QWidget *parent)
     setAttribute(Qt::WA_StyledBackground, true);
     setStyleSheet(QString("NavSidebar { background-color: %1; border-right: 1px solid %2; }")
         .arg(c.bg_surface.name())
-        .arg(QString("rgba(%1, %2, %3, %4)").arg(c.border.red()).arg(c.border.green()).arg(c.border.blue()).arg(c.border.alpha() / 255.0))
+        .arg(DesignTokens::rgba(c.border))
     );
 
     // Initial auth UI state
@@ -141,8 +110,12 @@ void NavSidebar::set_active_route(const std::string &route) {
         // Find icon label and text label to update their style/color
         auto labels = nb.btn->findChildren<QLabel*>();
         for (auto *label : labels) {
-            if (label->font().family() == "Material Symbols Rounded") {
+            if (label->objectName() == "nav_icon") {
                 IconProvider::setupIconLabel(label, label->text(), 20, active ? c.accent : c.text_secondary, true);
+            } else if (label->objectName() == "nav_text") {
+                label->setStyleSheet(QString("color: %1; background: transparent; font-weight: %2;")
+                    .arg(active ? c.text_primary.name() : c.text_secondary.name())
+                    .arg(active ? "600" : "500"));
             }
         }
     }
@@ -158,58 +131,14 @@ void NavSidebar::update_theme() {
     
     setStyleSheet(QString("NavSidebar { background-color: %1; border-right: 1px solid %2; }")
         .arg(c.bg_surface.name())
-        .arg(QString("rgba(%1, %2, %3, %4)").arg(c.border.red()).arg(c.border.green()).arg(c.border.blue()).arg(c.border.alpha() / 255.0))
+        .arg(DesignTokens::rgba(c.border))
     );
     
     for (auto &nb : buttons_) {
-        QString style = QString(
-            "QPushButton {\n"
-            "    background: transparent;\n"
-            "    border: none;\n"
-            "    border-radius: 0px;\n"
-            "    border-left: 3px solid transparent;\n"
-            "    color: %1;\n"
-            "}\n"
-            "QPushButton:hover {\n"
-            "    background: %2;\n"
-            "    color: %3;\n"
-            "}\n"
-            "QPushButton:checked {\n"
-            "    background: %4;\n"
-            "    color: %5;\n"
-            "    border-left: 3px solid %5;\n"
-            "}\n"
-        )
-        .arg(c.text_secondary.name())
-        .arg(QString("rgba(%1, %2, %3, %4)").arg(c.accent_dim.red()).arg(c.accent_dim.green()).arg(c.accent_dim.blue()).arg(c.accent_dim.alpha() / 255.0))
-        .arg(c.text_primary.name())
-        .arg(QString("rgba(%1, %2, %3, %4)").arg(c.accent_dim.red()).arg(c.accent_dim.green()).arg(c.accent_dim.blue()).arg(c.accent_dim.alpha() / 255.0))
-        .arg(c.accent.name());
-        
-        nb.btn->setStyleSheet(style);
+        nb.btn->setStyleSheet(DesignTokens::navButtonStyle());
     }
     
-    QString profile_style = QString(
-        "QPushButton {\n"
-        "    background: transparent;\n"
-        "    border: none;\n"
-        "    border-radius: 12px;\n"
-        "    text-align: left;\n"
-        "    padding-left: 20px;\n"
-        "    margin: 4px 8px;\n"
-        "    font-weight: bold;\n"
-        "    color: %1;\n"
-        "}\n"
-        "QPushButton:hover {\n"
-        "    background: %2;\n"
-        "    color: %3;\n"
-        "}\n"
-    )
-    .arg(c.text_secondary.name())
-    .arg(QString("rgba(%1, %2, %3, %4)").arg(c.accent_dim.red()).arg(c.accent_dim.green()).arg(c.accent_dim.blue()).arg(c.accent_dim.alpha() / 255.0))
-    .arg(c.text_primary.name());
-    
-    profile_btn_->setStyleSheet(profile_style);
+    profile_btn_->setStyleSheet(DesignTokens::profileButtonStyle());
     
     for (auto &nb : buttons_) {
         if (nb.btn->isChecked()) {
@@ -230,9 +159,19 @@ void NavSidebar::update_profile(bool authenticated, const std::string &name, con
     if (authenticated) {
         profile_btn_->setText(QString::fromStdString(" " + name));
         profile_btn_->setIcon(IconProvider::getIcon("account_circle", c.accent, 20));
+        DesignTokens::applyAccessible(
+            profile_btn_,
+            QString("Cuenta de %1").arg(QString::fromStdString(name)),
+            "Abre el menu de cuenta.",
+            "Cuenta");
     } else {
         profile_btn_->setText(" Iniciar sesión");
         profile_btn_->setIcon(IconProvider::getIcon("login", c.text_secondary, 20));
+        DesignTokens::applyAccessible(
+            profile_btn_,
+            "Iniciar sesion",
+            "Abre la pantalla para iniciar sesion.",
+            "Iniciar sesion");
     }
 }
 

@@ -580,9 +580,7 @@ impl PlayHistoryRepo {
                  WHERE played_at >= datetime('now', '-7 days')
                  GROUP BY day ORDER BY day",
             )?;
-            let rows = stmt.query_map([], |r| {
-                Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?))
-            })?;
+            let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?)))?;
             rows.collect()
         })
     }
@@ -646,7 +644,7 @@ impl DownloadsRepo {
                 "SELECT video_id, title, artist, album, file_path, thumbnail_url, duration_ms,
                         downloaded_at, parent_playlist_id, parent_playlist_title,
                         parent_playlist_thumbnail_url, status, progress, error, cancelled
-                 FROM downloads WHERE video_id = ?1 LIMIT 1"
+                 FROM downloads WHERE video_id = ?1 LIMIT 1",
             )?;
             let mut rows = stmt.query_map(params![video_id], |r| {
                 Ok(DownloadTrack {
@@ -715,7 +713,12 @@ impl DownloadsRepo {
         })
     }
 
-    pub fn update_status(video_id: &str, status: &str, progress: f64, error: &str) -> SqlResult<()> {
+    pub fn update_status(
+        video_id: &str,
+        status: &str,
+        progress: f64,
+        error: &str,
+    ) -> SqlResult<()> {
         with_db(|conn| {
             conn.execute(
                 "UPDATE downloads SET status = ?1, progress = ?2, error = ?3 WHERE video_id = ?4",
@@ -762,7 +765,7 @@ impl DownloadsRepo {
                 "SELECT video_id, title, artist, album, file_path, thumbnail_url, duration_ms,
                         downloaded_at, parent_playlist_id, parent_playlist_title,
                         parent_playlist_thumbnail_url, status, progress, error, cancelled
-                 FROM downloads WHERE status = 'queued' ORDER BY downloaded_at ASC"
+                 FROM downloads WHERE status = 'queued' ORDER BY downloaded_at ASC",
             )?;
             let rows = stmt.query_map([], |r| {
                 Ok(DownloadTrack {
@@ -807,7 +810,7 @@ impl DownloadsRepo {
                 "SELECT video_id, title, artist, album, file_path, thumbnail_url, duration_ms,
                         downloaded_at, parent_playlist_id, parent_playlist_title,
                         parent_playlist_thumbnail_url, status, progress, error, cancelled
-                 FROM downloads ORDER BY downloaded_at DESC"
+                 FROM downloads ORDER BY downloaded_at DESC",
             )?;
             let rows = stmt.query_map([], |r| {
                 Ok(DownloadTrack {
@@ -836,7 +839,10 @@ impl DownloadsRepo {
 pub struct ShowCacheRepo;
 
 impl ShowCacheRepo {
-    pub fn save(show: &crate::api::models::Show, episodes: &[crate::api::models::Episode]) -> SqlResult<()> {
+    pub fn save(
+        show: &crate::api::models::Show,
+        episodes: &[crate::api::models::Episode],
+    ) -> SqlResult<()> {
         with_db(|conn| {
             conn.execute(
                 "INSERT OR REPLACE INTO cached_shows (id, title, author, description, thumbnail, episode_count)
@@ -877,7 +883,9 @@ impl ShowCacheRepo {
         })
     }
 
-    pub fn get(show_id: &str) -> SqlResult<Option<(crate::api::models::Show, Vec<crate::api::models::Episode>)>> {
+    pub fn get(
+        show_id: &str,
+    ) -> SqlResult<Option<(crate::api::models::Show, Vec<crate::api::models::Episode>)>> {
         let guard = match crate::db::global().lock() {
             Ok(g) => g,
             Err(e) => e.into_inner(),
@@ -1072,7 +1080,7 @@ mod tests {
 
             // Test delete_entry (case-insensitive)
             SearchHistoryRepo::delete_entry("HELLO").unwrap();
-            
+
             crate::db::with_db(|conn| {
                 let count2: i64 = conn
                     .query_row("SELECT COUNT(*) FROM search_history", [], |r| r.get(0))
@@ -1131,7 +1139,7 @@ mod tests {
     #[test]
     fn test_show_cache_sql() {
         with_test_conn(|| {
-            use crate::api::models::{Show, Episode};
+            use crate::api::models::{Episode, Show};
             let show = Show {
                 id: "show-1".to_string(),
                 title: "Test Show".to_string(),

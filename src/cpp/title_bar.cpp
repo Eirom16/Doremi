@@ -31,6 +31,12 @@ TitleBar::TitleBar(QWidget *parent)
     search_input_ = new QLineEdit(this);
     search_input_->setPlaceholderText("Buscar canciones, artistas, álbumes...");
     search_input_->setFont(DesignTokens::getFont("body", 13));
+    search_input_->setFocusPolicy(Qt::StrongFocus);
+    DesignTokens::applyAccessible(
+        search_input_,
+        "Buscar musica",
+        "Busca canciones, artistas, albumes y playlists en Doremi.",
+        "Buscar canciones, artistas, albumes o playlists (Ctrl+L / Ctrl+K)");
     search_suggestions_model_ = new QStringListModel(this);
     search_completer_ = new QCompleter(search_suggestions_model_, this);
     search_completer_->setCaseSensitivity(Qt::CaseInsensitive);
@@ -40,30 +46,7 @@ TitleBar::TitleBar(QWidget *parent)
     
     search_input_->addAction(IconProvider::getIcon("search", c.text_secondary, 18), QLineEdit::LeadingPosition);
     
-    QString search_style = QString(
-        "QLineEdit {\n"
-        "    background-color: %1;\n"
-        "    border: 1px solid %2;\n"
-        "    border-radius: 8px;\n"
-        "    padding: 6px 12px 6px 36px;\n"
-        "    color: %3;\n"
-        "}\n"
-        "QLineEdit:hover {\n"
-        "    border-color: %4;\n"
-        "}\n"
-        "QLineEdit:focus {\n"
-        "    border-color: %5;\n"
-        "    background-color: %6;\n"
-        "}\n"
-    )
-    .arg(c.bg_base.name())
-    .arg(c.border.name())
-    .arg(c.text_primary.name())
-    .arg(c.text_secondary.name())
-    .arg(c.accent.name())
-    .arg(c.bg_elevated.name());
-    
-    search_input_->setStyleSheet(search_style);
+    search_input_->setStyleSheet(DesignTokens::textInputStyle());
     layout->addWidget(search_input_, 1);
 
     debounce_timer_ = new QTimer(this);
@@ -107,6 +90,14 @@ std::string TitleBar::search_text() const {
     return search_input_->text().toStdString();
 }
 
+void TitleBar::focus_search() {
+    if (!search_input_) {
+        return;
+    }
+    search_input_->setFocus(Qt::ShortcutFocusReason);
+    search_input_->selectAll();
+}
+
 void TitleBar::update_theme() {
     const auto &c = DesignTokens::current();
     
@@ -121,29 +112,6 @@ void TitleBar::update_theme() {
     }
     
     if (search_input_) {
-        QString search_style = QString(
-            "QLineEdit {\n"
-            "    background-color: %1;\n"
-            "    border: 1px solid %2;\n"
-            "    border-radius: 8px;\n"
-            "    padding: 6px 12px 6px 36px;\n"
-            "    color: %3;\n"
-            "}\n"
-            "QLineEdit:hover {\n"
-            "    border-color: %4;\n"
-            "}\n"
-            "QLineEdit:focus {\n"
-            "    border-color: %5;\n"
-            "    background-color: %6;\n"
-            "}\n"
-        )
-        .arg(c.bg_base.name())
-        .arg(c.border.name())
-        .arg(c.text_primary.name())
-        .arg(c.text_secondary.name())
-        .arg(c.accent.name())
-        .arg(c.bg_elevated.name());
-        
-        search_input_->setStyleSheet(search_style);
+        search_input_->setStyleSheet(DesignTokens::textInputStyle());
     }
 }

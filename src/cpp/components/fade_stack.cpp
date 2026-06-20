@@ -19,6 +19,9 @@ void FadeStack::setCurrentIndex(int index) {
         QStackedWidget::setCurrentIndex(index);
         return;
     }
+
+    currentW->setGraphicsEffect(nullptr);
+    nextW->setGraphicsEffect(nullptr);
     
     m_isTransitioning = true;
     
@@ -32,7 +35,8 @@ void FadeStack::setCurrentIndex(int index) {
     outAnim->setEndValue(0.0);
     outAnim->setEasingCurve(QEasingCurve::InOutQuad);
     
-    connect(outAnim, &QPropertyAnimation::finished, this, [this, index, nextW, outAnim, outEffect]() {
+    connect(outAnim, &QPropertyAnimation::finished, this, [this, index, currentW, nextW, outAnim]() {
+        currentW->setGraphicsEffect(nullptr);
         outAnim->deleteLater();
         
         // 2. Change page
@@ -48,7 +52,8 @@ void FadeStack::setCurrentIndex(int index) {
         inAnim->setEndValue(1.0);
         inAnim->setEasingCurve(QEasingCurve::InOutQuad);
         
-        connect(inAnim, &QPropertyAnimation::finished, this, [this, inAnim, inEffect]() {
+        connect(inAnim, &QPropertyAnimation::finished, this, [this, nextW, inAnim]() {
+            nextW->setGraphicsEffect(nullptr);
             inAnim->deleteLater();
             m_isTransitioning = false;
         });

@@ -1,10 +1,10 @@
-pub mod repo;
 pub mod cache;
 pub mod lyrics_cache;
+pub mod repo;
 
-use std::sync::Mutex;
-use rusqlite::{Connection, Result as SqlResult};
 use crate::config::paths::AppDirs;
+use rusqlite::{Connection, Result as SqlResult};
+use std::sync::Mutex;
 
 static DB: Mutex<Option<Connection>> = Mutex::new(None);
 
@@ -23,7 +23,7 @@ where
     match guard.as_ref() {
         Some(conn) => f(conn),
         None => Err(rusqlite::Error::InvalidParameterName(
-            "Database not initialized".into()
+            "Database not initialized".into(),
         )),
     }
 }
@@ -62,10 +62,14 @@ impl Database {
 
     pub(crate) fn run_migrations(conn: &Connection) -> SqlResult<()> {
         conn.execute_batch(
-            "CREATE TABLE IF NOT EXISTS schema_version (version INTEGER PRIMARY KEY);"
+            "CREATE TABLE IF NOT EXISTS schema_version (version INTEGER PRIMARY KEY);",
         )?;
         let version: i32 = conn
-            .query_row("SELECT COALESCE(MAX(version), 0) FROM schema_version", [], |r| r.get(0))
+            .query_row(
+                "SELECT COALESCE(MAX(version), 0) FROM schema_version",
+                [],
+                |r| r.get(0),
+            )
             .unwrap_or(0);
 
         if version < 1 {
@@ -131,7 +135,7 @@ impl Database {
                     filter TEXT NOT NULL DEFAULT 'all',
                     searched_at TEXT NOT NULL DEFAULT (datetime('now'))
                 );
-                INSERT INTO schema_version (version) VALUES (1);"
+                INSERT INTO schema_version (version) VALUES (1);",
             )?;
         }
 
@@ -144,7 +148,7 @@ impl Database {
                     cached_at TEXT NOT NULL DEFAULT (datetime('now')),
                     expires_at TEXT
                 );
-                INSERT INTO schema_version (version) VALUES (2);"
+                INSERT INTO schema_version (version) VALUES (2);",
             )?;
         }
 
@@ -163,7 +167,7 @@ impl Database {
                     parent_playlist_title TEXT,
                     parent_playlist_thumbnail_url TEXT
                 );
-                INSERT INTO schema_version (version) VALUES (3);"
+                INSERT INTO schema_version (version) VALUES (3);",
             )?;
         }
 
@@ -180,34 +184,74 @@ impl Database {
                     expires_at TEXT,
                     UNIQUE(track_artist, track_title)
                 );
-                INSERT INTO schema_version (version) VALUES (4);"
+                INSERT INTO schema_version (version) VALUES (4);",
             )?;
         }
 
         if version < 5 {
-            conn.execute_batch(
-                "ALTER TABLE playlists ADD COLUMN privacy INTEGER NOT NULL DEFAULT 1;
-                 INSERT INTO schema_version (version) VALUES (5);"
+            Self::add_column_if_missing(
+                conn,
+                "playlists",
+                "privacy",
+                "INTEGER NOT NULL DEFAULT 1",
+            )?;
+            conn.execute(
+                "INSERT OR IGNORE INTO schema_version (version) VALUES (5)",
+                [],
             )?;
         }
 
         if version < 6 {
+            Self::add_column_if_missing(
+                conn,
+                "recently_played",
+                "play_count",
+                "INTEGER NOT NULL DEFAULT 1",
+            )?;
+            Self::add_column_if_missing(
+                conn,
+                "recently_played",
+                "progress_ms",
+                "INTEGER NOT NULL DEFAULT 0",
+            )?;
+            Self::add_column_if_missing(
+                conn,
+                "recently_played",
+                "skipped",
+                "INTEGER NOT NULL DEFAULT 0",
+            )?;
             conn.execute_batch(
-                "ALTER TABLE recently_played ADD COLUMN play_count INTEGER NOT NULL DEFAULT 1;
-                 ALTER TABLE recently_played ADD COLUMN progress_ms INTEGER NOT NULL DEFAULT 0;
-                 ALTER TABLE recently_played ADD COLUMN skipped INTEGER NOT NULL DEFAULT 0;
-                 CREATE UNIQUE INDEX IF NOT EXISTS idx_recently_played_track_id ON recently_played(track_id);
-                 INSERT INTO schema_version (version) VALUES (6);"
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_recently_played_track_id ON recently_played(track_id);"
+            )?;
+            conn.execute(
+                "INSERT OR IGNORE INTO schema_version (version) VALUES (6)",
+                [],
             )?;
         }
 
         if version < 7 {
-            conn.execute_batch(
-                "ALTER TABLE downloads ADD COLUMN status TEXT NOT NULL DEFAULT 'completed';
-                 ALTER TABLE downloads ADD COLUMN progress REAL NOT NULL DEFAULT 100.0;
-                 ALTER TABLE downloads ADD COLUMN error TEXT NOT NULL DEFAULT '';
-                 ALTER TABLE downloads ADD COLUMN cancelled INTEGER NOT NULL DEFAULT 0;
-                 INSERT INTO schema_version (version) VALUES (7);"
+            Self::add_column_if_missing(
+                conn,
+                "downloads",
+                "status",
+                "TEXT NOT NULL DEFAULT 'completed'",
+            )?;
+            Self::add_column_if_missing(
+                conn,
+                "downloads",
+                "progress",
+                "REAL NOT NULL DEFAULT 100.0",
+            )?;
+            Self::add_column_if_missing(conn, "downloads", "error", "TEXT NOT NULL DEFAULT ''")?;
+            Self::add_column_if_missing(
+                conn,
+                "downloads",
+                "cancelled",
+                "INTEGER NOT NULL DEFAULT 0",
+            )?;
+            conn.execute(
+                "INSERT OR IGNORE INTO schema_version (version) VALUES (7)",
+                [],
             )?;
         }
 
@@ -222,7 +266,7 @@ impl Database {
                     episode_count INTEGER NOT NULL DEFAULT 0,
                     added_at TEXT NOT NULL DEFAULT (datetime('now'))
                  );
-                 INSERT INTO schema_version (version) VALUES (8);"
+                 INSERT INTO schema_version (version) VALUES (8);",
             )?;
         }
 
@@ -250,11 +294,39 @@ impl Database {
                     added_at TEXT NOT NULL DEFAULT (datetime('now')),
                     FOREIGN KEY (show_id) REFERENCES cached_shows(id) ON DELETE CASCADE
                  );
-                 INSERT INTO schema_version (version) VALUES (9);"
+                 INSERT INTO schema_version (version) VALUES (9);",
             )?;
         }
 
         Ok(())
+    }
+
+    fn add_column_if_missing(
+        conn: &Connection,
+        table: &str,
+        column: &str,
+        definition: &str,
+    ) -> SqlResult<()> {
+        if Self::column_exists(conn, table, column)? {
+            return Ok(());
+        }
+        conn.execute(
+            &format!("ALTER TABLE {table} ADD COLUMN {column} {definition}"),
+            [],
+        )?;
+        Ok(())
+    }
+
+    fn column_exists(conn: &Connection, table: &str, column: &str) -> SqlResult<bool> {
+        let mut stmt = conn.prepare(&format!("PRAGMA table_info({table})"))?;
+        let mut rows = stmt.query([])?;
+        while let Some(row) = rows.next()? {
+            let name: String = row.get(1)?;
+            if name == column {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 
     pub fn reset() -> SqlResult<()> {
@@ -276,7 +348,11 @@ mod tests {
         let conn = Connection::open_in_memory().unwrap();
         Database::run_migrations(&conn).unwrap();
         let version: i32 = conn
-            .query_row("SELECT COALESCE(MAX(version), 0) FROM schema_version", [], |r| r.get(0))
+            .query_row(
+                "SELECT COALESCE(MAX(version), 0) FROM schema_version",
+                [],
+                |r| r.get(0),
+            )
             .unwrap();
         assert!(version >= 2, "Expected schema version >= 2, got {version}");
     }
@@ -287,7 +363,61 @@ mod tests {
         Database::run_migrations(&conn).unwrap();
         Database::run_migrations(&conn).unwrap();
         let version: i32 = conn
-            .query_row("SELECT COALESCE(MAX(version), 0) FROM schema_version", [], |r| r.get(0))
+            .query_row(
+                "SELECT COALESCE(MAX(version), 0) FROM schema_version",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(version, 9);
+    }
+
+    #[test]
+    fn test_partial_column_migration_recovers() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE schema_version (version INTEGER PRIMARY KEY);
+             INSERT INTO schema_version (version) VALUES (5);
+             CREATE TABLE recently_played (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                track_id TEXT NOT NULL,
+                title TEXT NOT NULL,
+                artist TEXT NOT NULL,
+                album TEXT NOT NULL DEFAULT '',
+                duration_ms INTEGER NOT NULL DEFAULT 0,
+                thumbnail TEXT NOT NULL DEFAULT '',
+                played_at TEXT NOT NULL DEFAULT (datetime('now')),
+                play_count INTEGER NOT NULL DEFAULT 1
+             );
+             CREATE TABLE downloads (
+                video_id TEXT PRIMARY KEY,
+                title TEXT NOT NULL,
+                artist TEXT NOT NULL,
+                album TEXT NOT NULL DEFAULT '',
+                file_path TEXT NOT NULL,
+                thumbnail_url TEXT NOT NULL DEFAULT '',
+                duration_ms INTEGER NOT NULL DEFAULT 0,
+                downloaded_at TEXT NOT NULL DEFAULT (datetime('now')),
+                parent_playlist_id TEXT,
+                parent_playlist_title TEXT,
+                parent_playlist_thumbnail_url TEXT
+             );",
+        )
+        .unwrap();
+
+        Database::run_migrations(&conn).unwrap();
+
+        assert!(Database::column_exists(&conn, "recently_played", "play_count").unwrap());
+        assert!(Database::column_exists(&conn, "recently_played", "progress_ms").unwrap());
+        assert!(Database::column_exists(&conn, "recently_played", "skipped").unwrap());
+        assert!(Database::column_exists(&conn, "downloads", "status").unwrap());
+
+        let version: i32 = conn
+            .query_row(
+                "SELECT COALESCE(MAX(version), 0) FROM schema_version",
+                [],
+                |r| r.get(0),
+            )
             .unwrap();
         assert_eq!(version, 9);
     }
