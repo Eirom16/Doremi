@@ -170,6 +170,7 @@ void run_event_loop();
 void clear_home_sections();
 void set_home_state(rust::Str state, rust::Str message);
 void set_library_songs(rust::Vec<Track> songs);
+void set_library_shows(rust::Vec<Show> shows);
 void set_library_playlists(rust::Vec<Playlist> playlists);
 void set_library_albums(rust::Vec<Album> albums);
 void set_library_artists(rust::Vec<Artist> artists);
@@ -198,6 +199,9 @@ void set_settings_subtitle_font_size(int32_t size);
 void set_settings_subtitle_line_spacing(double spacing);
 void set_settings_subtitle_auto_scroll(bool on);
 void set_settings_subtitle_glow_effect(bool on);
+void set_settings_download_location(rust::Str location);
+void set_settings_download_format(rust::Str format);
+void set_settings_download_quality(rust::Str quality);
 
 
 rust::String get_or_create_thumbnail(rust::Str title, int32_t variant);

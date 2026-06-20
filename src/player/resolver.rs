@@ -33,24 +33,17 @@ impl StreamResolver {
         ]);
 
         // Load YouTube Music authenticated headers from Secret Service
-        match crate::utils::secure_storage::load_youtube_headers() {
-            Ok(Some(headers_json)) => {
-                if let Ok(val) = serde_json::from_str::<serde_json::Value>(&headers_json) {
-                    if let Some(headers_obj) = val.as_object() {
-                        for (key, val) in headers_obj {
-                            if let Some(val_str) = val.as_str() {
-                                cmd.arg("--add-header");
-                                cmd.arg(format!("{}:{}", key, val_str));
-                            }
-                        }
-                    }
-                }
+        let _auth = if let Some(auth) = crate::utils::ytdlp_auth::prepare_ytdlp_auth() {
+            cmd.arg("--cookies");
+            cmd.arg(&auth.cookie_path);
+            for (key, val) in &auth.extra_headers {
+                cmd.arg("--add-header");
+                cmd.arg(format!("{}:{}", key, val));
             }
-            Ok(None) => {}
-            Err(e) => {
-                log::debug!("Could not load YouTube authenticated headers: {e}");
-            }
-        }
+            Some(auth)
+        } else {
+            None
+        };
 
         cmd.arg(&url);
 

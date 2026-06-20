@@ -23,6 +23,7 @@ public:
     void set_songs(const std::vector<Track> &songs);
     void set_albums(const std::vector<Album> &albums);
     void set_artists(const std::vector<Artist> &artists);
+    void set_shows(const std::vector<Show> &shows);
     void set_search_results(
         const std::string &tab,
         const std::vector<Track> &songs,
@@ -41,6 +42,8 @@ signals:
     void remove_favorite_album_requested(const std::string &album_id);
     void add_favorite_artist_requested(const std::string &artist_id);
     void remove_favorite_artist_requested(const std::string &artist_id);
+    void remove_favorite_show_requested(const std::string &show_id);
+    void show_requested(const std::string &browse_id);
     void create_playlist_requested(const std::string &name, const std::string &description, const std::string &privacy);
     void download_requested(Track track);
     void add_to_queue_next_requested(Track track);

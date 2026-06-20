@@ -84,6 +84,7 @@ fn main() {
         .file("src/cpp/components/fade_stack.cpp")
         .file("src/cpp/components/song_card.cpp")
         .file("src/cpp/components/artwork_loader.cpp")
+        .file("src/cpp/components/artwork_backdrop.cpp")
         .file("src/cpp/components/album_card.cpp")
         .file("src/cpp/components/artist_card.cpp")
         .file("src/cpp/components/horizontal_carousel.cpp")
@@ -103,6 +104,7 @@ fn main() {
         .file("src/cpp/album_detail_view.cpp")
         .file("src/cpp/artist_detail_view.cpp")
         .file("src/cpp/playlist_detail_view.cpp")
+        .file("src/cpp/show_detail_view.cpp")
         .file("src/cpp/welcome_view.cpp")
         .file("src/cpp/login_dialog.cpp")
         .file("src/cpp/sudo_dialog.cpp")
@@ -138,6 +140,7 @@ fn main() {
         "components/icon_button.h",
         "components/fade_stack.h",
         "components/song_card.h",
+        "components/artwork_backdrop.h",
         "components/album_card.h",
         "components/artist_card.h",
         "components/horizontal_carousel.h",
@@ -157,6 +160,7 @@ fn main() {
         "album_detail_view.h",
         "artist_detail_view.h",
         "playlist_detail_view.h",
+        "show_detail_view.h",
         "welcome_view.h",
         "login_dialog.h",
         "sudo_dialog.h",
@@ -220,6 +224,8 @@ fn main() {
     println!("cargo:rerun-if-changed=src/cpp/components/song_card.h");
     println!("cargo:rerun-if-changed=src/cpp/components/artwork_loader.cpp");
     println!("cargo:rerun-if-changed=src/cpp/components/artwork_loader.h");
+    println!("cargo:rerun-if-changed=src/cpp/components/artwork_backdrop.cpp");
+    println!("cargo:rerun-if-changed=src/cpp/components/artwork_backdrop.h");
     println!("cargo:rerun-if-changed=src/cpp/components/album_card.cpp");
     println!("cargo:rerun-if-changed=src/cpp/components/album_card.h");
     println!("cargo:rerun-if-changed=src/cpp/components/artist_card.cpp");
@@ -258,6 +264,8 @@ fn main() {
     println!("cargo:rerun-if-changed=src/cpp/artist_detail_view.h");
     println!("cargo:rerun-if-changed=src/cpp/playlist_detail_view.cpp");
     println!("cargo:rerun-if-changed=src/cpp/playlist_detail_view.h");
+    println!("cargo:rerun-if-changed=src/cpp/show_detail_view.cpp");
+    println!("cargo:rerun-if-changed=src/cpp/show_detail_view.h");
     println!("cargo:rerun-if-changed=src/cpp/welcome_view.cpp");
     println!("cargo:rerun-if-changed=src/cpp/welcome_view.h");
     println!("cargo:rerun-if-changed=src/cpp/login_dialog.cpp");

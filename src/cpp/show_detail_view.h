@@ -8,6 +8,8 @@
 #include <QPushButton>
 #include <QScrollArea>
 #include <QMouseEvent>
+#include <QContextMenuEvent>
+#include <QMenu>
 #include <vector>
 #include <string>
 #include "doremi/src/bridge.rs.h"
@@ -24,6 +26,7 @@ signals:
 
 protected:
     void mousePressEvent(QMouseEvent *event) override;
+    void contextMenuEvent(QContextMenuEvent *event) override;
     void enterEvent(QEnterEvent *event) override;
     void leaveEvent(QEvent *event) override;
 
@@ -49,6 +52,7 @@ protected:
 
 private:
     void setupLayout();
+    void updateSubscriptionButtonState(bool subscribed);
 
     QVBoxLayout *content_layout_;
 
@@ -57,10 +61,13 @@ private:
     QLabel *author_label_;
     QLabel *description_label_;
     QLabel *episode_count_label_;
+    QPushButton *subscribe_btn_;
 
     QWidget *episodes_widget_;
     QVBoxLayout *episodes_layout_;
     std::vector<Episode> episodes_;
+    Show current_show_;
+    bool is_subscribed_;
 };
 
 #endif

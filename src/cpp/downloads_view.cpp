@@ -233,7 +233,7 @@ void DownloadsView::update_row(QWidget *row, double percent, const std::string &
     }
 }
 
-QWidget *DownloadsView::make_batch_row(const std::string &parent_id, const std::string &parent_title,
+QWidget *DownloadsView::make_batch_row(const std::string &/*parent_id*/, const std::string &parent_title,
                                         int total, int completed, double percent) {
     const auto &c = DesignTokens::current();
 
@@ -356,7 +356,6 @@ void DownloadsView::set_batch_progress(const std::string &parent_id, int total, 
         update_batch_row(row, total, completed, percent);
     } else {
         status_label_->hide();
-        int idx = list_->count() - 1;
         auto *batch_row = make_batch_row(parent_id, "Lote", total, completed, percent);
         list_->insertWidget(2, batch_row);
         batch_row_map_[parent_id] = batch_row;

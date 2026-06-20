@@ -429,6 +429,8 @@ void DoremiMainWindow::connect_signals() {
         [](const std::string &id) { on_remove_favorite_album(id); });
     QObject::connect(library_view_, &LibraryView::remove_favorite_artist_requested, this,
         [](const std::string &id) { on_remove_favorite_artist(id); });
+    QObject::connect(library_view_, &LibraryView::remove_favorite_show_requested, this,
+        [](const std::string &id) { on_remove_favorite_show(id); });
     QObject::connect(library_view_, &LibraryView::download_requested, this,
         [](Track track) {
             on_download_requested(track);
@@ -437,6 +439,8 @@ void DoremiMainWindow::connect_signals() {
         [](Track track) { on_add_to_queue_next(track); });
     QObject::connect(library_view_, &LibraryView::add_to_queue_end_requested, this,
         [](Track track) { on_add_to_queue_end(track); });
+    QObject::connect(library_view_, &LibraryView::show_requested, this,
+        [](const std::string &id) { on_show_requested(id); });
     QObject::connect(library_view_, &LibraryView::create_playlist_requested, this,
         [](const std::string &name, const std::string &desc, const std::string &privacy) {
             on_create_playlist(name, desc, privacy);
@@ -1051,6 +1055,14 @@ void set_library_songs(rust::Vec<Track> songs) {
     });
 }
 
+void set_library_shows(rust::Vec<Show> shows) {
+    std::vector<Show> v;
+    for (const auto &x : shows) v.push_back(x);
+    mutate_main_window("set_library_shows", [v = std::move(v)](DoremiMainWindow &window) {
+        if (window.library_view()) window.library_view()->set_shows(v);
+    });
+}
+
 void set_library_playlists(rust::Vec<Playlist> playlists) {
     std::vector<Playlist> p;
     for (const auto &x : playlists) p.push_back(x);
@@ -1228,6 +1240,27 @@ void set_settings_subtitle_glow_effect(bool on) {
     mutate_main_window("set_settings_subtitle_glow_effect", [on](DoremiMainWindow &window) {
         if (window.settings_view()) window.settings_view()->set_subtitle_glow_effect(on);
         if (window.now_playing_view()) window.now_playing_view()->setSubtitleGlowEffect(on);
+    });
+}
+
+void set_settings_download_location(rust::Str location) {
+    const std::string value = Ffi::to_std_string(location);
+    mutate_main_window("set_settings_download_location", [value](DoremiMainWindow &window) {
+        if (window.settings_view()) window.settings_view()->set_download_location(value);
+    });
+}
+
+void set_settings_download_format(rust::Str format) {
+    const std::string value = Ffi::to_std_string(format);
+    mutate_main_window("set_settings_download_format", [value](DoremiMainWindow &window) {
+        if (window.settings_view()) window.settings_view()->set_download_format(value);
+    });
+}
+
+void set_settings_download_quality(rust::Str quality) {
+    const std::string value = Ffi::to_std_string(quality);
+    mutate_main_window("set_settings_download_quality", [value](DoremiMainWindow &window) {
+        if (window.settings_view()) window.settings_view()->set_download_quality(value);
     });
 }
 

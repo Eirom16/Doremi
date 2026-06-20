@@ -182,5 +182,17 @@
     "align_center": "Center",
     "align_right": "Right",
     "activate_mpris": "Enable media controls (MPRIS)",
-    "stop_on_close": "Close on click 'X' (instead of minimizing)"
+    "stop_on_close": "Close on click 'X' (instead of minimizing)",
+    "shows": "Podcasts",
+    "subscribe": "Subscribe",
+    "unsubscribe": "Unsubscribe",
+    "settings_downloads": "Downloads Settings",
+    "download_location": "Download folder",
+    "download_format": "Audio format",
+    "download_quality": "Audio quality",
+    "select_folder": "Select folder",
+    "ytdlp_not_found": "yt-dlp not found",
+    "ytdlp_required": "yt-dlp is required for music playback and downloads",
+    "ffmpeg_not_found": "ffmpeg not found",
+    "ffmpeg_warning": "ffmpeg not found. Downloads will not be converted to MP3 (saved in original format)"
 }

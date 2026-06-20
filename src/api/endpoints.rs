@@ -125,6 +125,7 @@ pub async fn search(query: &str, filter: &str) -> Result<super::models::SearchRe
         "albums" => Some("EgWKAQIIRRoFCAQQgAE="),
         "artists" => Some("EgWKAQIIBRoFCAQQgAE="),
         "playlists" => Some("EgWKAQIIBxoFCAQQgAE="),
+        "podcasts" => Some("EgWKAQIIJhoFCAQQgAE="),
         _ => None,
     };
     if let Some(params) = params {
@@ -133,6 +134,8 @@ pub async fn search(query: &str, filter: &str) -> Result<super::models::SearchRe
     let response = super::transport::post("search", body).await?;
     let fallback_category = if filter == "all" || filter.is_empty() {
         "songs"
+    } else if filter == "podcasts" {
+        "shows"
     } else {
         filter
     };
@@ -885,6 +888,8 @@ mod tests {
             albums: Vec::new(),
             artists: Vec::new(),
             playlists: Vec::new(),
+            shows: Vec::new(),
+            episodes: Vec::new(),
         };
         let incoming = SearchResults {
             query: "q".into(),
@@ -894,6 +899,8 @@ mod tests {
             albums: Vec::new(),
             artists: Vec::new(),
             playlists: Vec::new(),
+            shows: Vec::new(),
+            episodes: Vec::new(),
         };
         merge_search_results(&mut target, incoming);
         assert_eq!(

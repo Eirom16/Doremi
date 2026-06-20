@@ -40,6 +40,9 @@ public:
     void set_subtitle_line_spacing(double spacing);
     void set_subtitle_auto_scroll(bool on);
     void set_subtitle_glow_effect(bool on);
+    void set_download_location(const std::string &location);
+    void set_download_format(const std::string &format);
+    void set_download_quality(const std::string &quality);
     void refresh_storage_sizes();
 
     std::string theme() const;
@@ -95,6 +98,12 @@ private:
     QComboBox *sub_line_spacing_cmb_;
     AnimatedToggle *sub_auto_scroll_cb_;
     AnimatedToggle *sub_glow_cb_;
+
+    // Downloads
+    QLineEdit *download_location_input_;
+    RippleButton *download_location_btn_;
+    QComboBox *download_format_cmb_;
+    QComboBox *download_quality_cmb_;
 
     // Storage
     QLabel *db_size_lbl_;

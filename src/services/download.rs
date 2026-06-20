@@ -212,6 +212,28 @@ impl DownloadManager {
         Self::refresh_downloads_ui();
     }
 
+    pub fn resume_unfinished_downloads(&self) {
+        log::info!("Checking for unfinished downloads to resume...");
+        if let Ok(tracks) = DownloadsRepo::all() {
+            for track in tracks {
+                if track.status == "queued" || track.status == "resolving" || track.status == "downloading" {
+                    log::info!("Resuming unfinished download: {} - {}", track.artist, track.title);
+                    let _ = DownloadsRepo::update_status(&track.video_id, "queued", 0.0, "");
+                    let task = DownloadTask {
+                        video_id: track.video_id.clone(),
+                        title: track.title.clone(),
+                        artist: track.artist.clone(),
+                        thumbnail_url: track.thumbnail_url.clone(),
+                        parent_playlist_id: track.parent_playlist_id.clone(),
+                        parent_playlist_title: track.parent_playlist_title.clone(),
+                        parent_playlist_thumbnail_url: track.parent_playlist_thumbnail_url.clone(),
+                    };
+                    let _ = self.sender.send(task);
+                }
+            }
+        }
+    }
+
     fn save_status(video_id: &str, status: &DownloadStatus) {
         let _ = DownloadsRepo::update_status(video_id, status.as_str(), status.progress(), status.error());
         crate::bridge::bridge::set_download_progress(video_id, status.progress(), status.as_str());
@@ -305,9 +327,44 @@ impl DownloadManager {
         cancel_flag: &AtomicBool,
         child_pids: &Arc<Mutex<HashMap<String, u32>>>,
     ) -> Result<DownloadTrack, String> {
-        let out_dir = crate::config::paths::AppDirs::global()
-            .cache_dir()
-            .join("downloads");
+        let res = Self::download_track_impl_inner(task, cancel_flag, child_pids).await;
+        if res.is_err() {
+            let dirs = crate::config::paths::AppDirs::global();
+            let settings = crate::config::settings::AppSettings::load(&dirs.settings_path());
+            let out_dir = if !settings.downloads.location.is_empty() {
+                std::path::PathBuf::from(&settings.downloads.location)
+            } else {
+                dirs.cache_dir().join("downloads")
+            };
+            let temp_prefix = format!("{}_download.tmp", task.video_id);
+            if let Ok(entries) = std::fs::read_dir(&out_dir) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                        if name.starts_with(&temp_prefix) {
+                            let _ = std::fs::remove_file(path);
+                        }
+                    }
+                }
+            }
+        }
+        res
+    }
+
+    async fn download_track_impl_inner(
+        task: &DownloadTask,
+        cancel_flag: &AtomicBool,
+        child_pids: &Arc<Mutex<HashMap<String, u32>>>,
+    ) -> Result<DownloadTrack, String> {
+        let dirs = crate::config::paths::AppDirs::global();
+        let settings = crate::config::settings::AppSettings::load(&dirs.settings_path());
+
+        let out_dir = if !settings.downloads.location.is_empty() {
+            std::path::PathBuf::from(&settings.downloads.location)
+        } else {
+            dirs.cache_dir().join("downloads")
+        };
+
         std::fs::create_dir_all(&out_dir)
             .map_err(|e| format!("Failed to create downloads folder: {e}"))?;
 
@@ -324,40 +381,55 @@ impl DownloadManager {
         let clean_title = task.title.replace("/", "_").replace("\\", "_");
         let filename_base = format!("{} - {}", clean_artist, clean_title);
 
-        let out_tmpl = out_dir.join(format!("{}.%(ext)s", filename_base));
+        let temp_filename_base = format!("{}_download.tmp", task.video_id);
+        let out_tmpl = out_dir.join(format!("{}.%(ext)s", temp_filename_base));
         let out_tmpl_str = out_tmpl.to_str().ok_or("Invalid output path")?;
 
-        let mut args: Vec<&str> = vec![
-            "-f",
-            "bestaudio/best",
-            "--no-playlist",
-            "--no-warnings",
-            "--newline",
-            "-o",
-            out_tmpl_str,
-        ];
+        log::info!("Running yt-dlp for download: {}", task.video_id);
+
+        let mut child = tokio::process::Command::new("yt-dlp");
+        child
+            .arg("-f").arg("bestaudio/best")
+            .arg("--no-playlist")
+            .arg("--no-warnings")
+            .arg("--newline")
+            .arg("-o").arg(out_tmpl_str)
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .kill_on_drop(true);
+
+        let dl_format = settings.downloads.format.to_lowercase();
+        let dl_quality = settings.downloads.quality.to_lowercase();
 
         if has_ffmpeg {
-            args.extend([
-                "--extract-audio",
-                "--audio-format",
-                "mp3",
-                "--audio-quality",
-                "192K",
-            ]);
+            if dl_format != "original" {
+                child.arg("--extract-audio")
+                    .arg("--audio-format").arg(&dl_format);
+
+                let q_arg = match dl_quality.as_str() {
+                    "best" => "0",
+                    "320k" => "320K",
+                    "256k" => "256K",
+                    "192k" => "192K",
+                    "128k" => "128K",
+                    other => other,
+                };
+                child.arg("--audio-quality").arg(q_arg);
+            }
+        }
+
+        if let Some(auth) = crate::utils::ytdlp_auth::prepare_ytdlp_auth() {
+            child.arg("--cookies").arg(&auth.cookie_path);
+            for (key, val) in &auth.extra_headers {
+                child.arg("--add-header").arg(format!("{}:{}", key, val));
+            }
+            // auth is dropped after spawn, cleaning up temp file
         }
 
         let url = format!("https://music.youtube.com/watch?v={}", task.video_id);
-        args.push(&url);
+        child.arg(&url);
 
-        log::info!("Running yt-dlp with arguments: {:?}", args);
-
-        let mut child = tokio::process::Command::new("yt-dlp")
-            .args(&args)
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped())
-            .kill_on_drop(true)
-            .spawn()
+        let mut child = child.spawn()
             .map_err(|e| format!("Failed to start yt-dlp: {e}"))?;
 
         {
@@ -430,21 +502,29 @@ impl DownloadManager {
             return Err(err_msg);
         }
 
-        let ext = if has_ffmpeg { "mp3" } else { "m4a" };
-        let mut final_path = out_dir.join(format!("{}.{}", filename_base, ext));
+        let ext = if has_ffmpeg {
+            if dl_format == "original" {
+                "m4a"
+            } else {
+                &dl_format
+            }
+        } else {
+            "m4a"
+        };
+        let mut temp_final_path = out_dir.join(format!("{}.{}", temp_filename_base, ext));
 
-        if !final_path.exists() {
-            let webm_path = out_dir.join(format!("{}.webm", filename_base));
+        if !temp_final_path.exists() {
+            let webm_path = out_dir.join(format!("{}.webm", temp_filename_base));
             if webm_path.exists() {
-                final_path = webm_path;
+                temp_final_path = webm_path;
             } else {
                 let mut found = false;
                 if let Ok(entries) = std::fs::read_dir(&out_dir) {
                     for entry in entries.flatten() {
                         let path = entry.path();
                         if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
-                            if stem == filename_base {
-                                final_path = path;
+                            if stem == temp_filename_base {
+                                temp_final_path = path;
                                 found = true;
                                 break;
                             }
@@ -456,6 +536,13 @@ impl DownloadManager {
                 }
             }
         }
+
+        let final_ext = temp_final_path.extension().and_then(|e| e.to_str()).unwrap_or(ext);
+        let final_path = out_dir.join(format!("{}.{}", filename_base, final_ext));
+
+        // Atomic rename
+        std::fs::rename(&temp_final_path, &final_path)
+            .map_err(|e| format!("Failed to rename temporary file to final path: {e}"))?;
 
         let file_path_str = final_path.to_str().unwrap_or_default().to_string();
 

@@ -329,7 +329,7 @@ Soporte para podcasts y shows de YouTube Music (y potencialmente RSS). YouTube M
 - [x] Parsear resultados de tipo `show`/`podcast` en `api/parsers.rs` (search + browse).
 - [x] Añadir endpoint `show_detail(browse_id)` en `api/endpoints.rs` con parseo de episodios.
 - [x] Extender `SearchResults` con `shows: Vec<Show>` y `episodes: Vec<Episode>`.
-- [ ] Añadir filtro de busqueda "podcasts" en SearchView.
+- [x] Añadir filtro de busqueda "podcasts" en SearchView.
 - [x] Crear structs bridge `Show` y `Episode` con `#[cxx::bridge]`.
 - [x] Añadir `on_show_requested(browse_id)` y `set_show_detail(show, episodes)` en bridge.
 - [x] Crear `ShowDetailView` C++ (header + cover + lista episodios con duración, back button).
@@ -339,11 +339,11 @@ Soporte para podcasts y shows de YouTube Music (y potencialmente RSS). YouTube M
 - [x] Navegación completa: `set_show_detail` → `navigate_to("show_detail")` + back desde detail.
 - [x] DB: migration v8 `favorite_shows` (tabla creada, CRUD pendiente).
 - [x] `build.rs`: `show_detail_view.cpp/.h` registrados en compilación y moc.
-- [ ] Añadir "Podcasts" como tab en LibraryView con suscripciones locales.
-- [ ] Soportar suscripcion/desuscripcion a shows via DB (`favorite_shows` CRUD + UI).
-- [ ] Soportar like/unlike en episodios individuales (reusar `favorite_tracks`).
-- [ ] Cablear `play_episode_requested` en ShowDetailView → crear Track desde Episode y reproducir.
-- [ ] Cache de episodios y metadata de shows.
+- [x] Añadir "Podcasts" como tab en LibraryView con suscripciones locales.
+- [x] Soportar suscripcion/desuscripcion a shows via DB (`favorite_shows` CRUD + UI).
+- [x] Hecho - Soportar like/unlike en episodios individuales (reusar `favorite_tracks`).
+- [x] Cablear `play_episode_requested` en ShowDetailView → crear Track desde Episode y reproducir.
+- [x] Hecho - Cache de episodios y metadata de shows.
 - [ ] (Futuro) Soporte de feeds RSS para podcasts externos.
 
 ## P4 - Descargas y experiencia offline
@@ -355,11 +355,11 @@ Soporte para podcasts y shows de YouTube Music (y potencialmente RSS). YouTube M
 - [x] Implementar cancel/retry.
 - [x] Controlar concurrencia mediante semaphore.
 - [x] Capturar stdout estructuradamente de `yt-dlp --newline` con regex.
-- [ ] Detectar ausencia/version incompatible de `yt-dlp` y `ffmpeg`.
+- [x] Hecho - Detectar ausencia/version incompatible de `yt-dlp` y `ffmpeg`.
 - [ ] Permitir ubicacion, formato y calidad configurables.
 - [ ] Sanitizar nombres de forma portable y resolver colisiones.
-- [ ] Escribir a archivo temporal y hacer rename atomico al completar.
-- [ ] Limpiar parciales tras cancelacion o crash segun politica.
+- [x] Hecho - Escribir a archivo temporal y hacer rename atomico al completar.
+- [x] Hecho - Limpiar parciales tras cancelacion o crash segun politica.
 - [ ] Guardar metadata y artwork local.
 - [ ] Verificar existencia/integridad antes de marcar completado.
 

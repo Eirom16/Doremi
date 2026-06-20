@@ -163,6 +163,34 @@ fn default_text_color_inactive() -> String {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DownloadSettings {
+    #[serde(default)]
+    pub location: String,
+    #[serde(default = "default_download_format")]
+    pub format: String,
+    #[serde(default = "default_download_quality")]
+    pub quality: String,
+}
+
+fn default_download_format() -> String {
+    "mp3".to_string()
+}
+
+fn default_download_quality() -> String {
+    "192k".to_string()
+}
+
+impl Default for DownloadSettings {
+    fn default() -> Self {
+        Self {
+            location: String::new(),
+            format: "mp3".to_string(),
+            quality: "192k".to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppSettings {
     #[serde(default)]
     pub google_client_id: String,
@@ -180,6 +208,8 @@ pub struct AppSettings {
     pub integrations: IntegrationsSettings,
     #[serde(default)]
     pub subtitles: SubtitleSettings,
+    #[serde(default)]
+    pub downloads: DownloadSettings,
     #[serde(default = "default_language")]
     pub language: String,
     pub last_video_id: Option<String>,
@@ -200,6 +230,7 @@ impl Default for AppSettings {
             network: NetworkSettings::default(),
             integrations: IntegrationsSettings::default(),
             subtitles: SubtitleSettings::default(),
+            downloads: DownloadSettings::default(),
             language: "es".to_string(),
             last_video_id: None,
         }
@@ -424,5 +455,24 @@ mod tests {
         let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
         let _ = std::fs::remove_file(path);
         assert_eq!(mode, 0o600);
+    }
+
+    #[test]
+    fn test_download_settings_serialization() {
+        let mut settings = AppSettings::default();
+        assert_eq!(settings.downloads.format, "mp3");
+        assert_eq!(settings.downloads.quality, "192k");
+        assert_eq!(settings.downloads.location, "");
+
+        settings.downloads.location = "/path/to/downloads".to_string();
+        settings.downloads.format = "m4a".to_string();
+        settings.downloads.quality = "320k".to_string();
+
+        let serialized = toml::to_string(&settings).unwrap();
+        let deserialized: AppSettings = toml::from_str(&serialized).unwrap();
+
+        assert_eq!(deserialized.downloads.location, "/path/to/downloads");
+        assert_eq!(deserialized.downloads.format, "m4a");
+        assert_eq!(deserialized.downloads.quality, "320k");
     }
 }

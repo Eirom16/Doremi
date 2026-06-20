@@ -102,6 +102,23 @@ impl DoremiApp {
         apply_theme(theme, accent);
         set_window_title("Doremi");
         show_main_window();
+
+        // Check system dependencies (yt-dlp and ffmpeg)
+        let dep_status = crate::utils::dependencies::check_dependencies();
+        if !dep_status.ytdlp_ok {
+            log::warn!("yt-dlp not found! streaming and downloads will fail.");
+            bridge::bridge::show_notification(&crate::tr!("ytdlp_required"), "error");
+        } else {
+            log::info!("yt-dlp version: {}", dep_status.ytdlp_version);
+        }
+
+        if !dep_status.ffmpeg_ok {
+            log::warn!("ffmpeg not found! audio downloads will not be converted to MP3.");
+            bridge::bridge::show_notification(&crate::tr!("ffmpeg_warning"), "warning");
+        } else {
+            log::info!("ffmpeg version: {}", dep_status.ffmpeg_version);
+        }
+
         if restored_queue {
             player.refresh_queue_ui();
         }
@@ -257,7 +274,9 @@ impl DoremiApp {
         });
 
         // Load downloads data from database
+        let dl_manager = crate::services::download::DownloadManager::get_instance();
         crate::services::download::DownloadManager::refresh_downloads_ui();
+        dl_manager.resume_unfinished_downloads();
 
         // Trigger update check after a short delay (3 seconds)
         tokio::spawn(async {

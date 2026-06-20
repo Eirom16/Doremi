@@ -44,6 +44,45 @@ void EpisodeRow::mousePressEvent(QMouseEvent *event) {
     QWidget::mousePressEvent(event);
 }
 
+void EpisodeRow::contextMenuEvent(QContextMenuEvent *event) {
+    QMenu menu(this);
+    
+    QAction *play = menu.addAction("Reproducir");
+    
+    bool is_fav = get_track_favorite_state(static_cast<std::string>(episode_.id));
+    QAction *fav = menu.addAction(is_fav ? "Quitar de favoritos" : "Agregar a favoritos");
+    
+    QAction *dl = menu.addAction("Descargar");
+
+    QAction *chosen = menu.exec(event->globalPos());
+    if (chosen == play) {
+        emit play_requested(episode_);
+    } else if (chosen == fav) {
+        Track t;
+        t.id = episode_.id;
+        t.title = episode_.title;
+        t.artist = episode_.show;
+        t.album = "";
+        t.duration_ms = static_cast<int32_t>(episode_.duration_ms);
+        t.thumbnail = episode_.thumbnail;
+        
+        if (is_fav) {
+            on_remove_favorite(static_cast<std::string>(episode_.id));
+        } else {
+            on_add_favorite(t);
+        }
+    } else if (chosen == dl) {
+        Track t;
+        t.id = episode_.id;
+        t.title = episode_.title;
+        t.artist = episode_.show;
+        t.album = "";
+        t.duration_ms = static_cast<int32_t>(episode_.duration_ms);
+        t.thumbnail = episode_.thumbnail;
+        on_download_requested(t);
+    }
+}
+
 void EpisodeRow::enterEvent(QEnterEvent *event) {
     setStyleSheet(QString("background: %1;").arg(DesignTokens::current().bg_elevated.name()));
     QWidget::enterEvent(event);
@@ -117,6 +156,21 @@ void ShowDetailView::setupLayout() {
     description_label_->setWordWrap(true);
     header_info->addWidget(description_label_);
 
+    subscribe_btn_ = new QPushButton(this);
+    subscribe_btn_->setCursor(Qt::PointingHandCursor);
+    subscribe_btn_->setFixedHeight(36);
+    QObject::connect(subscribe_btn_, &QPushButton::clicked, this, [this]() {
+        if (is_subscribed_) {
+            on_remove_favorite_show(static_cast<std::string>(current_show_.id));
+            updateSubscriptionButtonState(false);
+        } else {
+            on_add_favorite_show(current_show_);
+            updateSubscriptionButtonState(true);
+        }
+    });
+    header_info->addWidget(subscribe_btn_, 0, Qt::AlignLeft);
+    updateSubscriptionButtonState(false);
+
     header_info->addStretch();
     header->addLayout(header_info, 1);
     content_layout_->addLayout(header);
@@ -141,6 +195,8 @@ void ShowDetailView::setupLayout() {
 
 void ShowDetailView::set_show_info(const Show &show) {
     const auto &c = DesignTokens::current();
+    current_show_ = show;
+    
     title_label_->setText(QString::fromStdString(static_cast<std::string>(show.title)));
     author_label_->setText(QString::fromStdString(static_cast<std::string>(show.author)));
     if (!static_cast<std::string>(show.description).empty()) {
@@ -152,6 +208,7 @@ void ShowDetailView::set_show_info(const Show &show) {
     if (show.episode_count > 0) {
         episode_count_label_->setText(
             QString::number(show.episode_count) + " episodios");
+        episode_count_label_->show();
     } else {
         episode_count_label_->hide();
     }
@@ -165,6 +222,9 @@ void ShowDetailView::set_show_info(const Show &show) {
             cover_label_->setStyleSheet(QString("font-size: 64px; background: %1; border-radius: 8px;").arg(c.bg_elevated.name()));
         }
     }
+
+    bool is_fav = get_show_favorite_state(static_cast<std::string>(show.id));
+    updateSubscriptionButtonState(is_fav);
 }
 
 void ShowDetailView::set_episodes(const std::vector<Episode> &episodes) {
@@ -200,10 +260,35 @@ void ShowDetailView::clear() {
     episode_count_label_->clear();
     cover_label_->clear();
     cover_label_->setStyleSheet(QString("background: %1; border-radius: 8px;").arg(DesignTokens::current().bg_elevated.name()));
+    updateSubscriptionButtonState(false);
     QLayoutItem *child;
     while ((child = episodes_layout_->takeAt(0)) != nullptr) {
         delete child->widget();
         delete child;
     }
     episodes_.clear();
+}
+
+void ShowDetailView::updateSubscriptionButtonState(bool subscribed) {
+    is_subscribed_ = subscribed;
+    const auto &c = DesignTokens::current();
+    if (subscribed) {
+        subscribe_btn_->setText(QString::fromStdString(std::string(doremi_tr("unsubscribe"))));
+        subscribe_btn_->setStyleSheet(QString(
+            "QPushButton { background: transparent; border: 1px solid %1; border-radius: 18px; color: %1; padding: 0 16px; font-weight: bold; }"
+            "QPushButton:hover { background: rgba(%2, %3, %4, 0.08); }")
+            .arg(c.text_primary.name())
+            .arg(c.text_primary.red()).arg(c.text_primary.green()).arg(c.text_primary.blue()));
+    } else {
+        subscribe_btn_->setText(QString::fromStdString(std::string(doremi_tr("subscribe"))));
+        subscribe_btn_->setStyleSheet(QString(
+            "QPushButton { background: %1; border: none; border-radius: 18px; color: #FFFFFF; padding: 0 16px; font-weight: bold; }"
+            "QPushButton:hover { background: %2; }")
+            .arg(c.accent.name())
+            .arg(c.accent.lighter(115).name()));
+    }
+}
+
+bool ShowDetailView::eventFilter(QObject *obj, QEvent *event) {
+    return QWidget::eventFilter(obj, event);
 }

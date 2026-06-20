@@ -183,10 +183,11 @@ void ClickableItem::show_context_menu(const QPoint &global_pos) {
     const auto &c = DesignTokens::current();
     QMenu menu(this);
 
-    // Collection types (artist/album/playlist) get a navigation-oriented menu
-    if (item_type_ == "artist" || item_type_ == "album" || item_type_ == "playlist") {
+    // Collection types (artist/album/playlist/show) get a navigation-oriented menu
+    if (item_type_ == "artist" || item_type_ == "album" || item_type_ == "playlist" || item_type_ == "show") {
         QString open_label = item_type_ == "artist" ? "Ir al artista"
                            : item_type_ == "album"  ? "Ir al álbum"
+                           : item_type_ == "show"   ? "Ir al podcast"
                                                     : "Ir a la playlist";
         QAction *open = new QAction(IconProvider::getIcon("open_in_new", c.text_primary, 16), open_label, &menu);
         menu.addAction(open);
@@ -198,6 +199,9 @@ void ClickableItem::show_context_menu(const QPoint &global_pos) {
             has_fav = true;
         } else if (item_type_ == "album") {
             is_fav = get_album_favorite_state(item_id_);
+            has_fav = true;
+        } else if (item_type_ == "show") {
+            is_fav = get_show_favorite_state(item_id_);
             has_fav = true;
         }
 

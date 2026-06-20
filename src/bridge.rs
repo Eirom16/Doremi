@@ -77,6 +77,8 @@ pub mod bridge {
         description: String,
         thumbnail: String,
         track_count: i32,
+        owner: String,
+        privacy: String,
     }
 
     #[derive(Clone)]
@@ -106,6 +108,27 @@ pub mod bridge {
         subtitle: String,
         thumbnail: String,
         item_type: String,
+    }
+
+    #[derive(Clone)]
+    struct Show {
+        id: String,
+        title: String,
+        author: String,
+        description: String,
+        thumbnail: String,
+        episode_count: i32,
+    }
+
+    #[derive(Clone)]
+    struct Episode {
+        id: String,
+        title: String,
+        show: String,
+        show_id: String,
+        description: String,
+        thumbnail: String,
+        duration_ms: i64,
     }
 
     #[derive(Clone)]
@@ -144,6 +167,7 @@ pub mod bridge {
         fn on_album_requested(browse_id: &str);
         fn on_artist_requested(browse_id: &str);
         fn on_playlist_requested(playlist_id: &str);
+        fn on_show_requested(browse_id: &str);
         fn on_volume_change(delta: i32);
         fn on_volume_set(volume: i32);
         fn on_seek_relative(delta_ms: i32);
@@ -160,12 +184,16 @@ pub mod bridge {
         fn on_remove_favorite_album(album_id: &str);
         fn on_add_favorite_artist(artist: Artist);
         fn on_remove_favorite_artist(artist_id: &str);
+        fn on_add_favorite_show(show: Show);
+        fn on_remove_favorite_show(show_id: &str);
         fn on_add_to_playlist(track: Track, playlist_id: &str);
         fn on_create_playlist(name: &str, description: &str, privacy: &str);
         fn on_rename_playlist(playlist_id: &str, name: &str);
         fn on_delete_playlist(playlist_id: &str);
         fn on_remove_playlist_track(playlist_id: &str, track_id: &str);
         fn on_download_requested(track: Track);
+        fn on_batch_download_requested(tracks: Vec<Track>, parent_id: &str, parent_title: &str, parent_thumbnail: &str);
+        fn on_download_cancel_requested(video_id: &str);
         fn on_add_to_queue_next(track: Track);
         fn on_add_to_queue_end(track: Track);
         fn on_play_all(tracks: Vec<Track>, shuffle: bool);
@@ -180,8 +208,9 @@ pub mod bridge {
         fn on_queue_item_removed(index: i32);
         fn on_queue_item_moved(from: i32, to: i32);
         fn on_queue_clear_requested();
-        fn on_stats_requested();
+        fn on_stats_requested(days: i32);
         fn on_history_requested();
+        fn on_clear_history();
         fn on_youtube_login_success(headers_json: &str, name: &str, avatar_url: &str);
         fn on_youtube_session_refresh(headers_json: &str);
         fn on_youtube_logout();
@@ -202,6 +231,8 @@ pub mod bridge {
         fn on_library_set_filter_source(source: i32);
         fn get_album_favorite_state(album_id: &str) -> bool;
         fn get_artist_favorite_state(artist_id: &str) -> bool;
+        fn get_track_favorite_state(track_id: &str) -> bool;
+        fn get_show_favorite_state(show_id: &str) -> bool;
         fn on_update_playlist_privacy(playlist_id: &str, privacy: &str);
         fn on_playlist_load_continuations(playlist_id: &str);
     }
@@ -226,6 +257,7 @@ pub mod bridge {
         fn run_event_loop();
         fn set_player_volume(volume: i32);
         fn set_library_songs(songs: Vec<Track>);
+        fn set_library_shows(shows: Vec<Show>);
         fn set_library_playlists(playlists: Vec<Playlist>);
         fn set_context_playlists(playlists: Vec<Playlist>);
         fn set_library_albums(albums: Vec<Album>);
@@ -233,6 +265,7 @@ pub mod bridge {
         fn set_search_history(queries: Vec<String>);
         fn set_search_suggestions(query: &str, suggestions: Vec<String>);
         fn apply_settings_to_ui();
+        fn set_prefetch_status(video_id: &str, status: &str);
         fn set_settings_theme(mode: &str);
         fn set_settings_accent(color: &str);
         fn set_settings_font_size(size: i32);
@@ -260,6 +293,9 @@ pub mod bridge {
         fn set_settings_subtitle_glow_effect(on: bool);
         fn set_settings_stop_on_close(stop: bool);
         fn set_settings_mpris_enabled(on: bool);
+        fn set_settings_download_location(location: &str);
+        fn set_settings_download_format(format: &str);
+        fn set_settings_download_quality(quality: &str);
 
         // Data service functions
         fn set_search_results(
@@ -270,13 +306,19 @@ pub mod bridge {
             artists: Vec<Artist>,
             albums: Vec<Album>,
             playlists: Vec<Playlist>,
+            shows: Vec<Show>,
+            episodes: Vec<Episode>,
         );
+        fn set_show_detail(show: Show, episodes: Vec<Episode>);
         fn add_home_section(title: &str, items: Vec<HomeCard>);
         fn clear_home_sections();
         fn set_home_state(state: &str, message: &str);
         fn set_trending_items(items: Vec<HomeCard>);
         fn set_trending_state(state: &str, message: &str);
-        fn set_downloads_list(titles: Vec<String>, artists: Vec<String>, thumbnails: Vec<String>);
+        fn set_downloads_list(titles: Vec<String>, artists: Vec<String>, thumbnails: Vec<String>,
+                              video_ids: Vec<String>, statuses: Vec<String>, progresses: Vec<f64>);
+        fn set_download_progress(video_id: &str, percent: f64, status: &str);
+        fn set_batch_download_progress(parent_id: &str, total: i32, completed: i32, percent: f64);
         fn set_player_shuffle(on: bool);
         fn set_player_repeat(mode: i32);
         fn get_or_create_thumbnail(title: &str, variant: i32) -> String;
@@ -418,6 +460,13 @@ pub fn on_home_retry_requested() {
     tokio::spawn(async { crate::services::home::HomeService::new().load_home().await });
 }
 
+pub fn on_show_requested(browse_id: &str) {
+    let browse_id = browse_id.to_string();
+    tokio::spawn(async move {
+        crate::services::browse::load_show(&browse_id).await;
+    });
+}
+
 pub fn on_home_load_more_requested() {
     tokio::spawn(async { crate::services::home::HomeService::new().load_more().await });
 }
@@ -510,6 +559,7 @@ enum LibraryTab {
     Albums,
     Artists,
     Playlists,
+    Shows,
 }
 
 impl LibraryTab {
@@ -519,6 +569,7 @@ impl LibraryTab {
             "albums" => Some(Self::Albums),
             "artists" => Some(Self::Artists),
             "playlists" => Some(Self::Playlists),
+            "shows" => Some(Self::Shows),
             _ => None,
         }
     }
@@ -540,6 +591,7 @@ pub fn on_library_tab_changed(tab_key: &str) {
                 LibraryTab::Albums => service.load_albums().await,
                 LibraryTab::Artists => service.load_artists().await,
                 LibraryTab::Playlists => service.load_playlists().await,
+                LibraryTab::Shows => refresh_library_shows_ui(),
             }
         } else {
             tokio::task::spawn_blocking(move || {
@@ -608,12 +660,15 @@ pub fn on_library_tab_changed(tab_key: &str) {
                                         description: p.description.clone(),
                                         thumbnail: p.artwork.clone(),
                                         track_count: count,
+                                        owner: String::new(),
+                                        privacy: String::new(),
                                     }
                                 })
                                 .collect();
                             crate::bridge::bridge::set_library_playlists(p_list);
                         }
                     }
+                    LibraryTab::Shows => refresh_library_shows_ui(),
                 }
             })
             .await
@@ -644,6 +699,10 @@ mod contract_tests {
         assert_eq!(
             LibraryTab::from_key("playlists"),
             Some(LibraryTab::Playlists)
+        );
+        assert_eq!(
+            LibraryTab::from_key("shows"),
+            Some(LibraryTab::Shows)
         );
         assert_eq!(LibraryTab::from_key("Canciones"), None);
         assert_eq!(LibraryTab::from_key("Songs"), None);
@@ -850,6 +909,56 @@ pub fn on_remove_favorite_artist(artist_id: &str) {
     }
 }
 
+pub fn on_add_favorite_show(show: bridge::Show) {
+    let fav = crate::db::repo::FavoriteShow {
+        id: show.id,
+        title: show.title,
+        author: show.author,
+        description: show.description,
+        thumbnail: show.thumbnail,
+        episode_count: show.episode_count,
+        added_at: String::new(),
+    };
+    if let Err(e) = crate::db::repo::FavoritesRepo::add_show(&fav) {
+        log::error!("Failed to add favorite show: {e}");
+    } else {
+        log::info!("Added favorite show: {}", fav.title);
+        refresh_library_shows_ui();
+    }
+}
+
+pub fn on_remove_favorite_show(show_id: &str) {
+    if let Err(e) = crate::db::repo::FavoritesRepo::remove_show(show_id) {
+        log::error!("Failed to remove favorite show: {e}");
+    } else {
+        refresh_library_shows_ui();
+    }
+}
+
+pub fn get_show_favorite_state(show_id: &str) -> bool {
+    crate::db::repo::FavoritesRepo::is_favorite_show(show_id).unwrap_or(false)
+}
+
+pub fn get_track_favorite_state(track_id: &str) -> bool {
+    crate::db::repo::FavoritesRepo::is_favorite_track(track_id).unwrap_or(false)
+}
+
+fn refresh_library_shows_ui() {
+    let shows = crate::db::repo::FavoritesRepo::all_shows().unwrap_or_default();
+    let bridge_shows: Vec<bridge::Show> = shows
+        .into_iter()
+        .map(|s| bridge::Show {
+            id: s.id,
+            title: s.title,
+            author: s.author,
+            description: s.description,
+            thumbnail: s.thumbnail,
+            episode_count: s.episode_count,
+        })
+        .collect();
+    bridge::set_library_shows(bridge_shows);
+}
+
 pub fn on_download_requested(track: bridge::Track) {
     log::info!("Download requested: {} — {}", track.title, track.artist);
     if !track.id.is_empty() {
@@ -866,6 +975,23 @@ pub fn on_download_requested(track: bridge::Track) {
             track.artist
         );
     }
+}
+
+pub fn on_batch_download_requested(tracks: Vec<bridge::Track>, parent_id: &str, parent_title: &str, parent_thumbnail: &str) {
+    let batch: Vec<(String, String, String)> = tracks
+        .iter()
+        .map(|t| (t.id.clone(), t.title.clone(), t.artist.clone()))
+        .collect();
+    crate::services::download::DownloadManager::get_instance().add_batch_download(
+        &batch,
+        parent_id,
+        parent_title,
+        parent_thumbnail,
+    );
+}
+
+pub fn on_download_cancel_requested(video_id: &str) {
+    crate::services::download::DownloadManager::get_instance().cancel_download(video_id);
 }
 
 pub fn on_add_to_playlist(track: bridge::Track, playlist_id: &str) {
@@ -946,6 +1072,8 @@ fn load_local_playlist_detail(playlist_id: &str) -> Option<(crate::bridge::bridg
         description: p.description.clone(),
         thumbnail: p.artwork.clone(),
         track_count: count,
+        owner: String::new(),
+        privacy: String::new(),
     };
     let btracks: Vec<crate::bridge::bridge::Track> = tracks.into_iter().map(|t| {
         crate::bridge::bridge::Track {
@@ -975,6 +1103,8 @@ fn push_context_and_library_playlists() {
                     description: p.description.clone(),
                     thumbnail: p.artwork.clone(),
                     track_count: count,
+                    owner: String::new(),
+                    privacy: String::new(),
                 }
             })
             .collect();
@@ -985,6 +1115,8 @@ fn push_context_and_library_playlists() {
                 description: p.description.clone(),
                 thumbnail: p.thumbnail.clone(),
                 track_count: p.track_count,
+                owner: String::new(),
+                privacy: String::new(),
             }).collect()
         );
         crate::bridge::bridge::set_library_playlists(p_list);
@@ -1083,6 +1215,11 @@ pub fn apply_settings_impl() {
     bridge::set_settings_subtitle_line_spacing(settings.subtitles.line_spacing);
     bridge::set_settings_subtitle_auto_scroll(settings.subtitles.auto_scroll);
     bridge::set_settings_subtitle_glow_effect(settings.subtitles.glow_effect);
+
+    // Apply downloads settings
+    bridge::set_settings_download_location(&settings.downloads.location);
+    bridge::set_settings_download_format(&settings.downloads.format);
+    bridge::set_settings_download_quality(&settings.downloads.quality);
 
     // Apply integrations settings
     crate::services::discord::set_enabled(settings.integrations.discord_rpc_enabled);
@@ -1268,6 +1405,15 @@ pub fn on_setting_changed(key: &str, value: &str) {
                 crate::mpris::stop_mpris();
             }
         }
+        "download_location" => {
+            settings.downloads.location = value.to_string();
+        }
+        "download_format" => {
+            settings.downloads.format = value.to_string();
+        }
+        "download_quality" => {
+            settings.downloads.quality = value.to_string();
+        }
         _ => log::warn!("Unknown setting key: {key}"),
     }
     if let Err(e) = settings.save(&dirs.settings_path()) {
@@ -1405,8 +1551,8 @@ pub fn on_queue_clear_requested() {
     with_player(|player| player.clear_queue());
 }
 
-pub fn on_stats_requested() {
-    log::info!("Stats requested");
+pub fn on_stats_requested(days: i32) {
+    log::info!("Stats requested for {days} days");
     tokio::spawn(async move {
         let stats_res = tokio::task::spawn_blocking(move || {
             let total_time_ms = crate::db::with_db(|conn| {
@@ -1616,6 +1762,13 @@ pub fn on_history_requested() {
         if let Ok((history, played_at)) = local {
             crate::bridge::bridge::set_history_data(history, played_at);
         }
+    });
+}
+
+pub fn on_clear_history() {
+    log::info!("Clear history requested");
+    tokio::task::spawn_blocking(|| {
+        crate::db::repo::PlayHistoryRepo::clear().ok();
     });
 }
 
@@ -1870,7 +2023,7 @@ pub fn on_playlist_load_continuations(playlist_id: &str) {
     
     tokio::spawn(async move {
         use crate::api::client::ApiClient;
-        let api = ApiClient::new();
+        let _api = ApiClient::new();
         
         // TODO: Implementar lógica de continuations
         // Esta función cargará más tracks de una playlist si existen continuations

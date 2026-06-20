@@ -123,6 +123,10 @@ pub async fn load_playlist(playlist_id: &str) {
 pub async fn load_show(browse_id: &str) {
     match crate::api::innertube::show_detail(browse_id).await {
         Ok(detail) => {
+            if let Err(e) = crate::db::repo::ShowCacheRepo::save(&detail.show, &detail.episodes) {
+                log::error!("Failed to cache show detail in database: {e}");
+            }
+
             let show = crate::bridge::bridge::Show {
                 id: detail.show.id,
                 title: detail.show.title,
@@ -146,9 +150,43 @@ pub async fn load_show(browse_id: &str) {
                 .collect();
             crate::bridge::bridge::set_show_detail(show, episodes);
         }
-        Err(error) => crate::bridge::bridge::show_notification(
-            &format!("No se pudo cargar el podcast: {error}"),
-            "error",
-        ),
+        Err(error) => {
+            log::warn!("Failed to fetch show detail from network: {error}");
+            match crate::db::repo::ShowCacheRepo::get(browse_id) {
+                Ok(Some((show_model, episodes_model))) => {
+                    let show = crate::bridge::bridge::Show {
+                        id: show_model.id,
+                        title: show_model.title,
+                        author: show_model.author,
+                        description: show_model.description,
+                        thumbnail: show_model.thumbnail,
+                        episode_count: show_model.episode_count.unwrap_or(episodes_model.len() as i32),
+                    };
+                    let episodes = episodes_model
+                        .into_iter()
+                        .map(|ep| crate::bridge::bridge::Episode {
+                            id: ep.id,
+                            title: ep.title,
+                            show: ep.show,
+                            show_id: ep.show_id,
+                            description: ep.description,
+                            thumbnail: ep.thumbnail,
+                            duration_ms: ep.duration_ms,
+                        })
+                        .collect();
+                    crate::bridge::bridge::set_show_detail(show, episodes);
+                    crate::bridge::bridge::show_notification(
+                        "Cargada copia local sin conexión",
+                        "info",
+                    );
+                }
+                _ => {
+                    crate::bridge::bridge::show_notification(
+                        &format!("No se pudo cargar el podcast: {error}"),
+                        "error",
+                    );
+                }
+            }
+        }
     }
 }

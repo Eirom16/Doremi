@@ -41,6 +41,17 @@ pub struct FavoriteArtist {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FavoriteShow {
+    pub id: String,
+    pub title: String,
+    pub author: String,
+    pub description: String,
+    pub thumbnail: String,
+    pub episode_count: i32,
+    pub added_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Playlist {
     pub id: String,
     pub name: String,
@@ -140,7 +151,18 @@ impl FavoritesRepo {
                 params![artist_id],
                 |r| r.get::<_, i64>(0),
             )
-            .map(|c| c > 0)
+            .map(|count| count > 0)
+        })
+    }
+
+    pub fn is_favorite_show(show_id: &str) -> SqlResult<bool> {
+        with_db(|conn| {
+            conn.query_row(
+                "SELECT COUNT(*) FROM favorite_shows WHERE id = ?1",
+                params![show_id],
+                |r| r.get::<_, i64>(0),
+            )
+            .map(|count| count > 0)
         })
     }
 
@@ -264,6 +286,45 @@ impl FavoritesRepo {
                     name: r.get(1)?,
                     thumbnail: r.get(2)?,
                     added_at: r.get(3)?,
+                })
+            })?;
+            rows.collect()
+        })
+    }
+
+    pub fn add_show(show: &FavoriteShow) -> SqlResult<()> {
+        with_db(|conn| {
+            conn.execute(
+                "INSERT OR IGNORE INTO favorite_shows (id, title, author, description, thumbnail, episode_count)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                params![show.id, show.title, show.author, show.description, show.thumbnail, show.episode_count],
+            )?;
+            Ok(())
+        })
+    }
+
+    pub fn remove_show(show_id: &str) -> SqlResult<()> {
+        with_db(|conn| {
+            conn.execute("DELETE FROM favorite_shows WHERE id = ?1", params![show_id])?;
+            Ok(())
+        })
+    }
+
+    pub fn all_shows() -> SqlResult<Vec<FavoriteShow>> {
+        with_db(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT id, title, author, description, thumbnail, episode_count, added_at
+                 FROM favorite_shows ORDER BY added_at DESC",
+            )?;
+            let rows = stmt.query_map([], |r| {
+                Ok(FavoriteShow {
+                    id: r.get(0)?,
+                    title: r.get(1)?,
+                    author: r.get(2)?,
+                    description: r.get(3)?,
+                    thumbnail: r.get(4)?,
+                    episode_count: r.get(5)?,
+                    added_at: r.get(6)?,
                 })
             })?;
             rows.collect()
@@ -772,6 +833,109 @@ impl DownloadsRepo {
     }
 }
 
+pub struct ShowCacheRepo;
+
+impl ShowCacheRepo {
+    pub fn save(show: &crate::api::models::Show, episodes: &[crate::api::models::Episode]) -> SqlResult<()> {
+        with_db(|conn| {
+            conn.execute(
+                "INSERT OR REPLACE INTO cached_shows (id, title, author, description, thumbnail, episode_count)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                params![
+                    show.id,
+                    show.title,
+                    show.author,
+                    show.description,
+                    show.thumbnail,
+                    show.episode_count.unwrap_or(episodes.len() as i32)
+                ],
+            )?;
+
+            conn.execute(
+                "DELETE FROM cached_show_episodes WHERE show_id = ?1",
+                params![show.id],
+            )?;
+
+            for ep in episodes {
+                conn.execute(
+                    "INSERT OR REPLACE INTO cached_show_episodes (id, show_id, title, show_title, description, thumbnail, duration_ms, published_at, position)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                    params![
+                        ep.id,
+                        show.id,
+                        ep.title,
+                        ep.show,
+                        ep.description,
+                        ep.thumbnail,
+                        ep.duration_ms,
+                        ep.published_at,
+                        ep.position
+                    ],
+                )?;
+            }
+            Ok(())
+        })
+    }
+
+    pub fn get(show_id: &str) -> SqlResult<Option<(crate::api::models::Show, Vec<crate::api::models::Episode>)>> {
+        let guard = match crate::db::global().lock() {
+            Ok(g) => g,
+            Err(e) => e.into_inner(),
+        };
+        let conn = match guard.as_ref() {
+            Some(c) => c,
+            None => return Ok(None),
+        };
+
+        let show_row: Result<crate::api::models::Show, _> = conn.query_row(
+            "SELECT id, title, author, description, thumbnail, episode_count FROM cached_shows WHERE id = ?1",
+            params![show_id],
+            |r| {
+                Ok(crate::api::models::Show {
+                    id: r.get(0)?,
+                    title: r.get(1)?,
+                    author: r.get(2)?,
+                    description: r.get(3)?,
+                    thumbnail: r.get(4)?,
+                    episode_count: r.get(5)?,
+                    subscriber_count: None,
+                })
+            },
+        );
+
+        let show = match show_row {
+            Ok(s) => s,
+            Err(rusqlite::Error::QueryReturnedNoRows) => return Ok(None),
+            Err(e) => return Err(e),
+        };
+
+        let mut stmt = conn.prepare(
+            "SELECT id, title, show_title, description, thumbnail, duration_ms, published_at, position
+             FROM cached_show_episodes WHERE show_id = ?1 ORDER BY position ASC, added_at DESC",
+        )?;
+        let episode_rows = stmt.query_map(params![show_id], |r| {
+            Ok(crate::api::models::Episode {
+                id: r.get(0)?,
+                title: r.get(1)?,
+                show: r.get(2)?,
+                show_id: show_id.to_string(),
+                description: r.get(3)?,
+                thumbnail: r.get(4)?,
+                duration_ms: r.get(5)?,
+                published_at: r.get(6)?,
+                position: r.get(7)?,
+            })
+        })?;
+
+        let mut episodes = Vec::new();
+        for ep in episode_rows {
+            episodes.push(ep?);
+        }
+
+        Ok(Some((show, episodes)))
+    }
+}
+
 fn uuid_v4() -> String {
     use rand::RngExt;
     let mut rng = rand::rng();
@@ -785,7 +949,6 @@ fn uuid_v4() -> String {
     )
 }
 
-#[cfg(test)]
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -962,6 +1125,57 @@ mod tests {
                 Ok(())
             })
             .unwrap();
+        });
+    }
+
+    #[test]
+    fn test_show_cache_sql() {
+        with_test_conn(|| {
+            use crate::api::models::{Show, Episode};
+            let show = Show {
+                id: "show-1".to_string(),
+                title: "Test Show".to_string(),
+                author: "Author A".to_string(),
+                description: "Description of Show".to_string(),
+                thumbnail: "thumb_base64".to_string(),
+                episode_count: Some(2),
+                subscriber_count: None,
+            };
+            let episodes = vec![
+                Episode {
+                    id: "ep-1".to_string(),
+                    title: "Episode 1".to_string(),
+                    show: "Test Show".to_string(),
+                    show_id: "show-1".to_string(),
+                    description: "First episode".to_string(),
+                    thumbnail: "ep_thumb_1".to_string(),
+                    duration_ms: 300000,
+                    published_at: "2026-06-19".to_string(),
+                    position: Some(1),
+                },
+                Episode {
+                    id: "ep-2".to_string(),
+                    title: "Episode 2".to_string(),
+                    show: "Test Show".to_string(),
+                    show_id: "show-1".to_string(),
+                    description: "Second episode".to_string(),
+                    thumbnail: "ep_thumb_2".to_string(),
+                    duration_ms: 400000,
+                    published_at: "2026-06-20".to_string(),
+                    position: Some(2),
+                },
+            ];
+
+            ShowCacheRepo::save(&show, &episodes).unwrap();
+
+            let cached = ShowCacheRepo::get("show-1").unwrap();
+            assert!(cached.is_some());
+            let (cached_show, cached_eps) = cached.unwrap();
+            assert_eq!(cached_show.title, "Test Show");
+            assert_eq!(cached_show.episode_count, Some(2));
+            assert_eq!(cached_eps.len(), 2);
+            assert_eq!(cached_eps[0].title, "Episode 1");
+            assert_eq!(cached_eps[1].title, "Episode 2");
         });
     }
 }

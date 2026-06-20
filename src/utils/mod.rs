@@ -7,4 +7,6 @@ pub mod secure_storage;
 pub mod security;
 pub mod migration;
 pub mod errors;
+pub mod ytdlp_auth;
+pub mod dependencies;
 

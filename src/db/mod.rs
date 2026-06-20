@@ -226,6 +226,34 @@ impl Database {
             )?;
         }
 
+        if version < 9 {
+            conn.execute_batch(
+                "CREATE TABLE IF NOT EXISTS cached_shows (
+                    id TEXT PRIMARY KEY,
+                    title TEXT NOT NULL,
+                    author TEXT NOT NULL DEFAULT '',
+                    description TEXT NOT NULL DEFAULT '',
+                    thumbnail TEXT NOT NULL DEFAULT '',
+                    episode_count INTEGER NOT NULL DEFAULT 0,
+                    added_at TEXT NOT NULL DEFAULT (datetime('now'))
+                 );
+                 CREATE TABLE IF NOT EXISTS cached_show_episodes (
+                    id TEXT PRIMARY KEY,
+                    show_id TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    show_title TEXT NOT NULL DEFAULT '',
+                    description TEXT NOT NULL DEFAULT '',
+                    thumbnail TEXT NOT NULL DEFAULT '',
+                    duration_ms INTEGER NOT NULL DEFAULT 0,
+                    published_at TEXT NOT NULL DEFAULT '',
+                    position INTEGER,
+                    added_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    FOREIGN KEY (show_id) REFERENCES cached_shows(id) ON DELETE CASCADE
+                 );
+                 INSERT INTO schema_version (version) VALUES (9);"
+            )?;
+        }
+
         Ok(())
     }
 
@@ -261,6 +289,6 @@ mod tests {
         let version: i32 = conn
             .query_row("SELECT COALESCE(MAX(version), 0) FROM schema_version", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(version, 7);
+        assert_eq!(version, 9);
     }
 }

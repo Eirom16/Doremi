@@ -297,6 +297,62 @@ SettingsView::SettingsView(QWidget *parent)
     sep_sub->setStyleSheet(QString("color: %1;").arg(c.border.name()));
     content->addWidget(sep_sub);
 
+    // Downloads section
+    content->addWidget(section_header(std::string(doremi_tr("settings_downloads"))));
+    content->addSpacing(4);
+
+    // Location
+    auto *loc_widget = new QWidget(this);
+    loc_widget->setFixedHeight(36);
+    auto *loc_lay = new QHBoxLayout(loc_widget);
+    loc_lay->setContentsMargins(0, 0, 0, 0);
+    auto *loc_lbl = new QLabel(QString::fromStdString(std::string(doremi_tr("download_location"))), loc_widget);
+    loc_lbl->setFont(DesignTokens::getFont("body", 13));
+    loc_lbl->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
+    loc_lay->addWidget(loc_lbl);
+    loc_lay->addStretch(1);
+    
+    download_location_input_ = new QLineEdit(this);
+    download_location_input_->setStyleSheet(QString(
+        "QLineEdit {"
+        "    background-color: %1;"
+        "    border: 1px solid %2;"
+        "    border-radius: 6px;"
+        "    padding: 6px 12px;"
+        "    color: %3;"
+        "    font-size: 13px;"
+        "}"
+        "QLineEdit:focus {"
+        "    border-color: %4;"
+        "}"
+    ).arg(c.bg_elevated.name()).arg(c.border.name()).arg(c.text_primary.name()).arg(c.accent.name()));
+    download_location_input_->setFixedWidth(200);
+    loc_lay->addWidget(download_location_input_);
+
+    download_location_btn_ = new RippleButton(QString::fromStdString(std::string(doremi_tr("select_folder"))), this, RippleButton::Variant::Secondary);
+    download_location_btn_->setFixedWidth(140);
+    download_location_btn_->setFixedHeight(28);
+    loc_lay->addWidget(download_location_btn_);
+    content->addWidget(loc_widget);
+
+    // Format
+    download_format_cmb_ = new QComboBox(this);
+    download_format_cmb_->addItems({"MP3", "M4A", "Original"});
+    download_format_cmb_->setStyleSheet(comboStyle);
+    content->addWidget(combo_row(std::string(doremi_tr("download_format")), download_format_cmb_));
+
+    // Quality
+    download_quality_cmb_ = new QComboBox(this);
+    download_quality_cmb_->addItems({"Best", "320k", "256k", "192k", "128k"});
+    download_quality_cmb_->setStyleSheet(comboStyle);
+    content->addWidget(combo_row(std::string(doremi_tr("download_quality")), download_quality_cmb_));
+
+    content->addSpacing(12);
+    auto *sep_dl = new QFrame(this);
+    sep_dl->setFrameShape(QFrame::HLine);
+    sep_dl->setStyleSheet(QString("color: %1;").arg(c.border.name()));
+    content->addWidget(sep_dl);
+
     // Storage section
     content->addWidget(section_header(std::string(doremi_tr("settings_storage"))));
     content->addSpacing(4);
@@ -602,6 +658,24 @@ SettingsView::SettingsView(QWidget *parent)
     });
     QObject::connect(sub_glow_cb_, &AnimatedToggle::toggled, this, [this](bool v) {
         emit setting_changed("subtitle_glow_effect", v ? "true" : "false");
+    });
+
+    // Downloads connections
+    QObject::connect(download_location_input_, &QLineEdit::editingFinished, this, [this]() {
+        emit setting_changed("download_location", Ffi::to_std_string(download_location_input_->text()));
+    });
+    QObject::connect(download_location_btn_, &QPushButton::clicked, this, [this]() {
+        QString dir = QFileDialog::getExistingDirectory(this, QString::fromStdString(std::string(doremi_tr("select_folder"))), download_location_input_->text());
+        if (!dir.isEmpty()) {
+            download_location_input_->setText(dir);
+            emit setting_changed("download_location", Ffi::to_std_string(dir));
+        }
+    });
+    QObject::connect(download_format_cmb_, &QComboBox::currentTextChanged, this, [this](const QString &v) {
+        emit setting_changed("download_format", Ffi::to_std_string(v.toLower()));
+    });
+    QObject::connect(download_quality_cmb_, &QComboBox::currentTextChanged, this, [this](const QString &v) {
+        emit setting_changed("download_quality", Ffi::to_std_string(v.toLower()));
     });
 
     // Storage connections
@@ -928,6 +1002,34 @@ void SettingsView::set_subtitle_glow_effect(bool on) {
     sub_glow_cb_->blockSignals(true);
     sub_glow_cb_->setChecked(on);
     sub_glow_cb_->blockSignals(false);
+}
+
+void SettingsView::set_download_location(const std::string &location) {
+    download_location_input_->blockSignals(true);
+    download_location_input_->setText(QString::fromStdString(location));
+    download_location_input_->blockSignals(false);
+}
+
+void SettingsView::set_download_format(const std::string &format) {
+    download_format_cmb_->blockSignals(true);
+    int idx = -1;
+    if (format == "mp3") idx = 0;
+    else if (format == "m4a") idx = 1;
+    else if (format == "original") idx = 2;
+    if (idx >= 0) download_format_cmb_->setCurrentIndex(idx);
+    download_format_cmb_->blockSignals(false);
+}
+
+void SettingsView::set_download_quality(const std::string &quality) {
+    download_quality_cmb_->blockSignals(true);
+    int idx = -1;
+    if (quality == "best") idx = 0;
+    else if (quality == "320k") idx = 1;
+    else if (quality == "256k") idx = 2;
+    else if (quality == "192k") idx = 3;
+    else if (quality == "128k") idx = 4;
+    if (idx >= 0) download_quality_cmb_->setCurrentIndex(idx);
+    download_quality_cmb_->blockSignals(false);
 }
 
 void SettingsView::refresh_storage_sizes() {

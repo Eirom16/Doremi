@@ -17,17 +17,26 @@ pub fn get_stream_url(video_id: &str) -> Option<String> {
         return Some(entry.data);
     }
 
-    let output = std::process::Command::new("yt-dlp")
-        .args([
-            "-f",
-            "bestaudio/best",
-            "--get-url",
-            "--no-playlist",
-            "--no-warnings",
-            &format!("https://music.youtube.com/watch?v={video_id}"),
-        ])
-        .output()
-        .ok()?;
+    let mut cmd = std::process::Command::new("yt-dlp");
+    cmd.args([
+        "-f",
+        "bestaudio/best",
+        "--get-url",
+        "--no-playlist",
+        "--no-warnings",
+    ]);
+    if let Some(auth) = crate::utils::ytdlp_auth::prepare_ytdlp_auth() {
+        cmd.arg("--cookies");
+        cmd.arg(&auth.cookie_path);
+        for (key, val) in &auth.extra_headers {
+            cmd.arg("--add-header");
+            cmd.arg(format!("{}:{}", key, val));
+        }
+        // auth is dropped after cmd runs, cleaning up temp file
+    }
+    cmd.arg(&format!("https://music.youtube.com/watch?v={video_id}"));
+
+    let output = cmd.output().ok()?;
     cache_stream_output(video_id, output.status.success(), &output.stdout)
 }
 
@@ -38,18 +47,26 @@ pub async fn get_stream_url_async(video_id: &str) -> Option<String> {
         return Some(entry.data);
     }
 
-    let output = tokio::process::Command::new("yt-dlp")
-        .args([
-            "-f",
-            "bestaudio/best",
-            "--get-url",
-            "--no-playlist",
-            "--no-warnings",
-            &format!("https://music.youtube.com/watch?v={video_id}"),
-        ])
-        .output()
-        .await
-        .ok()?;
+    let mut cmd = tokio::process::Command::new("yt-dlp");
+    cmd.args([
+        "-f",
+        "bestaudio/best",
+        "--get-url",
+        "--no-playlist",
+        "--no-warnings",
+    ]);
+    if let Some(auth) = crate::utils::ytdlp_auth::prepare_ytdlp_auth() {
+        cmd.arg("--cookies");
+        cmd.arg(&auth.cookie_path);
+        for (key, val) in &auth.extra_headers {
+            cmd.arg("--add-header");
+            cmd.arg(format!("{}:{}", key, val));
+        }
+        // auth is dropped after cmd runs, cleaning up temp file
+    }
+    cmd.arg(&format!("https://music.youtube.com/watch?v={video_id}"));
+
+    let output = cmd.output().await.ok()?;
     cache_stream_output(video_id, output.status.success(), &output.stdout)
 }
 

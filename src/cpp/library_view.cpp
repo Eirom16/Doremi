@@ -19,11 +19,12 @@ constexpr LibraryTabSpec kLibraryTabs[] = {
     {"songs", "songs"},
     {"albums", "albums"},
     {"artists", "artists"},
+    {"shows", "shows"},
 };
 }
 
 LibraryView::LibraryView(QWidget *parent)
-    : QWidget(parent), authenticated_(false), active_tab_("")
+    : QWidget(parent), active_tab_(""), authenticated_(false)
 {
     const auto &c = DesignTokens::current();
 
@@ -112,7 +113,8 @@ QWidget *LibraryView::make_list_item(const std::string &text, const std::string 
     ci->set_item_id(id);
     ci->set_item_type(active_tab_ == "albums" ? "album" :
                       active_tab_ == "artists" ? "artist" :
-                      active_tab_ == "playlists" ? "playlist" : "song");
+                      active_tab_ == "playlists" ? "playlist" :
+                      active_tab_ == "shows" ? "show" : "song");
     
     // Find icon label and set special icon based on active tab
     auto labels = ci->findChildren<QLabel*>();
@@ -123,17 +125,22 @@ QWidget *LibraryView::make_list_item(const std::string &text, const std::string 
             if (active_tab_ == "playlists") iconName = "queue_music";
             else if (active_tab_ == "albums") iconName = "album";
             else if (active_tab_ == "artists") iconName = "person";
+            else if (active_tab_ == "shows") iconName = "podcasts";
             
             label->setPixmap(IconProvider::getIcon(iconName, c.text_secondary, 18).pixmap(36, 36));
         }
     }
     
     connect(ci, &ClickableItem::clicked, this, [this, text, sub, id]() {
-        Track track;
-        track.id = id;
-        track.title = text;
-        track.artist = sub;
-        emit play_requested(track);
+        if (active_tab_ == "shows") {
+            emit show_requested(id);
+        } else {
+            Track track;
+            track.id = id;
+            track.title = text;
+            track.artist = sub;
+            emit play_requested(track);
+        }
     });
     connect(ci, &ClickableItem::context_action, this, [this, id](const std::string &action, const std::string &) {
         if (action == "add_favorite" || action == "remove_favorite") {
@@ -143,6 +150,8 @@ QWidget *LibraryView::make_list_item(const std::string &text, const std::string 
                 emit remove_favorite_album_requested(id);
             } else if (active_tab_ == "artists") {
                 emit remove_favorite_artist_requested(id);
+            } else if (active_tab_ == "shows") {
+                emit remove_favorite_show_requested(id);
             }
         }
     });
@@ -295,6 +304,25 @@ void LibraryView::set_artists(const std::vector<Artist> &artists) {
     }
     for (const auto &a : artists) {
         list_->addWidget(make_list_item(static_cast<std::string>(a.name), "", static_cast<std::string>(a.id)));
+    }
+    list_->addStretch(1);
+    set_active_tab(active_tab_);
+}
+
+void LibraryView::set_shows(const std::vector<Show> &shows) {
+    active_tab_ = "shows";
+    clear_list();
+    if (shows.empty()) {
+        show_empty_state();
+        set_active_tab(active_tab_);
+        return;
+    }
+    for (const auto &s : shows) {
+        auto *ci = make_list_item(
+            static_cast<std::string>(s.title),
+            static_cast<std::string>(s.author),
+            static_cast<std::string>(s.id));
+        list_->addWidget(ci);
     }
     list_->addStretch(1);
     set_active_tab(active_tab_);

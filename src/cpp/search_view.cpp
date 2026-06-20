@@ -21,7 +21,8 @@ SearchView::SearchView(QWidget *parent)
     filters_->setSpacing(8);
     const std::vector<std::pair<const char *, const char *>> filterDefinitions = {
         {"Todo", "all"}, {"Canciones", "songs"}, {"Videos", "videos"},
-        {"Álbumes", "albums"}, {"Artistas", "artists"}, {"Playlists", "playlists"}
+        {"Álbumes", "albums"}, {"Artistas", "artists"}, {"Playlists", "playlists"},
+        {"Podcasts", "podcasts"}
     };
     for (const auto &[name, filterValue] : filterDefinitions) {
         auto *btn = new QPushButton(name, this);
