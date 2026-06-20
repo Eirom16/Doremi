@@ -1,7 +1,7 @@
+use crate::config::paths::AppDirs;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::Path;
-use crate::config::paths::AppDirs;
 
 pub fn export_backup(zip_path: &Path) -> bool {
     let dirs = AppDirs::global();
@@ -19,8 +19,8 @@ pub fn export_backup(zip_path: &Path) -> bool {
     };
 
     let mut zip = zip::ZipWriter::new(file);
-    let options = zip::write::FileOptions::default()
-        .compression_method(zip::CompressionMethod::Deflated);
+    let options =
+        zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
 
     // 1. Add database
     if db_path.exists() {

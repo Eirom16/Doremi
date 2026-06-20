@@ -1,6 +1,13 @@
 fn qt_cflags() -> Vec<String> {
     std::process::Command::new("pkg-config")
-        .args(["--cflags", "Qt6Core", "Qt6Widgets", "Qt6Gui", "Qt6WebEngineWidgets", "Qt6WebEngineCore"])
+        .args([
+            "--cflags",
+            "Qt6Core",
+            "Qt6Widgets",
+            "Qt6Gui",
+            "Qt6WebEngineWidgets",
+            "Qt6WebEngineCore",
+        ])
         .output()
         .map(|o| {
             String::from_utf8_lossy(&o.stdout)
@@ -13,7 +20,14 @@ fn qt_cflags() -> Vec<String> {
 
 fn qt_link_libs() {
     let output = std::process::Command::new("pkg-config")
-        .args(["--libs", "Qt6Core", "Qt6Widgets", "Qt6Gui", "Qt6WebEngineWidgets", "Qt6WebEngineCore"])
+        .args([
+            "--libs",
+            "Qt6Core",
+            "Qt6Widgets",
+            "Qt6Gui",
+            "Qt6WebEngineWidgets",
+            "Qt6WebEngineCore",
+        ])
         .output()
         .expect("pkg-config for Qt6 libs");
     let libs = String::from_utf8_lossy(&output.stdout);
@@ -29,15 +43,19 @@ fn qt_link_libs() {
 fn qt_moc_headers(build: &mut cc::Build, header: &str, out_dir: &std::path::Path) {
     let moc_path = "/usr/lib/qt6/moc";
     let header_path = std::path::Path::new("src/cpp").join(header);
-    let stem = std::path::Path::new(header).file_stem().unwrap().to_str().unwrap();
+    let stem = std::path::Path::new(header)
+        .file_stem()
+        .unwrap()
+        .to_str()
+        .unwrap();
     let moc_out = out_dir.join(format!("moc_{stem}.cpp"));
     let cxx_include = out_dir.join("cxxbridge").join("include");
-    
+
     // Ensure parent directory exists
     if let Some(parent) = moc_out.parent() {
         std::fs::create_dir_all(parent).unwrap_or_default();
     }
-    
+
     let status = std::process::Command::new(moc_path)
         .arg(&header_path)
         .arg("-o")
@@ -109,7 +127,6 @@ fn main() {
         .file("src/cpp/login_dialog.cpp")
         .file("src/cpp/sudo_dialog.cpp")
         .file("src/cpp/update_dialog.cpp")
-
         .flag_if_supported("-std=c++17")
         .flag_if_supported("-fPIC")
         .include("src/cpp");

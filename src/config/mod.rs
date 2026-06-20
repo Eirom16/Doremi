@@ -1,3 +1,3 @@
-pub mod settings;
 pub mod paths;
+pub mod settings;
 pub mod themes;

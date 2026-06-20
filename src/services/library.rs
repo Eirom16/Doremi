@@ -1,5 +1,5 @@
 use crate::api::client::ApiClient;
-use crate::services::library_cache::{LibraryCache, LibrarySource, CacheData};
+use crate::services::library_cache::{CacheData, LibraryCache, LibrarySource};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -30,17 +30,20 @@ impl LibraryService {
                 thumbnail: t.thumbnail,
             })
             .collect();
-        
+
         // Guardar en caché
         let cache = self.cache.write().await;
-        cache.set("songs", CacheData {
-            songs: songs.clone(),
-            albums: Vec::new(),
-            artists: Vec::new(),
-            playlists: Vec::new(),
-            source: LibrarySource::Remote,
-        });
-        
+        cache.set(
+            "songs",
+            CacheData {
+                songs: songs.clone(),
+                albums: Vec::new(),
+                artists: Vec::new(),
+                playlists: Vec::new(),
+                source: LibrarySource::Remote,
+            },
+        );
+
         crate::bridge::bridge::set_library_songs(songs);
     }
 
@@ -59,27 +62,33 @@ impl LibraryService {
                 privacy: String::new(),
             })
             .collect();
-        
+
         // Guardar en caché
         let cache = self.cache.write().await;
-        cache.set("playlists", CacheData {
-            songs: Vec::new(),
-            albums: Vec::new(),
-            artists: Vec::new(),
-            playlists: playlists.clone(),
-            source: LibrarySource::Remote,
-        });
+        cache.set(
+            "playlists",
+            CacheData {
+                songs: Vec::new(),
+                albums: Vec::new(),
+                artists: Vec::new(),
+                playlists: playlists.clone(),
+                source: LibrarySource::Remote,
+            },
+        );
 
         crate::bridge::bridge::set_context_playlists(
-            playlists.iter().map(|p| crate::bridge::bridge::Playlist {
-                id: p.id.clone(),
-                name: p.name.clone(),
-                description: p.description.clone(),
-                thumbnail: p.thumbnail.clone(),
-                track_count: p.track_count,
-                owner: p.owner.clone(),
-                privacy: p.privacy.clone(),
-            }).collect()
+            playlists
+                .iter()
+                .map(|p| crate::bridge::bridge::Playlist {
+                    id: p.id.clone(),
+                    name: p.name.clone(),
+                    description: p.description.clone(),
+                    thumbnail: p.thumbnail.clone(),
+                    track_count: p.track_count,
+                    owner: p.owner.clone(),
+                    privacy: p.privacy.clone(),
+                })
+                .collect(),
         );
         crate::bridge::bridge::set_library_playlists(playlists);
     }
@@ -99,16 +108,19 @@ impl LibraryService {
                 artist_id: a.artist_id.unwrap_or_default(),
             })
             .collect();
-        
+
         // Guardar en caché
         let cache = self.cache.write().await;
-        cache.set("albums", CacheData {
-            songs: Vec::new(),
-            albums: albums.clone(),
-            artists: Vec::new(),
-            playlists: Vec::new(),
-            source: LibrarySource::Remote,
-        });
+        cache.set(
+            "albums",
+            CacheData {
+                songs: Vec::new(),
+                albums: albums.clone(),
+                artists: Vec::new(),
+                playlists: Vec::new(),
+                source: LibrarySource::Remote,
+            },
+        );
 
         crate::bridge::bridge::set_library_albums(albums);
     }
@@ -126,16 +138,19 @@ impl LibraryService {
                 subscribers: a.subscriber_count.unwrap_or_default(),
             })
             .collect();
-        
+
         // Guardar en caché
         let cache = self.cache.write().await;
-        cache.set("artists", CacheData {
-            songs: Vec::new(),
-            albums: Vec::new(),
-            artists: artists.clone(),
-            playlists: Vec::new(),
-            source: LibrarySource::Remote,
-        });
+        cache.set(
+            "artists",
+            CacheData {
+                songs: Vec::new(),
+                albums: Vec::new(),
+                artists: artists.clone(),
+                playlists: Vec::new(),
+                source: LibrarySource::Remote,
+            },
+        );
 
         crate::bridge::bridge::set_library_artists(artists);
     }

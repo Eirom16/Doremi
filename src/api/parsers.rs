@@ -318,7 +318,8 @@ fn parse_library_album(renderer: &Value) -> Option<Album> {
                 {
                     artists.push(text.to_string());
                     if artist_id.is_none() {
-                        artist_id = run.pointer("/navigationEndpoint/browseEndpoint/browseId")
+                        artist_id = run
+                            .pointer("/navigationEndpoint/browseEndpoint/browseId")
                             .and_then(Value::as_str)
                             .map(String::from);
                     }
@@ -495,7 +496,10 @@ fn parse_top_result(card: &Value) -> Option<TopResultItem> {
     let type_lower = type_str.to_lowercase();
 
     if type_lower.contains("artist") || type_lower.contains("artista") {
-        let id = card.pointer("/onTap/browseEndpoint/browseId").and_then(Value::as_str)?.to_string();
+        let id = card
+            .pointer("/onTap/browseEndpoint/browseId")
+            .and_then(Value::as_str)?
+            .to_string();
         let name = runs(&card["title"]);
         let thumbnail = thumbnail(card);
         let subscriber_count = if subtitle_runs.len() >= 3 {
@@ -510,22 +514,31 @@ fn parse_top_result(card: &Value) -> Option<TopResultItem> {
             subscriber_count,
         }))
     } else if type_lower.contains("album") || type_lower.contains("álbum") {
-        let id = card.pointer("/onTap/browseEndpoint/browseId").and_then(Value::as_str)?.to_string();
+        let id = card
+            .pointer("/onTap/browseEndpoint/browseId")
+            .and_then(Value::as_str)?
+            .to_string();
         let title = runs(&card["title"]);
         let artist = if subtitle_runs.len() >= 3 {
-            subtitle_runs[2]["text"].as_str().unwrap_or_default().to_string()
+            subtitle_runs[2]["text"]
+                .as_str()
+                .unwrap_or_default()
+                .to_string()
         } else {
             String::new()
         };
         let artist_id = if subtitle_runs.len() >= 3 {
-            subtitle_runs[2].pointer("/navigationEndpoint/browseEndpoint/browseId")
+            subtitle_runs[2]
+                .pointer("/navigationEndpoint/browseEndpoint/browseId")
                 .and_then(Value::as_str)
                 .map(String::from)
         } else {
             None
         };
         let year = if subtitle_runs.len() >= 5 {
-            subtitle_runs[4]["text"].as_str().and_then(|s| s.parse::<i32>().ok())
+            subtitle_runs[4]["text"]
+                .as_str()
+                .and_then(|s| s.parse::<i32>().ok())
         } else {
             None
         };
@@ -540,12 +553,23 @@ fn parse_top_result(card: &Value) -> Option<TopResultItem> {
             artist_id,
         }))
     } else if type_lower.contains("song") || type_lower.contains("canci") {
-        let id = card.pointer("/onTap/watchEndpoint/videoId").and_then(Value::as_str)?.to_string();
+        let id = card
+            .pointer("/onTap/watchEndpoint/videoId")
+            .and_then(Value::as_str)?
+            .to_string();
         let title = runs(&card["title"]);
         let (artist, album) = if subtitle_runs.len() >= 3 {
-            let artist = subtitle_runs[2]["text"].as_str().unwrap_or_default().to_string();
+            let artist = subtitle_runs[2]["text"]
+                .as_str()
+                .unwrap_or_default()
+                .to_string();
             let album = if subtitle_runs.len() >= 5 {
-                Some(subtitle_runs[4]["text"].as_str().unwrap_or_default().to_string())
+                Some(
+                    subtitle_runs[4]["text"]
+                        .as_str()
+                        .unwrap_or_default()
+                        .to_string(),
+                )
             } else {
                 None
             };
@@ -565,10 +589,16 @@ fn parse_top_result(card: &Value) -> Option<TopResultItem> {
             stream_url: None,
         }))
     } else if type_lower.contains("video") {
-        let id = card.pointer("/onTap/watchEndpoint/videoId").and_then(Value::as_str)?.to_string();
+        let id = card
+            .pointer("/onTap/watchEndpoint/videoId")
+            .and_then(Value::as_str)?
+            .to_string();
         let title = runs(&card["title"]);
         let artist = if subtitle_runs.len() >= 3 {
-            subtitle_runs[2]["text"].as_str().unwrap_or_default().to_string()
+            subtitle_runs[2]["text"]
+                .as_str()
+                .unwrap_or_default()
+                .to_string()
         } else {
             String::new()
         };
@@ -584,10 +614,18 @@ fn parse_top_result(card: &Value) -> Option<TopResultItem> {
             stream_url: None,
         }))
     } else if type_lower.contains("playlist") {
-        let id = card.pointer("/onTap/browseEndpoint/browseId").and_then(Value::as_str)?.to_string();
+        let id = card
+            .pointer("/onTap/browseEndpoint/browseId")
+            .and_then(Value::as_str)?
+            .to_string();
         let title = runs(&card["title"]);
         let owner = if subtitle_runs.len() >= 3 {
-            Some(subtitle_runs[2]["text"].as_str().unwrap_or_default().to_string())
+            Some(
+                subtitle_runs[2]["text"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .to_string(),
+            )
         } else {
             None
         };
@@ -732,9 +770,18 @@ pub(crate) fn parse_search_page(
                     track_count: None,
                 }),
                 "shows" if !browse_id.is_empty() => {
-                    let author = subtitle.split('•').next().map(|s| s.trim()).unwrap_or("").to_string();
+                    let author = subtitle
+                        .split('•')
+                        .next()
+                        .map(|s| s.trim())
+                        .unwrap_or("")
+                        .to_string();
                     let ep_count = subtitle.split('•').nth(1).and_then(|s| {
-                        let s = s.trim().trim_end_matches("episodios").trim_end_matches("episodes").trim();
+                        let s = s
+                            .trim()
+                            .trim_end_matches("episodios")
+                            .trim_end_matches("episodes")
+                            .trim();
                         s.parse::<i32>().ok()
                     });
                     result.shows.push(Show {
@@ -752,9 +799,16 @@ pub(crate) fn parse_search_page(
                     if id.is_empty() {
                         continue;
                     }
-                    let show_name = subtitle.split('•').next().map(|s| s.trim()).unwrap_or("").to_string();
+                    let show_name = subtitle
+                        .split('•')
+                        .next()
+                        .map(|s| s.trim())
+                        .unwrap_or("")
+                        .to_string();
                     let duration = renderer
-                        .pointer("/fixedColumns/0/musicResponsiveListItemFixedColumnRenderer/text/runs")
+                        .pointer(
+                            "/fixedColumns/0/musicResponsiveListItemFixedColumnRenderer/text/runs",
+                        )
                         .and_then(Value::as_array)
                         .and_then(|runs| {
                             runs.get(0)
@@ -845,7 +899,8 @@ pub fn parse_album_detail(json: &Value, browse_id: &str) -> Result<(Album, Vec<T
         ));
     }
     let artist_text = text(&header["straplineTextOne"]);
-    let artist_id = header["straplineTextOne"]["runs"][0]["navigationEndpoint"]["browseEndpoint"]["browseId"]
+    let artist_id = header["straplineTextOne"]["runs"][0]["navigationEndpoint"]["browseEndpoint"]
+        ["browseId"]
         .as_str()
         .map(|s| s.to_string());
     let artists = if artist_text.is_empty() {
@@ -969,7 +1024,11 @@ pub fn parse_show_detail(json: &Value, browse_id: &str) -> Result<ShowDetail, St
     Ok(ShowDetail {
         show,
         episodes,
-        description: if description.is_empty() { None } else { Some(description) },
+        description: if description.is_empty() {
+            None
+        } else {
+            Some(description)
+        },
     })
 }
 

@@ -26,7 +26,9 @@ impl DoremiError {
                 format!("Error de red: {detail}. Verifica tu conexión a internet.")
             }
             DoremiError::Authentication(detail) => {
-                format!("Error de sesión/autenticación: {detail}. Por favor, vuelve a iniciar sesión.")
+                format!(
+                    "Error de sesión/autenticación: {detail}. Por favor, vuelve a iniciar sesión."
+                )
             }
             DoremiError::Database(detail) => {
                 format!("Error de base de datos local: {detail}.")

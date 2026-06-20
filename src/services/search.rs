@@ -161,18 +161,16 @@ impl SearchService {
                 };
                 (ffi_top, true)
             }
-            None => {
-                (
-                    crate::bridge::bridge::TopResult {
-                        id: String::new(),
-                        title: String::new(),
-                        subtitle: String::new(),
-                        thumbnail: String::new(),
-                        item_type: String::new(),
-                    },
-                    false,
-                )
-            }
+            None => (
+                crate::bridge::bridge::TopResult {
+                    id: String::new(),
+                    title: String::new(),
+                    subtitle: String::new(),
+                    thumbnail: String::new(),
+                    item_type: String::new(),
+                },
+                false,
+            ),
         };
 
         crate::bridge::bridge::set_search_results(

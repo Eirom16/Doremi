@@ -220,15 +220,18 @@ impl DoremiApp {
                         })
                         .collect();
                     crate::bridge::bridge::set_context_playlists(
-                        p_list.iter().map(|p| crate::bridge::bridge::Playlist {
-                            id: p.id.clone(),
-                            name: p.name.clone(),
-                            description: p.description.clone(),
-                            thumbnail: p.thumbnail.clone(),
-                            track_count: p.track_count,
-                            owner: p.owner.clone(),
-                            privacy: p.privacy.clone(),
-                        }).collect()
+                        p_list
+                            .iter()
+                            .map(|p| crate::bridge::bridge::Playlist {
+                                id: p.id.clone(),
+                                name: p.name.clone(),
+                                description: p.description.clone(),
+                                thumbnail: p.thumbnail.clone(),
+                                track_count: p.track_count,
+                                owner: p.owner.clone(),
+                                privacy: p.privacy.clone(),
+                            })
+                            .collect(),
                     );
                     set_library_playlists(p_list);
                 }

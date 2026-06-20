@@ -141,6 +141,7 @@ private:
 
     QSystemTrayIcon *tray_icon_;
     QAction *play_action_ = nullptr;
+    bool playback_playing_ = false;
     bool stop_on_close_ = false;
     std::string current_route_ = "home";
     std::string detail_return_route_ = "home";

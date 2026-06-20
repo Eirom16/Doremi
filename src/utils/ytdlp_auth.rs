@@ -29,14 +29,11 @@ pub fn prepare_ytdlp_auth() -> Option<YtDlpAuth> {
         .ok()
         .flatten()?;
 
-    let map: serde_json::Map<String, serde_json::Value> =
-        serde_json::from_str(&headers_json)
-            .map_err(|e| log::debug!("Failed to parse headers JSON: {e}"))
-            .ok()?;
+    let map: serde_json::Map<String, serde_json::Value> = serde_json::from_str(&headers_json)
+        .map_err(|e| log::debug!("Failed to parse headers JSON: {e}"))
+        .ok()?;
 
-    let cookie_str = map
-        .get("cookie")
-        .and_then(|v| v.as_str())?;
+    let cookie_str = map.get("cookie").and_then(|v| v.as_str())?;
 
     // 1. Write cookies to a temp file (Netscape format)
     let cookie_path = write_netscape_cookies(cookie_str)?;
@@ -65,7 +62,10 @@ pub fn prepare_ytdlp_auth() -> Option<YtDlpAuth> {
     }
 
     // Ensure a user-agent is always set
-    if !extra.iter().any(|(k, _)| k.eq_ignore_ascii_case("user-agent")) {
+    if !extra
+        .iter()
+        .any(|(k, _)| k.eq_ignore_ascii_case("user-agent"))
+    {
         extra.push((
             "user-agent".to_string(),
             "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Doremi/2".to_string(),
@@ -119,10 +119,7 @@ fn extract_sapisid_from_cookie(cookie_val: &str) -> Option<String> {
         if let Some(eq_idx) = part.find('=') {
             let name = part[..eq_idx].trim();
             let val = part[eq_idx + 1..].trim().replace('"', "");
-            if name == "__Secure-3PAPISID"
-                || name == "__Secure-1PAPISID"
-                || name == "SAPISID"
-            {
+            if name == "__Secure-3PAPISID" || name == "__Secure-1PAPISID" || name == "SAPISID" {
                 return Some(val);
             }
         }

@@ -1,13 +1,14 @@
-pub mod vlc_check;
-pub mod state;
-pub mod queue;
 pub mod audio;
+pub mod queue;
 pub mod resolver;
+pub mod state;
+pub mod stream_proxy;
+pub mod vlc_check;
 
-use std::sync::{Arc, Mutex};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::atomic::AtomicU64;
 use once_cell::sync::Lazy;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use audio::AudioEngine;
@@ -35,6 +36,7 @@ pub struct PlayerService {
     prefetch_task: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>>,
     crossfade_active: Arc<std::sync::atomic::AtomicBool>,
     crossfade_start_time: Arc<Mutex<Option<Instant>>>,
+    playback_generation: Arc<AtomicU64>,
 }
 
 impl PlayerService {
@@ -66,6 +68,7 @@ impl PlayerService {
             prefetch_task: Arc::new(Mutex::new(None)),
             crossfade_active: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             crossfade_start_time: Arc::new(Mutex::new(None)),
+            playback_generation: Arc::new(AtomicU64::new(0)),
         }
     }
 
@@ -94,7 +97,11 @@ impl PlayerService {
             let mut queue = self.queue.lock().unwrap();
             let was_current = !queue.is_empty() && queue.current_index() == index;
             let removed = queue.remove(index).is_some();
-            let replacement = if removed && was_current { queue.current().cloned() } else { None };
+            let replacement = if removed && was_current {
+                queue.current().cloned()
+            } else {
+                None
+            };
             (removed, was_current, replacement)
         };
 
@@ -125,6 +132,7 @@ impl PlayerService {
     }
 
     pub fn clear_queue(&self) {
+        self.playback_generation.fetch_add(1, Ordering::AcqRel);
         self.queue.lock().unwrap().clear();
         self.audio.stop();
         self.sync_queue_ui();
@@ -193,7 +201,11 @@ impl PlayerService {
     }
 
     pub fn stop(&self) {
-        if self.crossfade_active.swap(false, std::sync::atomic::Ordering::Relaxed) {
+        self.playback_generation.fetch_add(1, Ordering::AcqRel);
+        if self
+            .crossfade_active
+            .swap(false, std::sync::atomic::Ordering::Relaxed)
+        {
             *self.crossfade_start_time.lock().unwrap() = None;
             self.audio.complete_crossfade();
         }
@@ -207,6 +219,7 @@ impl PlayerService {
     }
 
     pub fn play_url(&self, url: &str) {
+        self.playback_generation.fetch_add(1, Ordering::AcqRel);
         let normalize = self.should_normalize();
         self.audio.play_url(url, normalize);
         drop(self.last_poll.lock().unwrap());
@@ -225,7 +238,12 @@ impl PlayerService {
     }
 
     fn play_track_info(&self, t: TrackInfo) {
-        if self.crossfade_active.swap(false, std::sync::atomic::Ordering::Relaxed) {
+        let generation = self.playback_generation.fetch_add(1, Ordering::AcqRel) + 1;
+
+        if self
+            .crossfade_active
+            .swap(false, std::sync::atomic::Ordering::Relaxed)
+        {
             *self.crossfade_start_time.lock().unwrap() = None;
             self.audio.complete_crossfade();
         }
@@ -254,9 +272,18 @@ impl PlayerService {
         }
 
         let mut needs_resolution = t.stream_url.is_empty();
-        if !needs_resolution && t.stream_url.starts_with("http") && crate::player::resolver::StreamResolver::is_url_expired(&t.stream_url) {
-            log::info!("Stream URL for {} is expired, forcing re-resolution", t.id);
-            needs_resolution = true;
+        if !needs_resolution && t.stream_url.starts_with("http") {
+            if crate::player::resolver::StreamResolver::is_url_expired(&t.stream_url) {
+                log::info!("Stream URL for {} is expired, forcing re-resolution", t.id);
+                needs_resolution = true;
+            } else if crate::player::resolver::StreamResolver::is_youtube_stream_url(&t.stream_url)
+            {
+                log::info!(
+                    "Stream URL for {} needs a playability probe, forcing resolver path",
+                    t.id
+                );
+                needs_resolution = true;
+            }
         }
 
         let normalize = self.should_normalize();
@@ -269,6 +296,7 @@ impl PlayerService {
             let queue = self.queue.clone();
             let audio = self.audio.clone();
             let id = t.id.clone();
+            let playback_generation = self.playback_generation.clone();
 
             self.audio.set_state(PlayState::Loading);
 
@@ -295,6 +323,10 @@ impl PlayerService {
                         };
 
                         if still_current {
+                            if playback_generation.load(Ordering::Acquire) != generation {
+                                log::info!("Resolved URL for {id}, but a newer playback request exists. Ignoring.");
+                                return;
+                            }
                             log::info!("Playing resolved URL for {id}");
                             audio.play_url(&resolved_url, normalize);
                         } else {
@@ -312,6 +344,10 @@ impl PlayerService {
                 }
             });
         } else {
+            if self.playback_generation.load(Ordering::Acquire) != generation {
+                log::info!("Skipping stale playback request for {}", t.id);
+                return;
+            }
             self.audio.play_url(&t.stream_url, normalize);
         }
     }
@@ -457,7 +493,10 @@ impl PlayerService {
         self.audio.poll_position();
 
         let mut crossfade_completed = false;
-        if self.crossfade_active.load(std::sync::atomic::Ordering::Relaxed) {
+        if self
+            .crossfade_active
+            .load(std::sync::atomic::Ordering::Relaxed)
+        {
             let mut elapsed_secs = 0.0;
             let mut start_time_present = false;
             {
@@ -475,15 +514,25 @@ impl PlayerService {
                 if progress >= 1.0 || self.audio.has_ended() {
                     log::info!("Crossfade completed or active track ended. Swapping players.");
                     self.audio.complete_crossfade();
-                    self.crossfade_active.store(false, std::sync::atomic::Ordering::Relaxed);
+                    self.crossfade_active
+                        .store(false, std::sync::atomic::Ordering::Relaxed);
                     *self.crossfade_start_time.lock().unwrap() = None;
-                    
+
                     // Trigger integrations and UI updates for the new track
                     if let Some(track) = self.current_track() {
                         let mut last_id = self.last_track_id.lock().unwrap();
                         *last_id = track.id.clone();
-                        crate::services::discord::update_presence(&track.title, &track.artist, &track.album, true);
-                        crate::services::lastfm::update_now_playing(&track.artist, &track.title, &track.album);
+                        crate::services::discord::update_presence(
+                            &track.title,
+                            &track.artist,
+                            &track.album,
+                            true,
+                        );
+                        crate::services::lastfm::update_now_playing(
+                            &track.artist,
+                            &track.title,
+                            &track.album,
+                        );
                         let title = track.title.clone();
                         let artist = track.artist.clone();
                         tokio::spawn(async move {
@@ -499,29 +548,44 @@ impl PlayerService {
         }
 
         if !crossfade_completed {
-            if self.audio.has_ended() {
+            if self.audio.has_ended()
+                && self
+                    .last_is_playing
+                    .load(std::sync::atomic::Ordering::Relaxed)
+            {
                 self.next();
-            } else if settings.player.crossfade_enabled 
+            } else if settings.player.crossfade_enabled
                 && self.audio.state().is_playing()
-                && !self.crossfade_active.load(std::sync::atomic::Ordering::Relaxed)
+                && !self
+                    .crossfade_active
+                    .load(std::sync::atomic::Ordering::Relaxed)
             {
                 let remaining_ms = self.audio.duration_ms() - self.audio.position_ms();
                 let crossfade_ms = (settings.player.crossfade_duration_sec * 1000) as i64;
                 if remaining_ms > 0 && remaining_ms <= crossfade_ms {
-                    let next_track = self.queue.lock().ok().and_then(|q| q.next_candidate().cloned());
+                    let next_track = self
+                        .queue
+                        .lock()
+                        .ok()
+                        .and_then(|q| q.next_candidate().cloned());
                     if let Some(track) = next_track {
-                        log::info!("Initiating crossfade transition from current track to {}", track.title);
+                        log::info!(
+                            "Initiating crossfade transition from current track to {}",
+                            track.title
+                        );
                         let normalize = settings.player.normalize_audio;
                         let queue = self.queue.clone();
                         let audio = self.audio.clone();
                         let crossfade_active = self.crossfade_active.clone();
                         let crossfade_start_time = self.crossfade_start_time.clone();
                         let id = track.id.clone();
-                        
+
                         tokio::spawn(async move {
                             let resolved_url = if track.stream_url.is_empty() {
                                 log::info!("Resolving stream URL for crossfade track {id}...");
-                                crate::player::resolver::StreamResolver::resolve(&id).await.ok()
+                                crate::player::resolver::StreamResolver::resolve(&id)
+                                    .await
+                                    .ok()
                             } else {
                                 Some(track.stream_url.clone())
                             };
@@ -538,18 +602,22 @@ impl PlayerService {
                                 if still_next {
                                     log::info!("Playing crossfade URL for next track {id}");
                                     if let Ok(mut q) = queue.lock() {
-                                        if let Some(target) = q.all_tracks().iter().position(|t| t.id == id) {
+                                        if let Some(target) =
+                                            q.all_tracks().iter().position(|t| t.id == id)
+                                        {
                                             if let Some(t) = q.track_mut(target) {
                                                 t.stream_url = url.clone();
                                             }
                                         }
                                         let _ = q.next();
                                     }
-                                    
+
                                     audio.play_crossfade(&url, normalize);
-                                    crossfade_active.store(true, std::sync::atomic::Ordering::Relaxed);
-                                    *crossfade_start_time.lock().unwrap() = Some(std::time::Instant::now());
-                                    
+                                    crossfade_active
+                                        .store(true, std::sync::atomic::Ordering::Relaxed);
+                                    *crossfade_start_time.lock().unwrap() =
+                                        Some(std::time::Instant::now());
+
                                     sync_queue_to_ui(&queue);
                                 }
                             }
@@ -578,7 +646,7 @@ impl PlayerService {
                         track.id,
                         track.title
                     );
-                    
+
                     // Invalidate cache
                     let cache_key = format!("stream_url:{}", track.id);
                     let _ = crate::db::cache::ResponseCache::invalidate(&cache_key);
@@ -607,7 +675,7 @@ impl PlayerService {
                         track.id,
                         track.title
                     );
-                    
+
                     // Clear the retried ID so we can try playing it again manually later
                     {
                         let mut retried_id = self.last_retried_track_id.lock().unwrap();
@@ -618,7 +686,7 @@ impl PlayerService {
                     self.audio.stop();
                     crate::bridge::bridge::show_notification(
                         &format!("Error de reproducción persistente en: {}", track.title),
-                        "error"
+                        "error",
                     );
                 }
             }
@@ -629,7 +697,8 @@ impl PlayerService {
     }
 
     pub fn apply_equalizer(&self, enabled: bool, preamp: f64, bands: &[f64], preset_name: &str) {
-        self.audio.apply_equalizer(enabled, preamp, bands, preset_name);
+        self.audio
+            .apply_equalizer(enabled, preamp, bands, preset_name);
     }
 
     pub fn set_sleep_timer(&self, minutes: i32) {
@@ -649,9 +718,7 @@ impl PlayerService {
         let dur = self.audio.duration_ms();
         let is_playing = state.is_playing();
 
-        crate::bridge::bridge::update_player_state(
-            state as i32, pos as i32, dur as i32,
-        );
+        crate::bridge::bridge::update_player_state(state as i32, pos as i32, dur as i32);
         crate::bridge::bridge::set_playing(is_playing);
 
         self.sync_queue_ui();
@@ -661,24 +728,26 @@ impl PlayerService {
             if thumb.is_empty() {
                 thumb = crate::bridge::bridge::get_or_create_thumbnail(&track.title, 0);
             }
-            crate::bridge::bridge::set_mini_player(
-                &track.title, &track.artist, &thumb,
-            );
-            crate::bridge::bridge::set_current_track(
-                crate::bridge::bridge::Track {
-                    id: track.id.clone(),
-                    title: track.title.clone(),
-                    artist: track.artist.clone(),
-                    album: track.album.clone(),
-                    duration_ms: track.duration_ms,
-                    thumbnail: thumb.clone(),
-                }
-            );
+            crate::bridge::bridge::set_mini_player(&track.title, &track.artist, &thumb);
+            crate::bridge::bridge::set_current_track(crate::bridge::bridge::Track {
+                id: track.id.clone(),
+                title: track.title.clone(),
+                artist: track.artist.clone(),
+                album: track.album.clone(),
+                duration_ms: track.duration_ms,
+                thumbnail: thumb.clone(),
+            });
             // Record in play history (only when playing new track at start)
             if is_playing && pos < 500 {
                 let _ = crate::db::repo::PlayHistoryRepo::record(
-                    &track.id, &track.title, &track.artist, &track.album,
-                    track.duration_ms, &thumb, dur as i64, false,
+                    &track.id,
+                    &track.title,
+                    &track.artist,
+                    &track.album,
+                    track.duration_ms,
+                    &thumb,
+                    dur as i64,
+                    false,
                 );
             }
 
@@ -690,19 +759,34 @@ impl PlayerService {
             *last_poll = now;
 
             let track_changed = *last_id != track.id;
-            let play_state_changed = is_playing != self.last_is_playing.load(std::sync::atomic::Ordering::Relaxed);
+            let play_state_changed = is_playing
+                != self
+                    .last_is_playing
+                    .load(std::sync::atomic::Ordering::Relaxed);
 
             if track_changed {
                 *last_id = track.id.clone();
-                self.last_is_playing.store(is_playing, std::sync::atomic::Ordering::Relaxed);
-                self.lastfm_scrobbled.store(false, std::sync::atomic::Ordering::Relaxed);
-                self.accumulated_playback_ms.store(0, std::sync::atomic::Ordering::Relaxed);
+                self.last_is_playing
+                    .store(is_playing, std::sync::atomic::Ordering::Relaxed);
+                self.lastfm_scrobbled
+                    .store(false, std::sync::atomic::Ordering::Relaxed);
+                self.accumulated_playback_ms
+                    .store(0, std::sync::atomic::Ordering::Relaxed);
 
                 // Trigger Discord RPC
-                crate::services::discord::update_presence(&track.title, &track.artist, &track.album, is_playing);
+                crate::services::discord::update_presence(
+                    &track.title,
+                    &track.artist,
+                    &track.album,
+                    is_playing,
+                );
                 // Trigger Last.fm Now Playing
                 if is_playing {
-                    crate::services::lastfm::update_now_playing(&track.artist, &track.title, &track.album);
+                    crate::services::lastfm::update_now_playing(
+                        &track.artist,
+                        &track.title,
+                        &track.album,
+                    );
                 }
 
                 // Trigger Dominant Colors extraction in background
@@ -735,19 +819,32 @@ impl PlayerService {
                     }
                 });
             } else if play_state_changed {
-                self.last_is_playing.store(is_playing, std::sync::atomic::Ordering::Relaxed);
+                self.last_is_playing
+                    .store(is_playing, std::sync::atomic::Ordering::Relaxed);
 
                 // Trigger Discord RPC
-                crate::services::discord::update_presence(&track.title, &track.artist, &track.album, is_playing);
+                crate::services::discord::update_presence(
+                    &track.title,
+                    &track.artist,
+                    &track.album,
+                    is_playing,
+                );
                 // Trigger Last.fm Now Playing if resuming
                 if is_playing {
-                    crate::services::lastfm::update_now_playing(&track.artist, &track.title, &track.album);
+                    crate::services::lastfm::update_now_playing(
+                        &track.artist,
+                        &track.title,
+                        &track.album,
+                    );
                 }
             }
 
             // Accumulate playback time and check for scrobbling
             if is_playing {
-                let accumulated = self.accumulated_playback_ms.fetch_add(elapsed_ms, std::sync::atomic::Ordering::Relaxed) + elapsed_ms;
+                let accumulated = self
+                    .accumulated_playback_ms
+                    .fetch_add(elapsed_ms, std::sync::atomic::Ordering::Relaxed)
+                    + elapsed_ms;
                 let duration_ms = if track.duration_ms > 0 {
                     track.duration_ms
                 } else {
@@ -756,34 +853,44 @@ impl PlayerService {
 
                 if duration_ms >= 30_000 {
                     let scrobble_threshold = std::cmp::min(duration_ms / 2, 240_000);
-                    if accumulated >= scrobble_threshold && !self.lastfm_scrobbled.load(std::sync::atomic::Ordering::Relaxed) {
-                        self.lastfm_scrobbled.store(true, std::sync::atomic::Ordering::Relaxed);
-                        crate::services::lastfm::scrobble(&track.artist, &track.title, &track.album);
+                    if accumulated >= scrobble_threshold
+                        && !self
+                            .lastfm_scrobbled
+                            .load(std::sync::atomic::Ordering::Relaxed)
+                    {
+                        self.lastfm_scrobbled
+                            .store(true, std::sync::atomic::Ordering::Relaxed);
+                        crate::services::lastfm::scrobble(
+                            &track.artist,
+                            &track.title,
+                            &track.album,
+                        );
                     }
                 }
             }
-            } else {
-                let mut last_id = self.last_track_id.lock().unwrap();
-                if !last_id.is_empty() {
-                    last_id.clear();
-                    self.last_is_playing.store(false, std::sync::atomic::Ordering::Relaxed);
-                    self.lastfm_scrobbled.store(false, std::sync::atomic::Ordering::Relaxed);
-                    self.accumulated_playback_ms.store(0, std::sync::atomic::Ordering::Relaxed);
+        } else {
+            let mut last_id = self.last_track_id.lock().unwrap();
+            if !last_id.is_empty() {
+                last_id.clear();
+                self.last_is_playing
+                    .store(false, std::sync::atomic::Ordering::Relaxed);
+                self.lastfm_scrobbled
+                    .store(false, std::sync::atomic::Ordering::Relaxed);
+                self.accumulated_playback_ms
+                    .store(0, std::sync::atomic::Ordering::Relaxed);
 
-                    crate::services::discord::disconnect();
-                }
-                crate::bridge::bridge::set_mini_player("", "", "");
-                crate::bridge::bridge::set_current_track(
-                    crate::bridge::bridge::Track {
-                        id: String::new(),
-                        title: String::new(),
-                        artist: String::new(),
-                        album: String::new(),
-                        duration_ms: 0,
-                        thumbnail: String::new(),
-                    }
-                );
+                crate::services::discord::disconnect();
             }
+            crate::bridge::bridge::set_mini_player("", "", "");
+            crate::bridge::bridge::set_current_track(crate::bridge::bridge::Track {
+                id: String::new(),
+                title: String::new(),
+                artist: String::new(),
+                album: String::new(),
+                duration_ms: 0,
+                thumbnail: String::new(),
+            });
+        }
     }
 
     fn sync_queue_ui(&self) {
@@ -795,11 +902,13 @@ impl PlayerService {
             return;
         }
 
+        let generation = self.playback_generation.fetch_add(1, Ordering::AcqRel) + 1;
         let queue = self.queue.clone();
         let audio = self.audio.clone();
         let loading = self.auto_queue_loading.clone();
         let prefetch_task = self.prefetch_task.clone();
         let preload_next = self.preload_next;
+        let playback_generation = self.playback_generation.clone();
         tokio::spawn(async move {
             let seed_id = seed.id.clone();
             let result = crate::api::innertube::related_tracks(&seed_id).await;
@@ -847,10 +956,23 @@ impl PlayerService {
                 let mut queue_guard = queue.lock().unwrap();
                 let added = queue_guard.append_unique(candidates, 25);
                 log::info!("Auto queue added {added} related tracks for {}", seed.id);
-                if added > 0 { queue_guard.next().cloned() } else { None }
+                if added > 0 {
+                    queue_guard.next().cloned()
+                } else {
+                    None
+                }
             };
             sync_queue_to_ui(&queue);
             persist_queue_snapshot(queue.clone());
+
+            if playback_generation.load(Ordering::Acquire) != generation {
+                log::info!(
+                    "Auto queue for {} is stale. Not starting playback.",
+                    seed.id
+                );
+                loading.store(false, Ordering::Release);
+                return;
+            }
 
             let normalize = {
                 let dirs = crate::config::paths::AppDirs::global();
@@ -877,6 +999,14 @@ impl PlayerService {
                             return;
                         }
                     }
+                }
+                if playback_generation.load(Ordering::Acquire) != generation {
+                    log::info!(
+                        "Resolved auto queue track {} is stale. Not starting playback.",
+                        track.id
+                    );
+                    loading.store(false, Ordering::Release);
+                    return;
                 }
                 audio.play_url(&track.stream_url, normalize);
                 if preload_next {
@@ -907,12 +1037,17 @@ impl PlayerService {
 
     pub fn restore_queue_session(&self) -> bool {
         let path = queue_session_path();
-        let Ok(content) = std::fs::read_to_string(&path) else { return false; };
+        let Ok(content) = std::fs::read_to_string(&path) else {
+            return false;
+        };
         let Ok(snapshot) = serde_json::from_str(&content) else {
             log::warn!("Ignoring invalid queue session at {}", path.display());
             return false;
         };
-        self.queue.lock().map(|mut queue| queue.restore(snapshot)).unwrap_or(false)
+        self.queue
+            .lock()
+            .map(|mut queue| queue.restore(snapshot))
+            .unwrap_or(false)
     }
 
     pub fn refresh_queue_ui(&self) {
@@ -926,7 +1061,9 @@ impl PlayerService {
 }
 
 fn queue_session_path() -> std::path::PathBuf {
-    crate::config::paths::AppDirs::global().data_dir().join("queue-session.json")
+    crate::config::paths::AppDirs::global()
+        .data_dir()
+        .join("queue-session.json")
 }
 
 fn persist_queue_snapshot(queue: Arc<Mutex<PlaybackQueue>>) {
@@ -937,11 +1074,15 @@ fn persist_queue_snapshot(queue: Arc<Mutex<PlaybackQueue>>) {
     let path = queue_session_path();
     let generation = QUEUE_PERSIST_GENERATION.fetch_add(1, Ordering::AcqRel) + 1;
     tokio::task::spawn_blocking(move || {
-        let Ok(_guard) = QUEUE_PERSIST_LOCK.lock() else { return; };
+        let Ok(_guard) = QUEUE_PERSIST_LOCK.lock() else {
+            return;
+        };
         if QUEUE_PERSIST_GENERATION.load(Ordering::Acquire) != generation {
             return;
         }
-        let Ok(data) = serde_json::to_vec_pretty(&snapshot) else { return; };
+        let Ok(data) = serde_json::to_vec_pretty(&snapshot) else {
+            return;
+        };
         if let Err(error) = crate::config::settings::write_private_file(&path, &data) {
             log::warn!("Could not persist queue session: {error}");
         }
@@ -953,12 +1094,19 @@ fn schedule_prefetch_task(
     task_slot: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>>,
     generation: u64,
 ) {
-    let candidate = queue.lock().ok().and_then(|queue| queue.next_candidate().cloned());
-    let Ok(mut slot) = task_slot.lock() else { return; };
+    let candidate = queue
+        .lock()
+        .ok()
+        .and_then(|queue| queue.next_candidate().cloned());
+    let Ok(mut slot) = task_slot.lock() else {
+        return;
+    };
     if let Some(handle) = slot.take() {
         handle.abort();
     }
-    let Some(candidate) = candidate else { return; };
+    let Some(candidate) = candidate else {
+        return;
+    };
 
     let handle = tokio::spawn(async move {
         // Debounce: short delay before starting work
@@ -974,7 +1122,10 @@ fn schedule_prefetch_task(
                 tokio::time::timeout(
                     Duration::from_secs(30),
                     crate::player::resolver::StreamResolver::resolve(&candidate.id),
-                ).await.ok().and_then(|r| r.ok())
+                )
+                .await
+                .ok()
+                .and_then(|r| r.ok())
             } else {
                 Some(candidate.stream_url.clone())
             }
@@ -982,24 +1133,34 @@ fn schedule_prefetch_task(
         let lyrics_service = crate::services::lyrics::LyricsService::new();
         let lyrics_future = lyrics_service.fetch_lyrics(&candidate.title, &candidate.artist);
         let artwork_future = prefetch_artwork(&candidate);
-        let (stream_url, _, artwork_path) = tokio::join!(stream_future, lyrics_future, artwork_future);
+        let (stream_url, _, artwork_path) =
+            tokio::join!(stream_future, lyrics_future, artwork_future);
 
         if PREFETCH_GENERATION.load(Ordering::Acquire) != generation {
             return; // stale after long-running work
         }
 
         if let Ok(mut queue_guard) = queue.lock() {
-            let still_next = queue_guard.next_candidate()
+            let still_next = queue_guard
+                .next_candidate()
                 .map(|track| track.id == candidate.id)
                 .unwrap_or(false);
             if !still_next {
                 crate::bridge::bridge::set_prefetch_status(&candidate.id, "stale");
                 return;
             }
-            if let Some(target) = queue_guard.all_tracks().iter().position(|track| track.id == candidate.id) {
+            if let Some(target) = queue_guard
+                .all_tracks()
+                .iter()
+                .position(|track| track.id == candidate.id)
+            {
                 if let Some(track) = queue_guard.track_mut(target) {
-                    if let Some(url) = stream_url { track.stream_url = url; }
-                    if let Some(path) = artwork_path { track.thumbnail = path; }
+                    if let Some(url) = stream_url {
+                        track.stream_url = url;
+                    }
+                    if let Some(path) = artwork_path {
+                        track.thumbnail = path;
+                    }
                 }
             }
         }
@@ -1013,22 +1174,32 @@ async fn prefetch_artwork(track: &TrackInfo) -> Option<String> {
     if track.thumbnail.is_empty() || !track.thumbnail.starts_with("http") {
         return None;
     }
-    let safe_id: String = track.id.chars()
+    let safe_id: String = track
+        .id
+        .chars()
         .filter(|character| character.is_ascii_alphanumeric() || matches!(character, '-' | '_'))
         .take(80)
         .collect();
-    if safe_id.is_empty() { return None; }
-    let path = crate::config::paths::AppDirs::global().artwork_cache_dir()
+    if safe_id.is_empty() {
+        return None;
+    }
+    let path = crate::config::paths::AppDirs::global()
+        .artwork_cache_dir()
         .join(format!("{safe_id}.img"));
     if path.exists() {
         return Some(path.to_string_lossy().into_owned());
     }
     let response = reqwest::Client::builder()
         .timeout(Duration::from_secs(8))
-        .build().ok()?
+        .build()
+        .ok()?
         .get(&track.thumbnail)
-        .send().await.ok()?;
-    if !response.status().is_success() { return None; }
+        .send()
+        .await
+        .ok()?;
+    if !response.status().is_success() {
+        return None;
+    }
     let bytes = response.bytes().await.ok()?;
     tokio::fs::write(&path, bytes).await.ok()?;
     Some(path.to_string_lossy().into_owned())
@@ -1039,7 +1210,9 @@ fn sync_queue_to_ui(queue: &Arc<Mutex<PlaybackQueue>>) {
         let queue = queue.lock().unwrap();
         (queue.all_tracks().to_vec(), queue.current_index() as i32)
     };
-        let queue_list = tracks.into_iter().map(|track| {
+    let queue_list = tracks
+        .into_iter()
+        .map(|track| {
             let thumbnail = if track.thumbnail.is_empty() {
                 crate::bridge::bridge::get_or_create_thumbnail(&track.title, 0)
             } else {
@@ -1053,8 +1226,9 @@ fn sync_queue_to_ui(queue: &Arc<Mutex<PlaybackQueue>>) {
                 duration_ms: track.duration_ms,
                 thumbnail,
             }
-        }).collect();
-        crate::bridge::bridge::set_playback_queue(queue_list, current_index);
+        })
+        .collect();
+    crate::bridge::bridge::set_playback_queue(queue_list, current_index);
 }
 
 impl Default for PlayerService {

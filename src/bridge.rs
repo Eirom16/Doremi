@@ -192,7 +192,12 @@ pub mod bridge {
         fn on_delete_playlist(playlist_id: &str);
         fn on_remove_playlist_track(playlist_id: &str, track_id: &str);
         fn on_download_requested(track: Track);
-        fn on_batch_download_requested(tracks: Vec<Track>, parent_id: &str, parent_title: &str, parent_thumbnail: &str);
+        fn on_batch_download_requested(
+            tracks: Vec<Track>,
+            parent_id: &str,
+            parent_title: &str,
+            parent_thumbnail: &str,
+        );
         fn on_download_cancel_requested(video_id: &str);
         fn on_add_to_queue_next(track: Track);
         fn on_add_to_queue_end(track: Track);
@@ -315,8 +320,14 @@ pub mod bridge {
         fn set_home_state(state: &str, message: &str);
         fn set_trending_items(items: Vec<HomeCard>);
         fn set_trending_state(state: &str, message: &str);
-        fn set_downloads_list(titles: Vec<String>, artists: Vec<String>, thumbnails: Vec<String>,
-                              video_ids: Vec<String>, statuses: Vec<String>, progresses: Vec<f64>);
+        fn set_downloads_list(
+            titles: Vec<String>,
+            artists: Vec<String>,
+            thumbnails: Vec<String>,
+            video_ids: Vec<String>,
+            statuses: Vec<String>,
+            progresses: Vec<f64>,
+        );
         fn set_download_progress(video_id: &str, percent: f64, status: &str);
         fn set_batch_download_progress(parent_id: &str, total: i32, completed: i32, percent: f64);
         fn set_player_shuffle(on: bool);
@@ -700,10 +711,7 @@ mod contract_tests {
             LibraryTab::from_key("playlists"),
             Some(LibraryTab::Playlists)
         );
-        assert_eq!(
-            LibraryTab::from_key("shows"),
-            Some(LibraryTab::Shows)
-        );
+        assert_eq!(LibraryTab::from_key("shows"), Some(LibraryTab::Shows));
         assert_eq!(LibraryTab::from_key("Canciones"), None);
         assert_eq!(LibraryTab::from_key("Songs"), None);
         assert_eq!(LibraryTab::from_key(""), None);
@@ -977,7 +985,12 @@ pub fn on_download_requested(track: bridge::Track) {
     }
 }
 
-pub fn on_batch_download_requested(tracks: Vec<bridge::Track>, parent_id: &str, parent_title: &str, parent_thumbnail: &str) {
+pub fn on_batch_download_requested(
+    tracks: Vec<bridge::Track>,
+    parent_id: &str,
+    parent_title: &str,
+    parent_thumbnail: &str,
+) {
     let batch: Vec<(String, String, String)> = tracks
         .iter()
         .map(|t| (t.id.clone(), t.title.clone(), t.artist.clone()))
@@ -1025,7 +1038,10 @@ pub fn on_create_playlist(name: &str, description: &str, privacy: &str) {
             let name = name.clone();
             let description = description.clone();
             move || crate::db::repo::PlaylistRepo::create(&name, &description)
-        }).await.ok().and_then(|r| r.ok());
+        })
+        .await
+        .ok()
+        .and_then(|r| r.ok());
 
         if created_id.is_some() && crate::api::auth::is_authenticated() {
             let _ = crate::api::endpoints::create_playlist(&name, &description, &privacy).await;
@@ -1061,7 +1077,12 @@ pub fn on_remove_playlist_track(playlist_id: &str, track_id: &str) {
     }
 }
 
-fn load_local_playlist_detail(playlist_id: &str) -> Option<(crate::bridge::bridge::Playlist, Vec<crate::bridge::bridge::Track>)> {
+fn load_local_playlist_detail(
+    playlist_id: &str,
+) -> Option<(
+    crate::bridge::bridge::Playlist,
+    Vec<crate::bridge::bridge::Track>,
+)> {
     let all = crate::db::repo::PlaylistRepo::all().ok()?;
     let p = all.into_iter().find(|pl| pl.id == playlist_id)?;
     let tracks = crate::db::repo::PlaylistRepo::tracks(playlist_id).ok()?;
@@ -1075,16 +1096,17 @@ fn load_local_playlist_detail(playlist_id: &str) -> Option<(crate::bridge::bridg
         owner: String::new(),
         privacy: String::new(),
     };
-    let btracks: Vec<crate::bridge::bridge::Track> = tracks.into_iter().map(|t| {
-        crate::bridge::bridge::Track {
+    let btracks: Vec<crate::bridge::bridge::Track> = tracks
+        .into_iter()
+        .map(|t| crate::bridge::bridge::Track {
             id: t.track_id,
             title: t.title,
             artist: t.artist,
             album: t.album,
             duration_ms: t.duration_ms,
             thumbnail: t.thumbnail,
-        }
-    }).collect();
+        })
+        .collect();
     Some((bp, btracks))
 }
 
@@ -1109,15 +1131,18 @@ fn push_context_and_library_playlists() {
             })
             .collect();
         crate::bridge::bridge::set_context_playlists(
-            p_list.iter().map(|p| crate::bridge::bridge::Playlist {
-                id: p.id.clone(),
-                name: p.name.clone(),
-                description: p.description.clone(),
-                thumbnail: p.thumbnail.clone(),
-                track_count: p.track_count,
-                owner: String::new(),
-                privacy: String::new(),
-            }).collect()
+            p_list
+                .iter()
+                .map(|p| crate::bridge::bridge::Playlist {
+                    id: p.id.clone(),
+                    name: p.name.clone(),
+                    description: p.description.clone(),
+                    thumbnail: p.thumbnail.clone(),
+                    track_count: p.track_count,
+                    owner: String::new(),
+                    privacy: String::new(),
+                })
+                .collect(),
         );
         crate::bridge::bridge::set_library_playlists(p_list);
     }
@@ -1136,10 +1161,8 @@ pub fn on_search_item_clicked(track: bridge::Track) {
 pub fn on_play_all(tracks: Vec<bridge::Track>, shuffle: bool) {
     let count = tracks.len();
     log::info!("Playing all {count} tracks (shuffle={shuffle})");
-    let track_infos: Vec<crate::player::queue::TrackInfo> = tracks
-        .into_iter()
-        .map(queue_track_from_dto)
-        .collect();
+    let track_infos: Vec<crate::player::queue::TrackInfo> =
+        tracks.into_iter().map(queue_track_from_dto).collect();
     with_player(|p| p.play_all_tracks(track_infos, shuffle));
 }
 
@@ -1965,9 +1988,14 @@ pub fn on_library_search(tab: &str, query: &str, sort_by: &str) {
     let tab = tab.to_string();
     let query = query.to_string();
     let sort_by = sort_by.to_string();
-    
+
     tokio::spawn(async move {
-        log::info!("Library search: tab={}, query={}, sort_by={}", tab, query, sort_by);
+        log::info!(
+            "Library search: tab={}, query={}, sort_by={}",
+            tab,
+            query,
+            sort_by
+        );
         // TODO: Implementar búsqueda real en caché
         // Por ahora solo hace logging
     });
@@ -2005,7 +2033,7 @@ pub fn get_artist_favorite_state(artist_id: &str) -> bool {
 pub fn on_update_playlist_privacy(playlist_id: &str, privacy: &str) {
     let playlist_id = playlist_id.to_string();
     let privacy = privacy.to_string();
-    
+
     tokio::spawn(async move {
         use crate::db::repo::PlaylistRepo;
         if let Ok(mut playlist) = PlaylistRepo::get(&playlist_id) {
@@ -2020,11 +2048,11 @@ pub fn on_update_playlist_privacy(playlist_id: &str, privacy: &str) {
 /// Cargar continuations de una playlist (para paginación)
 pub fn on_playlist_load_continuations(playlist_id: &str) {
     let playlist_id = playlist_id.to_string();
-    
+
     tokio::spawn(async move {
         use crate::api::client::ApiClient;
         let _api = ApiClient::new();
-        
+
         // TODO: Implementar lógica de continuations
         // Esta función cargará más tracks de una playlist si existen continuations
         log::info!("Loading continuations for playlist: {}", playlist_id);

@@ -38,8 +38,7 @@ impl LyricsService {
         let clean_title = Self::clean_title(title).to_lowercase();
         let clean_artist = Self::clean_artist(artist).to_lowercase();
 
-        if let Some(entry) =
-            crate::db::lyrics_cache::LyricsCache::get(&clean_artist, &clean_title)
+        if let Some(entry) = crate::db::lyrics_cache::LyricsCache::get(&clean_artist, &clean_title)
         {
             if entry.plain_lyrics.is_empty() && entry.synced_lyrics.is_empty() {
                 return Ok(None);

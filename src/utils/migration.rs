@@ -1,10 +1,10 @@
-use std::path::{Path, PathBuf};
-use std::fs;
-use std::process::Command;
 use crate::config::paths::AppDirs;
 use crate::config::settings::AppSettings;
-use crate::utils::secure_storage::{self, LastFmCredentials};
 use crate::utils::backup::export_backup;
+use crate::utils::secure_storage::{self, LastFmCredentials};
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::process::Command;
 
 #[derive(Debug, Clone, Default)]
 pub struct MigrationSummary {
@@ -43,7 +43,7 @@ fn clear_legacy(account: &str) -> bool {
 
 pub fn run_migration() -> Result<Option<MigrationSummary>, String> {
     let home = std::env::var("HOME").unwrap_or_else(|_| "/home/eirom".to_string());
-    
+
     let xdg_config = std::env::var("XDG_CONFIG_HOME")
         .map(PathBuf::from)
         .unwrap_or_else(|_| PathBuf::from(&home).join(".config"));
@@ -104,7 +104,9 @@ pub fn run_migration_with_paths(
                     summary.errors.push(format!("Failed to save settings: {e}"));
                 }
             } else {
-                summary.errors.push("Failed to parse legacy settings.toml".to_string());
+                summary
+                    .errors
+                    .push("Failed to parse legacy settings.toml".to_string());
             }
         }
     }
@@ -193,7 +195,9 @@ pub fn run_migration_with_paths(
             // Rename database to mark as migrated
             let migrated_db_path = legacy_data_dir.join("pyrolist.db.migrated");
             if let Err(e) = fs::rename(&legacy_db_path, &migrated_db_path) {
-                summary.errors.push(format!("Failed to rename legacy database: {e}"));
+                summary
+                    .errors
+                    .push(format!("Failed to rename legacy database: {e}"));
             }
         }
     }
@@ -212,7 +216,9 @@ pub fn run_migration_with_paths(
                     for entry in entries.flatten() {
                         let path = entry.path();
                         let dest = new_downloads.join(path.file_name().unwrap());
-                        if fs::rename(&path, &dest).is_ok() || fs::copy(&path, &dest).map(|_| ()).is_ok() {
+                        if fs::rename(&path, &dest).is_ok()
+                            || fs::copy(&path, &dest).map(|_| ()).is_ok()
+                        {
                             summary.files_moved += 1;
                         }
                     }
@@ -223,7 +229,9 @@ pub fn run_migration_with_paths(
                 let path = entry.path();
                 let dest = new_downloads.join(path.file_name().unwrap());
                 if !dest.exists() {
-                    if fs::rename(&path, &dest).is_ok() || fs::copy(&path, &dest).map(|_| ()).is_ok() {
+                    if fs::rename(&path, &dest).is_ok()
+                        || fs::copy(&path, &dest).map(|_| ()).is_ok()
+                    {
                         summary.files_moved += 1;
                     }
                 }
@@ -241,7 +249,8 @@ pub fn run_migration_with_paths(
                 let path = entry.path();
                 let dest = new_artwork.join(path.file_name().unwrap());
                 if !dest.exists() {
-                    let _ = fs::rename(&path, &dest).or_else(|_| fs::copy(&path, &dest).map(|_| ()));
+                    let _ =
+                        fs::rename(&path, &dest).or_else(|_| fs::copy(&path, &dest).map(|_| ()));
                 }
             }
         }
@@ -257,7 +266,8 @@ pub fn run_migration_with_paths(
                 let path = entry.path();
                 let dest = new_lyrics.join(path.file_name().unwrap());
                 if !dest.exists() {
-                    let _ = fs::rename(&path, &dest).or_else(|_| fs::copy(&path, &dest).map(|_| ()));
+                    let _ =
+                        fs::rename(&path, &dest).or_else(|_| fs::copy(&path, &dest).map(|_| ()));
                 }
             }
         }
@@ -353,7 +363,13 @@ mod tests {
         conn.execute(
             "INSERT INTO play_history (video_id, title, artist, played_at, duration_ms)
              VALUES (?1, ?2, ?3, ?4, ?5)",
-            params!["track-1", "Song A", "Artist X", "2026-06-12 12:00:00", 180000],
+            params![
+                "track-1",
+                "Song A",
+                "Artist X",
+                "2026-06-12 12:00:00",
+                180000
+            ],
         )
         .unwrap();
 
@@ -433,8 +449,9 @@ font_size = 14
             &doremi_config,
             &doremi_data,
             &doremi_cache,
-        ).unwrap();
-        
+        )
+        .unwrap();
+
         assert_eq!(summary.tracks_migrated, 1);
         assert_eq!(summary.recently_played_migrated, 1);
         assert_eq!(summary.downloads_migrated, 1);
@@ -450,28 +467,35 @@ font_size = 14
 
         // 7. Verify migrated database contents
         crate::db::with_db(|conn| {
-            let count_tracks: i32 = conn.query_row(
-                "SELECT COUNT(*) FROM favorite_tracks WHERE id = 'track-1'",
-                [],
-                |r| r.get(0),
-            ).unwrap();
+            let count_tracks: i32 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM favorite_tracks WHERE id = 'track-1'",
+                    [],
+                    |r| r.get(0),
+                )
+                .unwrap();
             assert_eq!(count_tracks, 1);
 
-            let count_history: i32 = conn.query_row(
-                "SELECT COUNT(*) FROM recently_played WHERE track_id = 'track-1'",
-                [],
-                |r| r.get(0),
-            ).unwrap();
+            let count_history: i32 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM recently_played WHERE track_id = 'track-1'",
+                    [],
+                    |r| r.get(0),
+                )
+                .unwrap();
             assert_eq!(count_history, 1);
 
-            let file_path: String = conn.query_row(
-                "SELECT file_path FROM downloads WHERE video_id = 'track-1'",
-                [],
-                |r| r.get(0),
-            ).unwrap();
+            let file_path: String = conn
+                .query_row(
+                    "SELECT file_path FROM downloads WHERE video_id = 'track-1'",
+                    [],
+                    |r| r.get(0),
+                )
+                .unwrap();
             assert!(file_path.contains("/Doremi/downloads/"));
             Ok(())
-        }).unwrap();
+        })
+        .unwrap();
 
         // Clean up temp dir
         let _ = fs::remove_dir_all(temp_dir);

@@ -79,7 +79,11 @@ pub static CURRENT_THEME_MODE: AtomicUsize = AtomicUsize::new(0); // 0 = dark, 1
 pub static THEME_APPLYING: AtomicBool = AtomicBool::new(false);
 
 pub fn current() -> &'static ColorScheme {
-    if CURRENT_THEME_MODE.load(Ordering::Relaxed) == 0 { &DARK } else { &LIGHT }
+    if CURRENT_THEME_MODE.load(Ordering::Relaxed) == 0 {
+        &DARK
+    } else {
+        &LIGHT
+    }
 }
 
 pub fn set_theme_mode(dark: bool) {
@@ -88,23 +92,49 @@ pub fn set_theme_mode(dark: bool) {
 
 /// EQ band labels in Hz
 pub const EQ_BAND_LABELS: [&str; 10] = [
-    "60Hz", "170Hz", "310Hz", "600Hz", "1kHz",
-    "3kHz", "6kHz", "12kHz", "14kHz", "16kHz",
+    "60Hz", "170Hz", "310Hz", "600Hz", "1kHz", "3kHz", "6kHz", "12kHz", "14kHz", "16kHz",
 ];
 
 /// Equalizer presets: (preamp, [10 bands])
 pub fn eq_presets() -> HashMap<&'static str, (f64, [f64; 10])> {
     let mut m = HashMap::new();
-    m.insert("Flat",         (0.0,  [0.0; 10]));
-    m.insert("Bass Boost",   (2.0,  [6.0, 5.0, 4.0, 2.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]));
-    m.insert("Treble Boost", (0.0,  [0.0, 0.0, 0.0, 0.0, 0.0, 2.0, 4.0, 5.0, 6.0, 6.0]));
-    m.insert("Vocal",        (0.0,  [-2.0,-1.0, 0.0, 2.0, 4.0, 4.0, 3.0, 2.0, 1.0, 0.0]));
-    m.insert("Classical",    (0.0,  [4.0, 3.0, 2.0, 0.0, 0.0, 0.0, 0.0, 2.0, 3.0, 4.0]));
-    m.insert("Electronic",   (2.0,  [4.0, 3.0, 0.0, 2.0, 0.0, 0.0, 2.0, 3.0, 4.0, 4.0]));
-    m.insert("Hip-Hop",      (2.0,  [5.0, 4.0, 2.0, 3.0, 0.0, 0.0, 1.0, 2.0, 3.0, 4.0]));
-    m.insert("Rock",         (1.0,  [4.0, 3.0, 2.0, 0.0,-1.0,-1.0, 0.0, 2.0, 3.0, 4.0]));
-    m.insert("Jazz",         (0.0,  [3.0, 2.0, 1.0, 2.0, 0.0, 0.0, 1.0, 2.0, 3.0, 3.0]));
-    m.insert("Pop",          (0.0,  [-1.0, 0.0, 2.0, 3.0, 4.0, 3.0, 2.0, 0.0,-1.0,-1.0]));
+    m.insert("Flat", (0.0, [0.0; 10]));
+    m.insert(
+        "Bass Boost",
+        (2.0, [6.0, 5.0, 4.0, 2.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
+    );
+    m.insert(
+        "Treble Boost",
+        (0.0, [0.0, 0.0, 0.0, 0.0, 0.0, 2.0, 4.0, 5.0, 6.0, 6.0]),
+    );
+    m.insert(
+        "Vocal",
+        (0.0, [-2.0, -1.0, 0.0, 2.0, 4.0, 4.0, 3.0, 2.0, 1.0, 0.0]),
+    );
+    m.insert(
+        "Classical",
+        (0.0, [4.0, 3.0, 2.0, 0.0, 0.0, 0.0, 0.0, 2.0, 3.0, 4.0]),
+    );
+    m.insert(
+        "Electronic",
+        (2.0, [4.0, 3.0, 0.0, 2.0, 0.0, 0.0, 2.0, 3.0, 4.0, 4.0]),
+    );
+    m.insert(
+        "Hip-Hop",
+        (2.0, [5.0, 4.0, 2.0, 3.0, 0.0, 0.0, 1.0, 2.0, 3.0, 4.0]),
+    );
+    m.insert(
+        "Rock",
+        (1.0, [4.0, 3.0, 2.0, 0.0, -1.0, -1.0, 0.0, 2.0, 3.0, 4.0]),
+    );
+    m.insert(
+        "Jazz",
+        (0.0, [3.0, 2.0, 1.0, 2.0, 0.0, 0.0, 1.0, 2.0, 3.0, 3.0]),
+    );
+    m.insert(
+        "Pop",
+        (0.0, [-1.0, 0.0, 2.0, 3.0, 4.0, 3.0, 2.0, 0.0, -1.0, -1.0]),
+    );
     m
 }
 
@@ -112,7 +142,8 @@ pub fn eq_presets() -> HashMap<&'static str, (f64, [f64; 10])> {
 pub async fn extract_dominant_color(image_url: &str) -> Option<String> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(5))
-        .build().ok()?;
+        .build()
+        .ok()?;
     let resp = client.get(image_url).send().await.ok()?;
     let bytes = resp.bytes().await.ok()?;
     extract_dominant_from_bytes(&bytes)
@@ -122,7 +153,9 @@ fn extract_dominant_from_bytes(bytes: &[u8]) -> Option<String> {
     let img = image::load_from_memory(bytes).ok()?;
     let rgb = img.to_rgb8();
     let (w, h) = rgb.dimensions();
-    if w == 0 || h == 0 { return None; }
+    if w == 0 || h == 0 {
+        return None;
+    }
 
     // Sample center zone (25%-75%)
     let x_start = (w as f64 * 0.25) as u32;
@@ -145,7 +178,9 @@ fn extract_dominant_from_bytes(bytes: &[u8]) -> Option<String> {
         }
     }
 
-    if count == 0 { return None; }
+    if count == 0 {
+        return None;
+    }
 
     let r_avg = (r_sum / count) as f64 / 255.0;
     let g_avg = (g_sum / count) as f64 / 255.0;
@@ -157,10 +192,12 @@ fn extract_dominant_from_bytes(bytes: &[u8]) -> Option<String> {
     let val = val.max(0.6);
     let (r, g, b) = hsv_to_rgb(hue, sat, val);
 
-    Some(format!("#{:02X}{:02X}{:02X}",
+    Some(format!(
+        "#{:02X}{:02X}{:02X}",
         (r * 255.0) as u8,
         (g * 255.0) as u8,
-        (b * 255.0) as u8))
+        (b * 255.0) as u8
+    ))
 }
 
 fn rgb_to_hsv(r: f64, g: f64, b: f64) -> (f64, f64, f64) {

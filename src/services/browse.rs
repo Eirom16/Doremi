@@ -133,7 +133,10 @@ pub async fn load_show(browse_id: &str) {
                 author: detail.show.author,
                 description: detail.show.description,
                 thumbnail: detail.show.thumbnail,
-                episode_count: detail.show.episode_count.unwrap_or(detail.episodes.len() as i32),
+                episode_count: detail
+                    .show
+                    .episode_count
+                    .unwrap_or(detail.episodes.len() as i32),
             };
             let episodes = detail
                 .episodes
@@ -160,7 +163,9 @@ pub async fn load_show(browse_id: &str) {
                         author: show_model.author,
                         description: show_model.description,
                         thumbnail: show_model.thumbnail,
-                        episode_count: show_model.episode_count.unwrap_or(episodes_model.len() as i32),
+                        episode_count: show_model
+                            .episode_count
+                            .unwrap_or(episodes_model.len() as i32),
                     };
                     let episodes = episodes_model
                         .into_iter()

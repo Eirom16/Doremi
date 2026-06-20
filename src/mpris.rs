@@ -1,3 +1,4 @@
+use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -5,7 +6,6 @@ use tokio;
 use zbus::connection;
 use zbus::interface;
 use zbus::zvariant::{OwnedObjectPath, OwnedValue, Value};
-use once_cell::sync::Lazy;
 
 use crate::player::PlayerService;
 
@@ -51,7 +51,10 @@ impl MprisService {
         Self { player }
     }
 
-    pub async fn start_with_shutdown(self, rx: tokio::sync::oneshot::Receiver<()>) -> zbus::Result<()> {
+    pub async fn start_with_shutdown(
+        self,
+        rx: tokio::sync::oneshot::Receiver<()>,
+    ) -> zbus::Result<()> {
         let conn = connection::Builder::session()?
             .name("org.mpris.MediaPlayer2.doremi")?
             .build()
@@ -234,7 +237,9 @@ impl MprisPlayer {
     }
 
     fn track_id(&self) -> OwnedObjectPath {
-        let id = self.player.current_track()
+        let id = self
+            .player
+            .current_track()
             .map(|t| format!("/doremi/track/{}", t.id))
             .unwrap_or_else(|| "/doremi/track/none".into());
         zbus::zvariant::OwnedObjectPath::try_from(id.as_str()).unwrap_or_else(|_| {
@@ -305,7 +310,11 @@ impl MprisPlayer {
 
     #[zbus(property)]
     fn playback_status(&self) -> &str {
-        if self.player.is_playing() { "Playing" } else { "Paused" }
+        if self.player.is_playing() {
+            "Playing"
+        } else {
+            "Paused"
+        }
     }
 
     #[zbus(property)]
@@ -334,7 +343,10 @@ impl MprisPlayer {
             let len = (track.duration_ms.max(0) as i64) * 1000;
             dict.insert("mpris:length".into(), OwnedValue::from(len));
             dict.insert("xesam:title".into(), Self::str_val(&track.title));
-            dict.insert("xesam:artist".into(), Self::str_vec_val(vec![&track.artist]));
+            dict.insert(
+                "xesam:artist".into(),
+                Self::str_vec_val(vec![&track.artist]),
+            );
             if !track.album.is_empty() {
                 dict.insert("xesam:album".into(), Self::str_val(&track.album));
             }

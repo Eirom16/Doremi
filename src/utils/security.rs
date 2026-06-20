@@ -16,8 +16,8 @@ pub fn redact_url(value: &str) -> String {
 }
 
 pub fn redact_secrets(text: &str) -> String {
-    use std::sync::OnceLock;
     use regex::Regex;
+    use std::sync::OnceLock;
 
     let sentinels = [
         "sentinel-google-secret",
@@ -34,25 +34,27 @@ pub fn redact_secrets(text: &str) -> String {
     let re_header = RE_HEADER.get_or_init(|| {
         Regex::new(r"(?i)(authorization|auth|cookie|cookies)(\s*[:=]\s*)[^\r\n]+").unwrap()
     });
-    redacted = re_header.replace_all(&redacted, |caps: &regex::Captures| {
-        format!("{}{}<redacted>", &caps[1], &caps[2])
-    }).into_owned();
+    redacted = re_header
+        .replace_all(&redacted, |caps: &regex::Captures| {
+            format!("{}{}<redacted>", &caps[1], &caps[2])
+        })
+        .into_owned();
 
     static RE_KEYVAL: OnceLock<Regex> = OnceLock::new();
     let re_keyval = RE_KEYVAL.get_or_init(|| {
         Regex::new(r"(?i)(password|passwd|pass|contraseña|token|session_key|sessionkey|sk|api_key|apikey|api_secret|apisecret|client_secret|clientsecret|api_sig)(\s*[:=]\s*)[^\s\r\n,;]+").unwrap()
     });
-    redacted = re_keyval.replace_all(&redacted, |caps: &regex::Captures| {
-        format!("{}{}<redacted>", &caps[1], &caps[2])
-    }).into_owned();
+    redacted = re_keyval
+        .replace_all(&redacted, |caps: &regex::Captures| {
+            format!("{}{}<redacted>", &caps[1], &caps[2])
+        })
+        .into_owned();
 
     static RE_URL: OnceLock<Regex> = OnceLock::new();
-    let re_url = RE_URL.get_or_init(|| {
-        Regex::new(r"https?://[^\s]+").unwrap()
-    });
-    redacted = re_url.replace_all(&redacted, |caps: &regex::Captures| {
-        redact_url(&caps[0])
-    }).into_owned();
+    let re_url = RE_URL.get_or_init(|| Regex::new(r"https?://[^\s]+").unwrap());
+    redacted = re_url
+        .replace_all(&redacted, |caps: &regex::Captures| redact_url(&caps[0]))
+        .into_owned();
 
     redacted
 }
@@ -91,9 +93,8 @@ mod tests {
 
     #[test]
     fn redacts_url_credentials_query_and_fragment() {
-        let redacted = redact_url(
-            "https://user:password@example.com/update.deb?token=secret#fragment",
-        );
+        let redacted =
+            redact_url("https://user:password@example.com/update.deb?token=secret#fragment");
         assert!(!redacted.contains("password"));
         assert!(!redacted.contains("token="));
         assert!(!redacted.contains("fragment"));
@@ -102,7 +103,8 @@ mod tests {
 
     #[test]
     fn test_redact_secrets() {
-        let text = "Login failed for user test with password=supersecret, sk: 123456, session_key = abcde";
+        let text =
+            "Login failed for user test with password=supersecret, sk: 123456, session_key = abcde";
         let redacted = redact_secrets(text);
         assert!(!redacted.contains("supersecret"));
         assert!(!redacted.contains("123456"));
@@ -111,11 +113,15 @@ mod tests {
         assert!(redacted.contains("sk: <redacted>"));
         assert!(redacted.contains("session_key = <redacted>"));
 
-        let text_sentinel = "Found sentinel-google-secret and sentinel-lastfm-secret in the config.";
+        let text_sentinel =
+            "Found sentinel-google-secret and sentinel-lastfm-secret in the config.";
         let redacted_sentinel = redact_secrets(text_sentinel);
         assert!(!redacted_sentinel.contains("sentinel-google-secret"));
         assert!(!redacted_sentinel.contains("sentinel-lastfm-secret"));
-        assert_eq!(redacted_sentinel, "Found <redacted> and <redacted> in the config.");
+        assert_eq!(
+            redacted_sentinel,
+            "Found <redacted> and <redacted> in the config."
+        );
 
         let text_url = "Download update from https://user:pass@example.com/file.deb?token=123#frag";
         let redacted_url = redact_secrets(text_url);
@@ -165,7 +171,11 @@ mod tests {
         zip.finish().unwrap();
 
         for path in [&settings_path, &db_path, &log_path, &backup_path] {
-            assert!(!file_contains_any(path, &SECRETS).unwrap(), "{}", path.display());
+            assert!(
+                !file_contains_any(path, &SECRETS).unwrap(),
+                "{}",
+                path.display()
+            );
         }
 
         let mut archive = zip::ZipArchive::new(std::fs::File::open(&backup_path).unwrap()).unwrap();
@@ -174,7 +184,9 @@ mod tests {
             let mut content = Vec::new();
             entry.read_to_end(&mut content).unwrap();
             for secret in SECRETS {
-                assert!(!content.windows(secret.len()).any(|part| part == secret.as_bytes()));
+                assert!(!content
+                    .windows(secret.len())
+                    .any(|part| part == secret.as_bytes()));
             }
         }
 

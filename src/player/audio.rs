@@ -1,12 +1,15 @@
-use vlc::*;
 use std::sync::{Arc, Mutex};
+use vlc::*;
 
 use super::state::PlayState;
 
 const EXPECTED_EQ_BANDS: usize = 10;
+const YOUTUBE_ANDROID_USER_AGENT: &str =
+    "com.google.android.youtube/20.10.38 (Linux; U; Android 15)";
 
 fn normalized_equalizer(preamp: f64, bands: &[f64], available_bands: usize) -> (f32, Vec<f32>) {
-    let mut values = bands.iter()
+    let mut values = bands
+        .iter()
         .take(available_bands)
         .map(|value| value.clamp(-20.0, 20.0) as f32)
         .collect::<Vec<_>>();
@@ -22,6 +25,29 @@ fn normalized_equalizer(preamp: f64, bands: &[f64], available_bands: usize) -> (
     let adjusted_preamp = adjusted_preamp.clamp(-20.0, 20.0);
 
     (adjusted_preamp, values)
+}
+
+fn add_media_option(media: &Media, option: &str) {
+    unsafe {
+        if let Ok(option_cstr) = std::ffi::CString::new(option) {
+            sys::libvlc_media_add_option(media.raw(), option_cstr.as_ptr());
+        }
+    }
+}
+
+fn add_youtube_http_options(media: &Media, url: &str) {
+    if !(url.contains("googlevideo.com") || url.contains("youtube.com") || url.contains("youtu.be"))
+    {
+        return;
+    }
+
+    add_media_option(
+        media,
+        &format!(":http-user-agent={YOUTUBE_ANDROID_USER_AGENT}"),
+    );
+    add_media_option(media, ":http-referrer=https://www.youtube.com/");
+    add_media_option(media, ":network-caching=1500");
+    add_media_option(media, ":http-reconnect=true");
 }
 
 #[derive(Clone)]
@@ -91,18 +117,26 @@ impl AudioEngine {
         if band_count == EXPECTED_EQ_BANDS {
             log::info!("VLC equalizer capability verified: {band_count} bands");
         } else {
-            log::warn!("VLC exposes {band_count} equalizer bands; Doremi expects {EXPECTED_EQ_BANDS}");
+            log::warn!(
+                "VLC exposes {band_count} equalizer bands; Doremi expects {EXPECTED_EQ_BANDS}"
+            );
         }
 
         engine
     }
 
     pub fn is_available(&self) -> bool {
-        self.inner.lock().map(|i| i.player.is_some()).unwrap_or(false)
+        self.inner
+            .lock()
+            .map(|i| i.player.is_some())
+            .unwrap_or(false)
     }
 
     pub fn state(&self) -> PlayState {
-        self.inner.lock().map(|i| i.state).unwrap_or(PlayState::Stopped)
+        self.inner
+            .lock()
+            .map(|i| i.state)
+            .unwrap_or(PlayState::Stopped)
     }
 
     pub fn has_error(&self) -> bool {
@@ -115,8 +149,15 @@ impl AudioEngine {
     }
 
     pub fn has_ended(&self) -> bool {
-        self.inner.lock().ok()
-            .and_then(|inner| inner.player.as_ref().map(|player| player.state() == State::Ended))
+        self.inner
+            .lock()
+            .ok()
+            .and_then(|inner| {
+                inner
+                    .player
+                    .as_ref()
+                    .map(|player| player.state() == State::Ended)
+            })
             .unwrap_or(false)
     }
 
@@ -134,6 +175,7 @@ impl AudioEngine {
 
     pub fn play_url(&self, url: &str, normalize: bool) {
         // Lock 1: get instance reference to create Media
+        let playback_url = crate::player::stream_proxy::proxied_url(url);
         let media = {
             let inner = match self.inner.lock() {
                 Ok(i) => i,
@@ -143,19 +185,16 @@ impl AudioEngine {
                 Some(i) => i,
                 None => return,
             };
-            Media::new_location(instance, url)
+            Media::new_location(instance, &playback_url)
         };
 
         let media = match media {
             Some(m) => m,
             None => return,
         };
+        add_youtube_http_options(&media, url);
         if normalize {
-            unsafe {
-                if let Ok(option_cstr) = std::ffi::CString::new("audio-filter=normvol") {
-                    sys::libvlc_media_add_option(media.raw(), option_cstr.as_ptr());
-                }
-            }
+            add_media_option(&media, ":audio-filter=normvol");
         }
         media.parse();
         let dur = media.duration().unwrap_or(0);
@@ -177,6 +216,7 @@ impl AudioEngine {
     }
 
     pub fn play_crossfade(&self, url: &str, normalize: bool) {
+        let playback_url = crate::player::stream_proxy::proxied_url(url);
         let media = {
             let inner = match self.inner.lock() {
                 Ok(i) => i,
@@ -186,19 +226,16 @@ impl AudioEngine {
                 Some(i) => i,
                 None => return,
             };
-            Media::new_location(instance, url)
+            Media::new_location(instance, &playback_url)
         };
 
         let media = match media {
             Some(m) => m,
             None => return,
         };
+        add_youtube_http_options(&media, url);
         if normalize {
-            unsafe {
-                if let Ok(option_cstr) = std::ffi::CString::new("audio-filter=normvol") {
-                    sys::libvlc_media_add_option(media.raw(), option_cstr.as_ptr());
-                }
-            }
+            add_media_option(&media, ":audio-filter=normvol");
         }
         media.parse();
 
@@ -406,7 +443,11 @@ impl AudioEngine {
                 // Apply to player
                 if let Some(player) = &inner.player {
                     if sys::libvlc_media_player_set_equalizer(player.raw(), eq) == 0 {
-                        log::info!("Applied VLC equalizer (preset: {}, preamp: {}dB)", preset_name, preamp);
+                        log::info!(
+                            "Applied VLC equalizer (preset: {}, preamp: {}dB)",
+                            preset_name,
+                            preamp
+                        );
                         inner.equalizer = Some(eq);
                     } else {
                         log::error!("Failed to apply equalizer to media player");

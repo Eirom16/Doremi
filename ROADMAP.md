@@ -410,13 +410,11 @@ Soporte para podcasts y shows de YouTube Music (y potencialmente RSS). YouTube M
 ### P5.3 Interaccion
 
 - [ ] Mini player flotante y modo compacto.
-- [x] Corregir mini player flotante y solape del boton principal con la linea de tiempo.
 - [x] Navegacion atras/adelante con historial de rutas.
-- [x] Restaurar scroll y foco al regresar.
+- [ ] Restaurar scroll y foco al regresar.
 - [x] Tooltips consistentes y shortcuts visibles.
-- [x] Sistema vertical de pestanas por categoria en configuracion.
 - [ ] Drag and drop para cola y playlists.
-- [x] Toasts accionables con cola y deduplicacion.
+- [ ] Toasts accionables con cola y deduplicacion.
 - [ ] Centro de notificaciones opcional.
 - [ ] Confirmaciones solo en acciones destructivas.
 - [ ] Errores con retry y detalle tecnico desplegable.

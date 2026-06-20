@@ -1,12 +1,11 @@
-pub mod time;
-pub mod i18n;
-pub mod color;
-pub mod storage;
 pub mod backup;
+pub mod color;
+pub mod dependencies;
+pub mod errors;
+pub mod i18n;
+pub mod migration;
 pub mod secure_storage;
 pub mod security;
-pub mod migration;
-pub mod errors;
+pub mod storage;
+pub mod time;
 pub mod ytdlp_auth;
-pub mod dependencies;
-

@@ -475,11 +475,6 @@ void DoremiMainWindow::connect_signals() {
         dialog->deleteLater();
     });
 
-    QObject::connect(trending_view_, &TrendingView::play_requested, this,
-        [](Track track) {
-            on_search_item_clicked(track);
-        });
-
     QObject::connect(downloads_view_, &DownloadsView::play_requested, this,
         [](Track track) {
             on_search_item_clicked(track);
@@ -787,7 +782,7 @@ void DoremiMainWindow::set_mini_player_info(const std::string &title, const std:
     if (now_playing_view_) {
         now_playing_view_->setTrackInfo(title, artist, thumb);
     }
-    if (!title.empty() && (title != g_last_track_title || artist != g_last_track_artist)) {
+    if (playback_playing_ && !title.empty() && (title != g_last_track_title || artist != g_last_track_artist)) {
         g_last_track_title = title;
         g_last_track_artist = artist;
         show_notif("Reproduciendo: " + title + " — " + artist, "info");
@@ -795,6 +790,7 @@ void DoremiMainWindow::set_mini_player_info(const std::string &title, const std:
 }
 
 void DoremiMainWindow::set_playback_playing(bool playing) {
+    playback_playing_ = playing;
     player_bar_->set_playing(playing);
     if (now_playing_view_) {
         now_playing_view_->setPlaying(playing);

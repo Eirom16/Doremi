@@ -22,38 +22,55 @@ fn main() {
 
     // 1. Single Instance Check & Port Forwarding
     let args: Vec<String> = std::env::args().skip(1).collect();
-    match std::net::TcpListener::bind("127.0.0.1:18420") {
-        Ok(listener) => {
-            // Primary instance. Spawn thread to listen for forwarded arguments.
-            std::thread::spawn(move || {
-                use std::io::Read;
-                for stream in listener.incoming() {
-                    if let Ok(mut stream) = stream {
-                        let mut buffer = Vec::new();
-                        stream.set_read_timeout(Some(std::time::Duration::from_secs(2))).ok();
-                        if stream.read_to_end(&mut buffer).is_ok() {
-                            if let Ok(text) = String::from_utf8(buffer) {
-                                let received_args: Vec<String> = text.split('\n')
-                                    .map(|s| s.to_string())
-                                    .filter(|s| !s.is_empty())
-                                    .collect();
-                                doremi_core::bridge::handle_forwarded_args(received_args);
+    let single_instance_disabled = std::env::var("DOREMI_DISABLE_SINGLE_INSTANCE")
+        .map(|value| value == "1" || value.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
+    if !single_instance_disabled {
+        let instance_port = std::env::var("DOREMI_INSTANCE_PORT")
+            .ok()
+            .and_then(|value| value.parse::<u16>().ok())
+            .unwrap_or(18420);
+        let instance_addr = format!("127.0.0.1:{instance_port}");
+        match std::net::TcpListener::bind(&instance_addr) {
+            Ok(listener) => {
+                // Primary instance. Spawn thread to listen for forwarded arguments.
+                std::thread::spawn(move || {
+                    use std::io::Read;
+                    for stream in listener.incoming() {
+                        if let Ok(mut stream) = stream {
+                            let mut buffer = Vec::new();
+                            stream
+                                .set_read_timeout(Some(std::time::Duration::from_secs(2)))
+                                .ok();
+                            if stream.read_to_end(&mut buffer).is_ok() {
+                                if let Ok(text) = String::from_utf8(buffer) {
+                                    let received_args: Vec<String> = text
+                                        .split('\n')
+                                        .map(|s| s.to_string())
+                                        .filter(|s| !s.is_empty())
+                                        .collect();
+                                    doremi_core::bridge::handle_forwarded_args(received_args);
+                                }
                             }
                         }
                     }
-                }
-            });
-        }
-        Err(_) => {
-            // Secondary instance. Forward arguments and exit.
-            use std::io::Write;
-            if let Ok(mut stream) = std::net::TcpStream::connect("127.0.0.1:18420") {
-                let payload = args.join("\n");
-                let _ = stream.write_all(payload.as_bytes());
+                });
             }
-            log::info!("Another instance is running. Forwarded arguments to primary instance. Exiting.");
-            return;
+            Err(error) => {
+                // Secondary instance. Forward arguments and exit.
+                use std::io::Write;
+                if let Ok(mut stream) = std::net::TcpStream::connect(&instance_addr) {
+                    let payload = args.join("\n");
+                    let _ = stream.write_all(payload.as_bytes());
+                }
+                log::info!(
+                    "Another instance is running or single-instance bind failed ({error}). Forwarded arguments to primary instance. Exiting."
+                );
+                return;
+            }
         }
+    } else {
+        log::warn!("Single-instance guard disabled by DOREMI_DISABLE_SINGLE_INSTANCE");
     }
 
     // Global Panic Hook for Clean Shutdown
@@ -66,7 +83,10 @@ fn main() {
             "Unknown panic payload"
         };
         let redacted_msg = doremi_core::utils::security::redact_secrets(panic_msg);
-        let location = panic_info.location().map(|l| format!("at {}:{}", l.file(), l.line())).unwrap_or_default();
+        let location = panic_info
+            .location()
+            .map(|l| format!("at {}:{}", l.file(), l.line()))
+            .unwrap_or_default();
         log::error!("CRITICAL PANIC: {redacted_msg} {location}");
 
         log::info!("Executing emergency shutdown...");

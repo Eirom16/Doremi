@@ -220,6 +220,7 @@ impl Database {
                 "skipped",
                 "INTEGER NOT NULL DEFAULT 0",
             )?;
+            Self::dedupe_recently_played(conn)?;
             conn.execute_batch(
                 "CREATE UNIQUE INDEX IF NOT EXISTS idx_recently_played_track_id ON recently_played(track_id);"
             )?;
@@ -329,6 +330,40 @@ impl Database {
         Ok(false)
     }
 
+    fn dedupe_recently_played(conn: &Connection) -> SqlResult<()> {
+        conn.execute_batch(
+            "UPDATE recently_played
+             SET play_count = (
+                SELECT SUM(COALESCE(r2.play_count, 1))
+                FROM recently_played r2
+                WHERE r2.track_id = recently_played.track_id
+             ),
+             progress_ms = (
+                SELECT MAX(COALESCE(r2.progress_ms, 0))
+                FROM recently_played r2
+                WHERE r2.track_id = recently_played.track_id
+             ),
+             skipped = (
+                SELECT MAX(COALESCE(r2.skipped, 0))
+                FROM recently_played r2
+                WHERE r2.track_id = recently_played.track_id
+             )
+             WHERE rowid IN (
+                SELECT MAX(rowid)
+                FROM recently_played
+                GROUP BY track_id
+             );
+
+             DELETE FROM recently_played
+             WHERE rowid NOT IN (
+                SELECT MAX(rowid)
+                FROM recently_played
+                GROUP BY track_id
+             );",
+        )?;
+        Ok(())
+    }
+
     pub fn reset() -> SqlResult<()> {
         let path = AppDirs::global().database_path();
         take_connection();
@@ -401,7 +436,12 @@ mod tests {
                 parent_playlist_id TEXT,
                 parent_playlist_title TEXT,
                 parent_playlist_thumbnail_url TEXT
-             );",
+             );
+             INSERT INTO recently_played
+                (track_id, title, artist, play_count)
+             VALUES
+                ('dup-track', 'Song', 'Artist', 1),
+                ('dup-track', 'Song', 'Artist', 3);",
         )
         .unwrap();
 
@@ -411,6 +451,23 @@ mod tests {
         assert!(Database::column_exists(&conn, "recently_played", "progress_ms").unwrap());
         assert!(Database::column_exists(&conn, "recently_played", "skipped").unwrap());
         assert!(Database::column_exists(&conn, "downloads", "status").unwrap());
+
+        let duplicate_count: i32 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM recently_played WHERE track_id = 'dup-track'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        let merged_play_count: i32 = conn
+            .query_row(
+                "SELECT play_count FROM recently_played WHERE track_id = 'dup-track'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(duplicate_count, 1);
+        assert_eq!(merged_play_count, 4);
 
         let version: i32 = conn
             .query_row(

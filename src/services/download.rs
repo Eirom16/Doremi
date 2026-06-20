@@ -1,10 +1,10 @@
 use crate::db::repo::{DownloadTrack, DownloadsRepo};
 use once_cell::sync::Lazy;
 use regex::Regex;
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use tokio::sync::{mpsc, Semaphore};
-use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum DownloadStatus {
@@ -216,8 +216,15 @@ impl DownloadManager {
         log::info!("Checking for unfinished downloads to resume...");
         if let Ok(tracks) = DownloadsRepo::all() {
             for track in tracks {
-                if track.status == "queued" || track.status == "resolving" || track.status == "downloading" {
-                    log::info!("Resuming unfinished download: {} - {}", track.artist, track.title);
+                if track.status == "queued"
+                    || track.status == "resolving"
+                    || track.status == "downloading"
+                {
+                    log::info!(
+                        "Resuming unfinished download: {} - {}",
+                        track.artist,
+                        track.title
+                    );
                     let _ = DownloadsRepo::update_status(&track.video_id, "queued", 0.0, "");
                     let task = DownloadTask {
                         video_id: track.video_id.clone(),
@@ -235,7 +242,12 @@ impl DownloadManager {
     }
 
     fn save_status(video_id: &str, status: &DownloadStatus) {
-        let _ = DownloadsRepo::update_status(video_id, status.as_str(), status.progress(), status.error());
+        let _ = DownloadsRepo::update_status(
+            video_id,
+            status.as_str(),
+            status.progress(),
+            status.error(),
+        );
         crate::bridge::bridge::set_download_progress(video_id, status.progress(), status.as_str());
     }
 
@@ -271,12 +283,18 @@ impl DownloadManager {
                     match Self::download_track_impl(&task, &cancel_flag, &cpids).await {
                         Ok(track) => {
                             if cancel_flag.load(Ordering::SeqCst) {
-                                log::info!("Download cancelled after completion check: {}", task.title);
+                                log::info!(
+                                    "Download cancelled after completion check: {}",
+                                    task.title
+                                );
                             } else {
                                 log::info!("Download completed successfully: {}", task.title);
                                 if let Err(e) = DownloadsRepo::add(&track) {
                                     log::error!("Failed to save download to database: {}", e);
-                                    Self::save_status(&task.video_id, &DownloadStatus::Failed(e.to_string()));
+                                    Self::save_status(
+                                        &task.video_id,
+                                        &DownloadStatus::Failed(e.to_string()),
+                                    );
                                 } else {
                                     Self::save_status(&task.video_id, &DownloadStatus::Completed);
                                     Self::refresh_downloads_ui();
@@ -295,7 +313,10 @@ impl DownloadManager {
                                 log::info!("Download cancelled: {}", task.title);
                             } else {
                                 log::error!("Download failed for {}: {}", task.title, e);
-                                Self::save_status(&task.video_id, &DownloadStatus::Failed(e.clone()));
+                                Self::save_status(
+                                    &task.video_id,
+                                    &DownloadStatus::Failed(e.clone()),
+                                );
                                 if let Some(ref parent_id) = task.parent_playlist_id {
                                     Self::notify_batch_progress(parent_id);
                                 }
@@ -389,11 +410,13 @@ impl DownloadManager {
 
         let mut child = tokio::process::Command::new("yt-dlp");
         child
-            .arg("-f").arg("bestaudio/best")
+            .arg("-f")
+            .arg("bestaudio/best")
             .arg("--no-playlist")
             .arg("--no-warnings")
             .arg("--newline")
-            .arg("-o").arg(out_tmpl_str)
+            .arg("-o")
+            .arg(out_tmpl_str)
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
             .kill_on_drop(true);
@@ -403,8 +426,10 @@ impl DownloadManager {
 
         if has_ffmpeg {
             if dl_format != "original" {
-                child.arg("--extract-audio")
-                    .arg("--audio-format").arg(&dl_format);
+                child
+                    .arg("--extract-audio")
+                    .arg("--audio-format")
+                    .arg(&dl_format);
 
                 let q_arg = match dl_quality.as_str() {
                     "best" => "0",
@@ -429,7 +454,8 @@ impl DownloadManager {
         let url = format!("https://music.youtube.com/watch?v={}", task.video_id);
         child.arg(&url);
 
-        let mut child = child.spawn()
+        let mut child = child
+            .spawn()
             .map_err(|e| format!("Failed to start yt-dlp: {e}"))?;
 
         {
@@ -457,10 +483,9 @@ impl DownloadManager {
                 return Err("Cancelled".to_string());
             }
 
-            match tokio::time::timeout(
-                std::time::Duration::from_millis(200),
-                lines.next_line(),
-            ).await {
+            match tokio::time::timeout(std::time::Duration::from_millis(200), lines.next_line())
+                .await
+            {
                 Ok(Ok(Some(line))) => {
                     if let Some(caps) = progress_re.captures(&line) {
                         if let Ok(pct) = caps[1].parse::<f64>() {
@@ -478,14 +503,19 @@ impl DownloadManager {
             }
         }
 
-        let output = child.wait().await.map_err(|e| format!("yt-dlp wait error: {e}"))?;
+        let output = child
+            .wait()
+            .await
+            .map_err(|e| format!("yt-dlp wait error: {e}"))?;
 
         if cancel_flag.load(Ordering::SeqCst) {
             return Err("Cancelled".to_string());
         }
 
         if !output.success() {
-            let stderr = child.stderr.take()
+            let stderr = child
+                .stderr
+                .take()
                 .map(|s| {
                     use tokio::io::AsyncReadExt;
                     let mut buf = String::new();
@@ -537,7 +567,10 @@ impl DownloadManager {
             }
         }
 
-        let final_ext = temp_final_path.extension().and_then(|e| e.to_str()).unwrap_or(ext);
+        let final_ext = temp_final_path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or(ext);
         let final_path = out_dir.join(format!("{}.{}", filename_base, final_ext));
 
         // Atomic rename
@@ -574,7 +607,9 @@ impl DownloadManager {
             let video_ids: Vec<String> = downloads.iter().map(|d| d.video_id.clone()).collect();
             let statuses: Vec<String> = downloads.iter().map(|d| d.status.clone()).collect();
             let progresses: Vec<f64> = downloads.iter().map(|d| d.progress).collect();
-            crate::bridge::bridge::set_downloads_list(titles, artists, thumbnails, video_ids, statuses, progresses);
+            crate::bridge::bridge::set_downloads_list(
+                titles, artists, thumbnails, video_ids, statuses, progresses,
+            );
         }
     }
 

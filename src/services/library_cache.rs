@@ -88,10 +88,7 @@ impl LibraryCache {
     /// Guardar datos en caché
     pub fn set(&self, tab: &str, data: CacheData) {
         let mut cache = self.cache.lock().unwrap();
-        cache.insert(
-            tab.to_string(),
-            CacheEntry::new(data, self.default_ttl),
-        );
+        cache.insert(tab.to_string(), CacheEntry::new(data, self.default_ttl));
     }
 
     /// Invalidar un tab específico

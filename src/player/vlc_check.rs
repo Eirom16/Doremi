@@ -1,6 +1,6 @@
+use crate::tr;
 use std::path::PathBuf;
 use std::process::Command;
-use crate::tr;
 
 /// Check if VLC is available on the system
 pub fn check_vlc_available() -> bool {

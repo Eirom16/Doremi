@@ -1,45 +1,139 @@
 use crate::db::cache::ResponseCache;
 use crate::utils::errors::DoremiError;
+use once_cell::sync::Lazy;
+use reqwest::header::{
+    HeaderMap, HeaderValue, ACCEPT, ACCEPT_ENCODING, ORIGIN, RANGE, REFERER, USER_AGENT,
+};
 use reqwest::Url;
 use serde_json::json;
+use std::collections::HashMap;
 use std::process::Stdio;
+use std::sync::Arc;
 use std::time::Duration;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::process::Command;
+use tokio::sync::{Mutex as AsyncMutex, OnceCell as TokioOnceCell};
 
 pub struct StreamResolver;
 
 const INNERTUBE_TIMEOUT: Duration = Duration::from_secs(6);
-const YT_DLP_TIMEOUT: Duration = Duration::from_secs(15);
+const STREAM_PROBE_TIMEOUT: Duration = Duration::from_secs(6);
+const YT_DLP_TIMEOUT: Duration = Duration::from_secs(45);
+const YOUTUBE_ANDROID_USER_AGENT: &str =
+    "com.google.android.youtube/20.10.38 (Linux; U; Android 15)";
+
+type ResolveCell = TokioOnceCell<Result<String, DoremiError>>;
+
+static IN_FLIGHT_RESOLVES: Lazy<AsyncMutex<HashMap<String, Arc<ResolveCell>>>> =
+    Lazy::new(|| AsyncMutex::new(HashMap::new()));
 
 impl StreamResolver {
     pub async fn resolve(video_id: &str) -> Result<String, DoremiError> {
-        let cache_key = format!("stream_url:{video_id}");
+        let video_id = video_id.to_string();
+        let cell = {
+            let mut in_flight = IN_FLIGHT_RESOLVES.lock().await;
+            if let Some(cell) = in_flight.get(&video_id) {
+                cell.clone()
+            } else {
+                let cell = Arc::new(TokioOnceCell::new());
+                in_flight.insert(video_id.clone(), cell.clone());
+                cell
+            }
+        };
 
-        // 1. Check cache first
+        let result = cell
+            .get_or_init(|| async { Self::resolve_inner(&video_id).await })
+            .await
+            .clone();
+
+        let mut in_flight = IN_FLIGHT_RESOLVES.lock().await;
+        if in_flight
+            .get(&video_id)
+            .map(|stored| Arc::ptr_eq(stored, &cell))
+            .unwrap_or(false)
+        {
+            in_flight.remove(&video_id);
+        }
+
+        result
+    }
+
+    async fn resolve_inner(video_id: &str) -> Result<String, DoremiError> {
+        let cache_key = format!("stream_url:ytdlp:{video_id}");
+        let legacy_cache_key = format!("stream_url:{video_id}");
+        let _ = ResponseCache::invalidate(&legacy_cache_key);
+
+        // 1. Check the yt-dlp cache first. Older cache keys may contain fast
+        // InnerTube URLs that start playing and then fail on later byte ranges.
         if let Some(entry) = ResponseCache::get::<String>(&cache_key) {
             let url = entry.data;
             if !Self::is_url_expired(&url) {
-                log::info!("Stream URL loaded from cache (resolver) for {video_id}");
-                return Ok(url);
+                match Self::probe_stream_url(&url).await {
+                    Ok(()) => {
+                        log::info!("yt-dlp stream URL loaded from cache for {video_id}");
+                        return Ok(url);
+                    }
+                    Err(error) => {
+                        log::warn!(
+                            "Cached yt-dlp stream URL for {video_id} is not playable ({error}). Re-resolving..."
+                        );
+                        let _ = ResponseCache::invalidate(&cache_key);
+                    }
+                }
             } else {
                 log::info!("Cached stream URL for {video_id} has expired or is close to expiring. Re-resolving...");
                 let _ = ResponseCache::invalidate(&cache_key);
             }
         }
 
-        // 2. Try the same fast Android InnerTube path used by the Rust app.
-        match Self::resolve_innertube(video_id).await {
+        // 2. Resolve using yt-dlp first. Its URLs accept the bounded range
+        // sequence that the local proxy feeds to VLC.
+        match Self::resolve_ytdlp(video_id).await {
             Ok(resolved_url) => {
+                Self::probe_stream_url(&resolved_url).await?;
                 Self::cache_resolved_url(video_id, &cache_key, &resolved_url);
                 return Ok(resolved_url);
             }
             Err(error) => {
-                log::warn!("Fast InnerTube stream resolution failed for {video_id}: {error}; falling back to yt-dlp");
+                log::warn!(
+                    "yt-dlp stream resolution failed for {video_id}: {error}; falling back to InnerTube"
+                );
             }
         }
 
-        // 3. Resolve using yt-dlp
+        // 3. Last resort: fast Android InnerTube. Do not cache this path because
+        // some returned URLs reject later byte ranges even when the first probe
+        // succeeds.
+        let resolved_url = Self::resolve_innertube(video_id).await?;
+        Self::probe_stream_url(&resolved_url).await?;
+        Ok(resolved_url)
+    }
+
+    async fn resolve_ytdlp(video_id: &str) -> Result<String, DoremiError> {
+        match Self::resolve_ytdlp_once(video_id, false).await {
+            Ok(url) => return Ok(url),
+            Err(anonymous_error) => {
+                if Self::is_ytdlp_timeout(&anonymous_error) {
+                    return Err(anonymous_error);
+                }
+                log::warn!(
+                    "Anonymous yt-dlp stream resolution failed for {video_id}: {anonymous_error}; retrying with stored YouTube session"
+                );
+                match Self::resolve_ytdlp_once(video_id, true).await {
+                    Ok(url) => Ok(url),
+                    Err(auth_error) => Err(DoremiError::Network(format!(
+                        "yt-dlp anonymous failed: {anonymous_error}; authenticated retry failed: {auth_error}"
+                    ))),
+                }
+            }
+        }
+    }
+
+    fn is_ytdlp_timeout(error: &DoremiError) -> bool {
+        matches!(error, DoremiError::Network(message) if message.contains("tardó más"))
+    }
+
+    async fn resolve_ytdlp_once(video_id: &str, use_auth: bool) -> Result<String, DoremiError> {
         let url = format!("https://music.youtube.com/watch?v={video_id}");
         let format_selector = Self::audio_format_selector();
         let mut cmd = Command::new("yt-dlp");
@@ -59,21 +153,31 @@ impl StreamResolver {
         cmd.stderr(Stdio::piped());
 
         // Load YouTube Music authenticated headers from Secret Service
-        let _auth = if let Some(auth) = crate::utils::ytdlp_auth::prepare_ytdlp_auth() {
-            cmd.arg("--cookies");
-            cmd.arg(&auth.cookie_path);
-            for (key, val) in &auth.extra_headers {
-                cmd.arg("--add-header");
-                cmd.arg(format!("{}:{}", key, val));
+        let _auth = if use_auth {
+            if let Some(auth) = crate::utils::ytdlp_auth::prepare_ytdlp_auth() {
+                cmd.arg("--cookies");
+                cmd.arg(&auth.cookie_path);
+                for (key, val) in &auth.extra_headers {
+                    cmd.arg("--add-header");
+                    cmd.arg(format!("{}:{}", key, val));
+                }
+                Some(auth)
+            } else {
+                return Err(DoremiError::ExternalDependency(
+                    "No hay sesión de YouTube guardada para yt-dlp".to_string(),
+                ));
             }
-            Some(auth)
         } else {
             None
         };
 
         cmd.arg(&url);
 
-        log::info!("Resolving stream URL for {} using yt-dlp...", video_id);
+        log::info!(
+            "Resolving stream URL for {} using yt-dlp{}...",
+            video_id,
+            if use_auth { " with auth" } else { "" }
+        );
         let output = match tokio::time::timeout(YT_DLP_TIMEOUT, cmd.output()).await {
             Ok(Ok(output)) => output,
             Ok(Err(e)) => {
@@ -103,10 +207,55 @@ impl StreamResolver {
             )
         })?;
 
-        // 4. Cache the resolved URL
-        Self::cache_resolved_url(video_id, &cache_key, &resolved_url);
-
         Ok(resolved_url)
+    }
+
+    async fn probe_stream_url(url: &str) -> Result<(), DoremiError> {
+        if !Self::is_youtube_stream_url(url) {
+            return Ok(());
+        }
+
+        let client = reqwest::Client::builder()
+            .connect_timeout(Duration::from_secs(3))
+            .timeout(STREAM_PROBE_TIMEOUT)
+            .http1_only()
+            .build()
+            .map_err(|error| DoremiError::Network(error.to_string()))?;
+
+        let response = client
+            .get(url)
+            .headers(Self::stream_request_headers(Some("bytes=0-32767")))
+            .send()
+            .await
+            .map_err(|error| DoremiError::Network(error.to_string()))?;
+
+        if response.status().is_success() {
+            Ok(())
+        } else {
+            Err(DoremiError::Network(format!(
+                "stream probe returned HTTP {}",
+                response.status()
+            )))
+        }
+    }
+
+    fn stream_request_headers(range: Option<&str>) -> HeaderMap {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            USER_AGENT,
+            HeaderValue::from_static(YOUTUBE_ANDROID_USER_AGENT),
+        );
+        headers.insert(ORIGIN, HeaderValue::from_static("https://www.youtube.com"));
+        headers.insert(
+            REFERER,
+            HeaderValue::from_static("https://www.youtube.com/"),
+        );
+        headers.insert(ACCEPT, HeaderValue::from_static("*/*"));
+        headers.insert(ACCEPT_ENCODING, HeaderValue::from_static("identity"));
+        if let Some(range) = range.and_then(|value| HeaderValue::from_str(value).ok()) {
+            headers.insert(RANGE, range);
+        }
+        headers
     }
 
     async fn resolve_innertube(video_id: &str) -> Result<String, DoremiError> {
@@ -266,6 +415,10 @@ impl StreamResolver {
         } else {
             true
         }
+    }
+
+    pub fn is_youtube_stream_url(url: &str) -> bool {
+        url.contains("googlevideo.com") || url.contains(".googlevideo.com/")
     }
 }
 

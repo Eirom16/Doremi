@@ -1,5 +1,5 @@
-use std::process::Command;
 use crate::tr;
+use std::process::Command;
 
 pub struct DependencyStatus {
     pub ytdlp_ok: bool,
@@ -24,7 +24,9 @@ pub fn check_dependencies() -> DependencyStatus {
         Ok(output) => {
             let ver_out = String::from_utf8_lossy(&output.stdout);
             let first_line = ver_out.lines().next().unwrap_or("").to_string();
-            let ver = first_line.split("version ").nth(1)
+            let ver = first_line
+                .split("version ")
+                .nth(1)
                 .and_then(|s| s.split_whitespace().next())
                 .unwrap_or("detectado")
                 .to_string();

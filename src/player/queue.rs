@@ -84,7 +84,9 @@ impl PlaybackQueue {
             return self.current();
         }
         if self.shuffle_mode {
-            return self.shuffled.get(self.shuffle_position + 1)
+            return self
+                .shuffled
+                .get(self.shuffle_position + 1)
                 .and_then(|index| self.tracks.get(*index));
         }
         self.tracks.get(self.current_index + 1)
@@ -158,13 +160,19 @@ impl PlaybackQueue {
     }
 
     pub fn append_unique(&mut self, candidates: Vec<TrackInfo>, limit: usize) -> usize {
-        let mut known: HashSet<String> = self.tracks.iter()
+        let mut known: HashSet<String> = self
+            .tracks
+            .iter()
             .filter(|track| !track.id.is_empty())
             .map(|track| track.id.clone())
             .collect();
         let mut added = 0;
         for track in candidates {
-            if added >= limit || track.id.is_empty() || track.title.trim().is_empty() || !known.insert(track.id.clone()) {
+            if added >= limit
+                || track.id.is_empty()
+                || track.title.trim().is_empty()
+                || !known.insert(track.id.clone())
+            {
                 continue;
             }
             self.tracks.push(track);
@@ -475,8 +483,14 @@ mod tests {
         for _ in 1..queue.len() {
             queue.next();
         }
-        assert_eq!(queue.next().map(|track| track.id.as_str()), Some(first.as_str()));
-        let expected_last = queue.shuffled.last().map(|index| queue.tracks[*index].id.clone());
+        assert_eq!(
+            queue.next().map(|track| track.id.as_str()),
+            Some(first.as_str())
+        );
+        let expected_last = queue
+            .shuffled
+            .last()
+            .map(|index| queue.tracks[*index].id.clone());
         let previous = queue.previous().map(|track| track.id.clone());
         assert_eq!(previous, expected_last);
     }
@@ -491,7 +505,14 @@ mod tests {
         empty_title.title.clear();
 
         let added = queue.append_unique(
-            vec![track("seed"), invalid, empty_title, track("a"), track("a"), track("b")],
+            vec![
+                track("seed"),
+                invalid,
+                empty_title,
+                track("a"),
+                track("a"),
+                track("b"),
+            ],
             2,
         );
 
@@ -503,16 +524,28 @@ mod tests {
     fn next_candidate_observes_linear_shuffle_and_repeat_one_without_mutation() {
         let mut queue = PlaybackQueue::new();
         queue.set_tracks(vec![track("a"), track("b"), track("c")]);
-        assert_eq!(queue.next_candidate().map(|track| track.id.as_str()), Some("b"));
+        assert_eq!(
+            queue.next_candidate().map(|track| track.id.as_str()),
+            Some("b")
+        );
         assert_eq!(queue.current_index(), 0);
 
         queue.set_repeat_mode(RepeatMode::One);
-        assert_eq!(queue.next_candidate().map(|track| track.id.as_str()), Some("a"));
+        assert_eq!(
+            queue.next_candidate().map(|track| track.id.as_str()),
+            Some("a")
+        );
 
         queue.set_repeat_mode(RepeatMode::None);
         queue.toggle_shuffle();
-        let expected = queue.shuffled.get(1).map(|index| queue.tracks[*index].id.clone());
-        assert_eq!(queue.next_candidate().map(|track| track.id.clone()), expected);
+        let expected = queue
+            .shuffled
+            .get(1)
+            .map(|index| queue.tracks[*index].id.clone());
+        assert_eq!(
+            queue.next_candidate().map(|track| track.id.clone()),
+            expected
+        );
         assert_eq!(queue.current_index(), 0);
     }
 

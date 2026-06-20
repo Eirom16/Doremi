@@ -11,18 +11,17 @@ pub struct AppDirs {
 
 impl AppDirs {
     pub fn new() -> Option<Self> {
-        ProjectDirs::from("com", "doremi", "Doremi")
-            .map(|project| Self { project })
+        ProjectDirs::from("com", "doremi", "Doremi").map(|project| Self { project })
     }
 
     pub fn global() -> &'static AppDirs {
-        APP_DIRS.get().expect("AppDirs not initialized. Call AppDirs::setup() first.")
+        APP_DIRS
+            .get()
+            .expect("AppDirs not initialized. Call AppDirs::setup() first.")
     }
 
     pub fn setup() {
-        APP_DIRS.get_or_init(|| {
-            Self::new().expect("Could not determine application directories")
-        });
+        APP_DIRS.get_or_init(|| Self::new().expect("Could not determine application directories"));
         let dirs = Self::global();
         for dir in &[
             dirs.config_dir(),

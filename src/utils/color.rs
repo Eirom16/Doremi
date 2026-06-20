@@ -1,5 +1,5 @@
-use std::path::Path;
 use image::GenericImageView;
+use std::path::Path;
 
 /// Simple conversion from RGB to HSV
 fn rgb_to_hsv(r: u8, g: u8, b: u8) -> (f32, f32, f32) {
@@ -132,7 +132,7 @@ pub fn extract_dominant_colors<P: AsRef<Path>>(path: P) -> Vec<String> {
 
         // Convert to HSV to perform dark mode styling adjustments
         let (h, mut s, mut v) = rgb_to_hsv(r_u8, g_u8, b_u8);
-        
+
         // Roadmap: saturación mínima 40%, valor 25-50% (dark mode)
         s = s.max(0.40);
         v = v.clamp(0.25, 0.50);

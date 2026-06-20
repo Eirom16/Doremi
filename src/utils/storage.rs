@@ -1,5 +1,5 @@
-use std::path::Path;
 use crate::config::paths::AppDirs;
+use std::path::Path;
 
 fn dir_size_excluding(path: &Path, exclude: Option<&Path>) -> u64 {
     if !path.exists() {
@@ -25,7 +25,7 @@ fn dir_size_excluding(path: &Path, exclude: Option<&Path>) -> u64 {
 pub fn get_storage_sizes() -> Vec<f64> {
     let dirs = AppDirs::global();
     let db_path = dirs.database_path();
-    
+
     // 1. Calculate database size (db, wal, shm)
     let mut db_bytes = 0;
     if db_path.exists() {
@@ -39,18 +39,18 @@ pub fn get_storage_sizes() -> Vec<f64> {
     if shm_path.exists() {
         db_bytes += std::fs::metadata(&shm_path).map(|m| m.len()).unwrap_or(0);
     }
-    
+
     // 2. Calculate Cache size (excluding downloads)
     let cache_dir = dirs.cache_dir();
     let downloads_dir = cache_dir.join("downloads");
     let cache_bytes = dir_size_excluding(&cache_dir, Some(&downloads_dir));
-    
+
     // 3. Calculate Downloads size
     let downloads_bytes = dir_size_excluding(&downloads_dir, None);
-    
+
     // Convert bytes to Megabytes (1 MB = 1024 * 1024 bytes)
     let to_mb = |bytes: u64| (bytes as f64) / (1024.0 * 1024.0);
-    
+
     vec![to_mb(db_bytes), to_mb(cache_bytes), to_mb(downloads_bytes)]
 }
 
@@ -58,7 +58,7 @@ pub fn clear_cache() {
     let dirs = AppDirs::global();
     let cache_dir = dirs.cache_dir();
     let downloads_dir = cache_dir.join("downloads");
-    
+
     if let Ok(entries) = std::fs::read_dir(&cache_dir) {
         for entry in entries.flatten() {
             let path = entry.path();
