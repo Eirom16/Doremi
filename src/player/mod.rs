@@ -252,7 +252,26 @@ impl PlayerService {
         let mut local_path = None;
         if !t.id.is_empty() {
             if let Ok(Some(download)) = crate::db::repo::DownloadsRepo::get(&t.id) {
-                local_path = Some(download.file_path);
+                if download.status == "completed" {
+                    let path = std::path::Path::new(&download.file_path);
+                    if path.exists() && path.is_file() {
+                        local_path = Some(download.file_path);
+                    } else {
+                        log::warn!(
+                            "Track {} - {} was marked completed downloaded but file is missing at {:?}. Marking as failed and falling back to streaming.",
+                            download.artist,
+                            download.title,
+                            download.file_path
+                        );
+                        let _ = crate::db::repo::DownloadsRepo::update_status(
+                            &t.id,
+                            "failed",
+                            0.0,
+                            "El archivo fue movido o eliminado externamente",
+                        );
+                        crate::services::download::DownloadManager::refresh_downloads_ui();
+                    }
+                }
             }
         }
 
@@ -737,17 +756,15 @@ impl PlayerService {
                 duration_ms: track.duration_ms,
                 thumbnail: thumb.clone(),
             });
-            // Record in play history (only when playing new track at start)
+            // Record start in play history (only when playing new track at start)
             if is_playing && pos < 500 {
-                let _ = crate::db::repo::PlayHistoryRepo::record(
+                let _ = crate::db::repo::PlayHistoryRepo::record_start(
                     &track.id,
                     &track.title,
                     &track.artist,
                     &track.album,
                     track.duration_ms,
                     &thumb,
-                    dur as i64,
-                    false,
                 );
             }
 
@@ -839,7 +856,7 @@ impl PlayerService {
                 }
             }
 
-            // Accumulate playback time and check for scrobbling
+            // Accumulate playback time, check for scrobbling/play success, and save progress
             if is_playing {
                 let accumulated = self
                     .accumulated_playback_ms
@@ -851,21 +868,34 @@ impl PlayerService {
                     dur
                 };
 
-                if duration_ms >= 30_000 {
-                    let scrobble_threshold = std::cmp::min(duration_ms / 2, 240_000);
-                    if accumulated >= scrobble_threshold
-                        && !self
-                            .lastfm_scrobbled
-                            .load(std::sync::atomic::Ordering::Relaxed)
-                    {
-                        self.lastfm_scrobbled
-                            .store(true, std::sync::atomic::Ordering::Relaxed);
-                        crate::services::lastfm::scrobble(
-                            &track.artist,
-                            &track.title,
-                            &track.album,
-                        );
-                    }
+                let threshold = if duration_ms >= 30_000 {
+                    std::cmp::min(duration_ms / 2, 240_000)
+                } else {
+                    duration_ms / 2
+                };
+
+                if accumulated >= threshold
+                    && !self
+                        .lastfm_scrobbled
+                        .load(std::sync::atomic::Ordering::Relaxed)
+                {
+                    self.lastfm_scrobbled
+                        .store(true, std::sync::atomic::Ordering::Relaxed);
+                    
+                    // Scrobble to Last.fm
+                    crate::services::lastfm::scrobble(
+                        &track.artist,
+                        &track.title,
+                        &track.album,
+                    );
+
+                    // Mark play as success (increment play count, skipped = 0)
+                    let _ = crate::db::repo::PlayHistoryRepo::record_success(&track.id);
+                }
+
+                // Periodically save current playback progress to database (every 5 seconds)
+                if accumulated > 0 && accumulated % 5000 < elapsed_ms {
+                    let _ = crate::db::repo::PlayHistoryRepo::update_progress(&track.id, pos as i64);
                 }
             }
         } else {
@@ -1174,35 +1204,10 @@ async fn prefetch_artwork(track: &TrackInfo) -> Option<String> {
     if track.thumbnail.is_empty() || !track.thumbnail.starts_with("http") {
         return None;
     }
-    let safe_id: String = track
-        .id
-        .chars()
-        .filter(|character| character.is_ascii_alphanumeric() || matches!(character, '-' | '_'))
-        .take(80)
-        .collect();
-    if safe_id.is_empty() {
-        return None;
-    }
-    let path = crate::config::paths::AppDirs::global()
-        .artwork_cache_dir()
-        .join(format!("{safe_id}.img"));
-    if path.exists() {
-        return Some(path.to_string_lossy().into_owned());
-    }
-    let response = reqwest::Client::builder()
-        .timeout(Duration::from_secs(8))
-        .build()
-        .ok()?
-        .get(&track.thumbnail)
-        .send()
+    crate::utils::artwork_cache::ArtworkCache::global()
+        .get_or_fetch(&track.thumbnail, &track.id)
         .await
-        .ok()?;
-    if !response.status().is_success() {
-        return None;
-    }
-    let bytes = response.bytes().await.ok()?;
-    tokio::fs::write(&path, bytes).await.ok()?;
-    Some(path.to_string_lossy().into_owned())
+        .map(|path| path.to_string_lossy().into_owned())
 }
 
 fn sync_queue_to_ui(queue: &Arc<Mutex<PlaybackQueue>>) {

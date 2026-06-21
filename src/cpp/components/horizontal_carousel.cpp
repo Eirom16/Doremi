@@ -76,7 +76,7 @@ void HorizontalCarousel::init() {
 
     // Scroll Animation setup
     m_scrollAnim = new QVariantAnimation(this);
-    m_scrollAnim->setDuration(350);
+    m_scrollAnim->setDuration(DesignTokens::duration(350));
     m_scrollAnim->setEasingCurve(QEasingCurve::InOutQuad);
     connect(m_scrollAnim, &QVariantAnimation::valueChanged, this, [this](const QVariant &val) {
         setScrollValue(val.toInt());

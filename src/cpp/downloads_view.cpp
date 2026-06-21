@@ -7,6 +7,9 @@
 #include "downloads_view.h"
 #include "design_tokens.h"
 #include "icon_provider.h"
+#include <QMenu>
+#include <QAction>
+#include <QMessageBox>
 
 static QPixmap getRoundedPixmap(const QPixmap &src, int radius) {
     if (src.isNull()) return src;
@@ -168,9 +171,10 @@ QWidget *DownloadsView::make_download_row(const std::string &video_id, const std
             "QPushButton:hover { background-color: %2; }"
         ).arg(c.accent.name()).arg(c.accent_bright.name()));
         Track track_data;
-        track_data.id = rust::String(title);
+        track_data.id = rust::String(video_id);
         track_data.title = rust::String(title);
         track_data.artist = rust::String(artist);
+        track_data.thumbnail = rust::String(thumbnail_path);
         connect(play_btn, &QPushButton::clicked, this, [this, track_data]() {
             emit play_requested(track_data);
         });
@@ -210,6 +214,87 @@ QWidget *DownloadsView::make_download_row(const std::string &video_id, const std
         ).arg(c.bg_elevated.name()).arg(c.accent.name()));
         lay->addWidget(progress_bar);
     }
+
+    row->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(row, &QWidget::customContextMenuRequested, this, [this, video_id, title, artist, status, thumbnail_path](const QPoint &pos) {
+        auto *sender_widget = qobject_cast<QWidget*>(sender());
+        if (!sender_widget) return;
+        
+        QMenu menu;
+        bool is_completed = (status == "completed");
+        bool is_active = (status == "queued" || status == "resolving" || status == "downloading");
+
+        QAction *play = nullptr;
+        if (is_completed) {
+            play = menu.addAction("Reproducir");
+        }
+
+        bool is_fav = get_track_favorite_state(video_id);
+        QAction *fav = menu.addAction(is_fav ? "Quitar de favoritos" : "Agregar a favoritos");
+
+        QAction *next = nullptr;
+        QAction *end = nullptr;
+        if (is_completed) {
+            next = menu.addAction("Reproducir siguiente");
+            end = menu.addAction("Agregar a la cola");
+        }
+
+        QAction *cancel = nullptr;
+        if (is_active) {
+            cancel = menu.addAction("Cancelar descarga");
+        }
+
+        QAction *delete_db = menu.addAction("Eliminar de la lista");
+        QAction *delete_both = nullptr;
+        if (is_completed) {
+            delete_both = menu.addAction("Eliminar descarga (borrar archivo)");
+        }
+
+        QAction *chosen = menu.exec(sender_widget->mapToGlobal(pos));
+        if (!chosen) return;
+
+        Track track_data;
+        track_data.id = rust::String(video_id);
+        track_data.title = rust::String(title);
+        track_data.artist = rust::String(artist);
+        track_data.thumbnail = rust::String(thumbnail_path);
+
+        if (chosen == play) {
+            emit play_requested(track_data);
+        } else if (chosen == fav) {
+            if (is_fav) {
+                on_remove_favorite(video_id);
+            } else {
+                on_add_favorite(track_data);
+            }
+        } else if (chosen == next) {
+            on_add_to_queue_next(track_data);
+        } else if (chosen == end) {
+            on_add_to_queue_end(track_data);
+        } else if (chosen == cancel) {
+            on_download_cancel_requested(video_id);
+        } else if (chosen == delete_db) {
+            auto reply = QMessageBox::question(
+                this,
+                "Eliminar descarga",
+                "¿Quieres eliminar esta descarga de la lista?",
+                QMessageBox::Yes | QMessageBox::No,
+                QMessageBox::No);
+            if (reply == QMessageBox::Yes) {
+                on_delete_download(video_id, false);
+            }
+        } else if (chosen == delete_both) {
+            auto reply = QMessageBox::question(
+                this,
+                "Eliminar archivo descargado",
+                "¿Quieres eliminar esta descarga de la lista y borrar el archivo local?",
+                QMessageBox::Yes | QMessageBox::No,
+                QMessageBox::No);
+            if (reply == QMessageBox::Yes) {
+                on_delete_download(video_id, true);
+            }
+        }
+    });
 
     return row;
 }

@@ -2,8 +2,11 @@
 #include <QCoreApplication>
 #include <QDebug>
 #include <QDir>
+#include <QFile>
 #include <QFontDatabase>
+#include <QGuiApplication>
 #include <QLocale>
+#include <QStyleHints>
 
 static DesignTokens::Theme g_active_theme = DesignTokens::Theme::Dark;
 
@@ -17,10 +20,10 @@ static ColorScheme g_dark_colors = {
     QColor(139, 92, 246, 38), // accent_dim (rgba 0.15)
     QColor(139, 92, 246, 64), // accent_glow (rgba 0.25)
     QColor("#F1F0FF"), // text_primary
-    QColor("#8B8BAF"), // text_secondary
-    QColor("#4A4A6A"), // text_muted
-    QColor(255, 255, 255, 15), // border (rgba 0.06)
-    QColor(139, 92, 246, 51), // border_accent (rgba 0.20)
+    QColor("#B8B4D8"), // text_secondary
+    QColor("#77739D"), // text_muted
+    QColor(255, 255, 255, 24), // border (rgba 0.09)
+    QColor(139, 92, 246, 76), // border_accent (rgba 0.30)
     QColor("#34D399"), // success
     QColor("#FBBF24"), // warning
     QColor("#F87171")  // error
@@ -36,10 +39,10 @@ static ColorScheme g_light_colors = {
     QColor(124, 58, 237, 25), // accent_dim (rgba 0.10)
     QColor(124, 58, 237, 38), // accent_glow (rgba 0.15)
     QColor("#0D0D1A"), // text_primary
-    QColor("#6B6B8A"), // text_secondary
-    QColor("#9B9BB0"), // text_muted
-    QColor(0, 0, 0, 15), // border (rgba 0.06)
-    QColor(124, 58, 237, 38), // border_accent (rgba 0.15)
+    QColor("#4F4A68"), // text_secondary
+    QColor("#716B88"), // text_muted
+    QColor(0, 0, 0, 31), // border (rgba 0.12)
+    QColor(124, 58, 237, 64), // border_accent (rgba 0.25)
     QColor("#059669"), // success
     QColor("#D97706"), // warning
     QColor("#DC2626")  // error
@@ -137,15 +140,32 @@ QString DesignTokens::rgba(const QColor &color) {
         .arg(QLocale::c().toString(color.alphaF(), 'f', 3));
 }
 
+bool DesignTokens::reducedMotion() {
+    const QString env = qEnvironmentVariable("DOREMI_REDUCE_MOTION").trimmed().toLower();
+    if (env == "1" || env == "true" || env == "yes" || env == "on") {
+        return true;
+    }
+    if (QGuiApplication::instance()) {
+        if (auto *hints = QGuiApplication::styleHints()) {
+            return !hints->useHoverEffects();
+        }
+    }
+    return false;
+}
+
+int DesignTokens::duration(int milliseconds) {
+    return reducedMotion() ? 0 : milliseconds;
+}
+
 void DesignTokens::loadFonts() {
     static bool fonts_loaded = false;
     if (fonts_loaded) return;
 
     QStringList search_paths = {
+        ":/assets/fonts/MaterialSymbolsRounded.ttf",
         QCoreApplication::applicationDirPath() + "/assets/fonts/MaterialSymbolsRounded.ttf",
         QCoreApplication::applicationDirPath() + "/../assets/fonts/MaterialSymbolsRounded.ttf",
-        QDir::currentPath() + "/assets/fonts/MaterialSymbolsRounded.ttf",
-        "/home/eirom/Documents/Port/Doremi/assets/fonts/MaterialSymbolsRounded.ttf"
+        QDir::currentPath() + "/assets/fonts/MaterialSymbolsRounded.ttf"
     };
 
     bool loaded = false;

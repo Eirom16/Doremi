@@ -5,6 +5,8 @@
 #include <QPixmap>
 #include <QDir>
 #include <QCoreApplication>
+#include <QFile>
+#include <QStringList>
 #include <QTimer>
 #include <QGraphicsColorizeEffect>
 #include "doremi/src/bridge.rs.h"
@@ -19,15 +21,22 @@ WelcomeView::WelcomeView(QWidget *parent)
     layout->setContentsMargins(80, 40, 80, 40);
     layout->setSpacing(20);
 
-    // Try to load logo.png from assets
+    // Try to load logo.png from packaged or adjacent assets
     QString app_dir = QCoreApplication::applicationDirPath();
-    QString logo_path = app_dir + "/assets/logo.png";
-    if (!QFile::exists(logo_path)) {
-        // Fallback: check project parent dirs (development mode)
-        logo_path = QDir(app_dir).filePath("../assets/logo.png");
+    QStringList logo_paths = {
+        ":/assets/logo.png",
+        app_dir + "/assets/logo.png",
+        QDir(app_dir).filePath("../assets/logo.png")
+    };
+    QString logo_path;
+    for (const QString &candidate : logo_paths) {
+        if (QFile::exists(candidate)) {
+            logo_path = candidate;
+            break;
+        }
     }
 
-    if (QFile::exists(logo_path)) {
+    if (!logo_path.isEmpty()) {
         logo_ = new QLabel(this);
         QPixmap pix(logo_path);
         logo_->setPixmap(pix.scaledToWidth(180, Qt::SmoothTransformation));

@@ -26,16 +26,16 @@ PlayerBar::PlayerBar(QWidget *parent)
     const auto &c = DesignTokens::current();
 
     auto *main_layout = new QHBoxLayout(this);
-    main_layout->setContentsMargins(18, 10, 18, 10);
-    main_layout->setSpacing(18);
+    main_layout->setContentsMargins(18, 8, 18, 8);
+    main_layout->setSpacing(16);
 
     // ── LEFT: Track Info & Artwork ─────────────────────────────────────────
-    auto *left_container = new QWidget(this);
-    auto *left_layout = new QHBoxLayout(left_container);
+    left_container_ = new QWidget(this);
+    auto *left_layout = new QHBoxLayout(left_container_);
     left_layout->setContentsMargins(0, 0, 0, 0);
     left_layout->setSpacing(12);
 
-    artwork_label_ = new QLabel(this);
+    artwork_label_ = new QLabel(left_container_);
     artwork_label_->setFixedSize(44, 44);
     artwork_label_->setAlignment(Qt::AlignCenter);
     artwork_label_->setStyleSheet(QString("background-color: %1; border-radius: 6px;")
@@ -45,7 +45,7 @@ PlayerBar::PlayerBar(QWidget *parent)
     artwork_label_->setPixmap(getRoundedPixmap(default_art, 6));
     artwork_label_->setAccessibleName("Artwork del track actual");
 
-    track_label_ = new QLabel(this);
+    track_label_ = new QLabel(left_container_);
     track_label_->setFont(DesignTokens::getFont("body", 13));
     track_label_->setText("<b>Sin reproducción</b><br><font color=\"" + c.text_muted.name() + "\">Ningún track seleccionado</font>");
     track_label_->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
@@ -59,14 +59,16 @@ PlayerBar::PlayerBar(QWidget *parent)
     left_layout->addWidget(artwork_label_);
     left_layout->addWidget(track_label_);
     left_layout->addStretch();
-    left_container->setLayout(left_layout);
-    main_layout->addWidget(left_container, 1);
+    left_container_->setLayout(left_layout);
+    left_container_->setMinimumWidth(230);
+    left_container_->setMaximumWidth(340);
+    main_layout->addWidget(left_container_);
 
     // ── CENTER: Controls & Progress ─────────────────────────────────────────
     auto *center_container = new QWidget(this);
     auto *center_layout = new QVBoxLayout(center_container);
     center_layout->setContentsMargins(0, 0, 0, 0);
-    center_layout->setSpacing(8);
+    center_layout->setSpacing(6);
 
     // Control Buttons Row
     auto *controls_widget = new QWidget(this);
@@ -74,7 +76,7 @@ PlayerBar::PlayerBar(QWidget *parent)
     controls_layout->setContentsMargins(0, 0, 0, 0);
     controls_layout->setSpacing(16);
     controls_layout->addStretch();
-    controls_widget->setFixedHeight(40);
+    controls_widget->setFixedHeight(38);
 
     // Shuffle Button
     shuffle_btn_ = new QPushButton(this);
@@ -179,18 +181,18 @@ PlayerBar::PlayerBar(QWidget *parent)
     center_layout->addWidget(progress_widget);
 
     center_container->setLayout(center_layout);
-    main_layout->addWidget(center_container, 2);
+    main_layout->addWidget(center_container, 1);
 
     // ── RIGHT: Volume Controls ──────────────────────────────────────────────
-    auto *right_container = new QWidget(this);
-    auto *right_layout = new QHBoxLayout(right_container);
+    right_container_ = new QWidget(this);
+    auto *right_layout = new QHBoxLayout(right_container_);
     right_layout->setContentsMargins(0, 0, 0, 0);
     right_layout->setSpacing(8);
     right_layout->addStretch();
 
-    QLabel *volume_icon = IconProvider::createIconLabel("volume_up", 18, c.text_secondary, true, this);
+    QLabel *volume_icon = IconProvider::createIconLabel("volume_up", 18, c.text_secondary, true, right_container_);
     
-    volume_slider_ = new QSlider(Qt::Horizontal, this);
+    volume_slider_ = new QSlider(Qt::Horizontal, right_container_);
     volume_slider_->setRange(0, 100);
     volume_slider_->setValue(75);
     volume_slider_->setFixedWidth(80);
@@ -205,11 +207,12 @@ PlayerBar::PlayerBar(QWidget *parent)
 
     right_layout->addWidget(volume_icon);
     right_layout->addWidget(volume_slider_);
-    right_container->setLayout(right_layout);
-    main_layout->addWidget(right_container, 1);
+    right_container_->setLayout(right_layout);
+    right_container_->setFixedWidth(150);
+    main_layout->addWidget(right_container_);
 
     setLayout(main_layout);
-    setFixedHeight(86);
+    setFixedHeight(78);
 
     // Set panel background
     setAttribute(Qt::WA_StyledBackground, true);
@@ -217,7 +220,7 @@ PlayerBar::PlayerBar(QWidget *parent)
         "PlayerBar {"
         "    background-color: %1;"
         "    border: 1px solid %2;"
-        "    border-radius: 18px;"
+        "    border-radius: 16px;"
         "}"
     )
         .arg(c.bg_surface.name())
@@ -270,12 +273,13 @@ void PlayerBar::set_track_info(const std::string &title, const std::string &arti
 
     // Load artwork
     QPixmap art_pix;
+    const int artwork_size = artwork_label_->width() > 0 ? artwork_label_->width() : 44;
     if (!thumbnail.empty() && art_pix.load(QString::fromStdString(thumbnail))) {
         artwork_label_->setPixmap(getRoundedPixmap(
-            art_pix.scaled(44, 44, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation), 6
+            art_pix.scaled(artwork_size, artwork_size, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation), 6
         ));
     } else {
-        QPixmap default_art = IconProvider::getIcon("music_note", c.text_secondary, 22).pixmap(44, 44);
+        QPixmap default_art = IconProvider::getIcon("music_note", c.text_secondary, 22).pixmap(artwork_size, artwork_size);
         artwork_label_->setPixmap(getRoundedPixmap(default_art, 6));
     }
 }
@@ -359,6 +363,27 @@ void PlayerBar::set_repeat_mode(int mode) {
     }
 }
 
+void PlayerBar::set_compact(bool compact) {
+    if (compact_ == compact) {
+        return;
+    }
+    compact_ = compact;
+
+    setFixedHeight(compact_ ? 70 : 78);
+    if (auto *layout = qobject_cast<QHBoxLayout *>(this->layout())) {
+        layout->setContentsMargins(compact_ ? 14 : 18, compact_ ? 6 : 8, compact_ ? 14 : 18, compact_ ? 6 : 8);
+        layout->setSpacing(compact_ ? 12 : 16);
+    }
+
+    artwork_label_->setFixedSize(compact_ ? 38 : 44, compact_ ? 38 : 44);
+    left_container_->setMinimumWidth(compact_ ? 180 : 230);
+    left_container_->setMaximumWidth(compact_ ? 260 : 340);
+    if (right_container_) {
+        right_container_->setVisible(!compact_);
+    }
+    update_theme();
+}
+
 void PlayerBar::mousePressEvent(QMouseEvent *event) {
     QWidget::mousePressEvent(event);
     if (event->button() == Qt::LeftButton && event->pos().x() < 280) {
@@ -388,7 +413,7 @@ void PlayerBar::update_theme() {
         "PlayerBar {"
         "    background-color: %1;"
         "    border: 1px solid %2;"
-        "    border-radius: 18px;"
+        "    border-radius: 16px;"
         "}"
     )
         .arg(c.bg_surface.name())

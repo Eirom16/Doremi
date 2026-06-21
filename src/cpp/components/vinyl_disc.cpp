@@ -14,7 +14,9 @@ VinylDisc::VinylDisc(QWidget *parent)
     timer_ = new QTimer(this);
     connect(timer_, &QTimer::timeout, this, &VinylDisc::onTick);
     // 60fps (16ms) for fluid continuous rotation
-    timer_->start(16);
+    if (!DesignTokens::reducedMotion()) {
+        timer_->start(16);
+    }
 }
 
 void VinylDisc::setArtwork(const QString &thumbnail_path) {
@@ -35,10 +37,27 @@ void VinylDisc::setArtwork(const QString &thumbnail_path) {
 
 void VinylDisc::setPlaying(bool playing) {
     playing_ = playing;
+    if (DesignTokens::reducedMotion()) {
+        target_speed_ = 0.0f;
+        current_speed_ = 0.0f;
+        if (timer_) timer_->stop();
+        update();
+        return;
+    }
+    if (timer_ && !timer_->isActive()) {
+        timer_->start(16);
+    }
     target_speed_ = playing ? MAX_SPEED : 0.0f;
 }
 
 void VinylDisc::onTick() {
+    if (DesignTokens::reducedMotion()) {
+        current_speed_ = 0.0f;
+        target_speed_ = 0.0f;
+        if (timer_) timer_->stop();
+        return;
+    }
+
     // Smooth speed interpolation (accel / decel)
     if (std::abs(current_speed_ - target_speed_) > 0.001f) {
         if (current_speed_ < target_speed_) {

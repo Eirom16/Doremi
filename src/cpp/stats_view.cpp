@@ -9,8 +9,29 @@
 #include <QPainterPath>
 #include <QPushButton>
 #include <QButtonGroup>
+#include <QFile>
+#include <QFileDialog>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QMessageBox>
+#include <QTextStream>
 #include <algorithm>
 #include "doremi/src/bridge.rs.h"
+
+namespace {
+QString rs(const rust::String &value) {
+    return QString::fromStdString(static_cast<std::string>(value));
+}
+
+QString csvCell(QString value) {
+    value.replace('"', "\"\"");
+    if (value.contains(',') || value.contains('"') || value.contains('\n') || value.contains('\r')) {
+        return QString("\"%1\"").arg(value);
+    }
+    return value;
+}
+}
 
 TopTrackRow::TopTrackRow(int rank, const Track &track,
             int plays, int max_plays, QWidget *parent)
@@ -141,10 +162,42 @@ void StatsView::setupLayout() {
     main_layout_->setSpacing(24);
     main_layout_->setAlignment(Qt::AlignTop);
 
+    auto *header_layout = new QHBoxLayout();
+    header_layout->setSpacing(12);
+
     auto *title = new QLabel("Estadísticas de Escucha", this);
     title->setFont(DesignTokens::getFont("display", 22));
     title->setStyleSheet(QString("color: %1; font-weight: bold;").arg(c.text_primary.name()));
-    main_layout_->addWidget(title);
+    header_layout->addWidget(title);
+    header_layout->addStretch();
+
+    auto button_style = QString(
+        "QPushButton { background: %1; border: 1px solid %2; border-radius: 6px; padding: 7px 12px; color: %3; font-size: 12px; }"
+        "QPushButton:hover { background: rgba(%4, %5, %6, 0.08); }"
+        "QPushButton:disabled { color: %7; border-color: %2; }")
+        .arg(c.bg_surface.name())
+        .arg(c.border.name())
+        .arg(c.text_primary.name())
+        .arg(c.text_primary.red())
+        .arg(c.text_primary.green())
+        .arg(c.text_primary.blue())
+        .arg(c.text_muted.name());
+
+    auto *export_json = new QPushButton("JSON", this);
+    export_json->setCursor(Qt::PointingHandCursor);
+    export_json->setToolTip("Exportar estadísticas a JSON");
+    export_json->setStyleSheet(button_style);
+    connect(export_json, &QPushButton::clicked, this, &StatsView::exportStatsAsJson);
+    header_layout->addWidget(export_json);
+
+    auto *export_csv = new QPushButton("CSV", this);
+    export_csv->setCursor(Qt::PointingHandCursor);
+    export_csv->setToolTip("Exportar estadísticas a CSV");
+    export_csv->setStyleSheet(button_style);
+    connect(export_csv, &QPushButton::clicked, this, &StatsView::exportStatsAsCsv);
+    header_layout->addWidget(export_csv);
+
+    main_layout_->addLayout(header_layout);
 
     // Range selector
     auto *range_layout = new QHBoxLayout();
@@ -228,6 +281,9 @@ void StatsView::showEvent(QShowEvent *event) {
 }
 
 void StatsView::setStatsData(const StatsData &stats) {
+    current_stats_ = stats;
+    has_stats_ = true;
+
     card_time_->setValueText(QString::fromStdString(static_cast<std::string>(stats.total_play_time)));
     card_plays_->setValue(stats.total_plays);
     card_artists_->setValue(stats.unique_artists);
@@ -236,11 +292,12 @@ void StatsView::setStatsData(const StatsData &stats) {
     for (int v : stats.weekly_activity) act.push_back(v);
     bar_chart_->setData(act);
 
-    buildTopTracks(std::vector<Track>(stats.top_tracks.begin(), stats.top_tracks.end()),
-                   stats.total_plays);
+    std::vector<Track> tracks(stats.top_tracks.begin(), stats.top_tracks.end());
+    std::vector<int> plays(stats.top_tracks_plays.begin(), stats.top_tracks_plays.end());
+    buildTopTracks(tracks, plays);
 }
 
-void StatsView::buildTopTracks(const std::vector<Track> &tracks, int total_plays) {
+void StatsView::buildTopTracks(const std::vector<Track> &tracks, const std::vector<int> &plays) {
     QLayoutItem *item;
     while ((item = top_tracks_layout_->takeAt(0)) != nullptr) {
         if (item->widget()) {
@@ -259,14 +316,130 @@ void StatsView::buildTopTracks(const std::vector<Track> &tracks, int total_plays
         return;
     }
 
-    int max_plays = total_plays > 0 ? total_plays : 1;
+    int max_plays = plays.empty() ? 1 : plays[0];
     int count = static_cast<int>(tracks.size());
     for (int i = 0; i < count; ++i) {
-        // We don't have per-track play count from StatsData directly,
-        // so we estimate based on position (higher rank = more plays)
-        int plays = (count - i) * (total_plays / qMax(count, 1) / 2);
-        auto *row = new TopTrackRow(i + 1, tracks[i], plays, max_plays, top_tracks_widget_);
+        int track_plays = static_cast<std::size_t>(i) < plays.size() ? plays[i] : 1;
+        auto *row = new TopTrackRow(i + 1, tracks[i], track_plays, max_plays, top_tracks_widget_);
         connect(row, &TopTrackRow::clicked, this, &StatsView::play_requested);
         top_tracks_layout_->addWidget(row);
     }
+}
+
+void StatsView::exportStatsAsJson() {
+    if (!has_stats_) {
+        QMessageBox::information(this, "Sin datos", "Todavía no hay estadísticas cargadas para exportar.");
+        return;
+    }
+
+    QString path = QFileDialog::getSaveFileName(
+        this,
+        "Exportar estadísticas",
+        "doremi-stats.json",
+        "JSON (*.json)");
+    if (path.isEmpty()) return;
+    if (!path.endsWith(".json", Qt::CaseInsensitive)) path += ".json";
+
+    if (writeStatsJson(path)) {
+        QMessageBox::information(this, "Exportación completada", "Las estadísticas se exportaron correctamente.");
+    } else {
+        QMessageBox::warning(this, "Error de exportación", "No se pudo escribir el archivo seleccionado.");
+    }
+}
+
+void StatsView::exportStatsAsCsv() {
+    if (!has_stats_) {
+        QMessageBox::information(this, "Sin datos", "Todavía no hay estadísticas cargadas para exportar.");
+        return;
+    }
+
+    QString path = QFileDialog::getSaveFileName(
+        this,
+        "Exportar estadísticas",
+        "doremi-stats.csv",
+        "CSV (*.csv)");
+    if (path.isEmpty()) return;
+    if (!path.endsWith(".csv", Qt::CaseInsensitive)) path += ".csv";
+
+    if (writeStatsCsv(path)) {
+        QMessageBox::information(this, "Exportación completada", "Las estadísticas se exportaron correctamente.");
+    } else {
+        QMessageBox::warning(this, "Error de exportación", "No se pudo escribir el archivo seleccionado.");
+    }
+}
+
+bool StatsView::writeStatsJson(const QString &path) const {
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+        return false;
+    }
+
+    QJsonArray weekly;
+    for (int value : current_stats_.weekly_activity) {
+        weekly.append(value);
+    }
+
+    QJsonArray top_tracks;
+    for (std::size_t i = 0; i < current_stats_.top_tracks.size(); ++i) {
+        const auto &track = current_stats_.top_tracks[i];
+        QJsonObject item;
+        item["rank"] = static_cast<int>(i + 1);
+        item["id"] = rs(track.id);
+        item["title"] = rs(track.title);
+        item["artist"] = rs(track.artist);
+        item["album"] = rs(track.album);
+        item["duration_ms"] = static_cast<qint64>(track.duration_ms);
+        item["thumbnail"] = rs(track.thumbnail);
+        item["plays"] = i < current_stats_.top_tracks_plays.size()
+            ? current_stats_.top_tracks_plays[i]
+            : 0;
+        top_tracks.append(item);
+    }
+
+    QJsonObject root;
+    root["total_play_time"] = rs(current_stats_.total_play_time);
+    root["total_plays"] = current_stats_.total_plays;
+    root["unique_artists"] = current_stats_.unique_artists;
+    root["weekly_activity"] = weekly;
+    root["top_tracks"] = top_tracks;
+
+    file.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
+    return file.error() == QFileDevice::NoError;
+}
+
+bool StatsView::writeStatsCsv(const QString &path) const {
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+        return false;
+    }
+
+    QTextStream out(&file);
+    out << "metric,value\n";
+    out << "total_play_time," << csvCell(rs(current_stats_.total_play_time)) << "\n";
+    out << "total_plays," << current_stats_.total_plays << "\n";
+    out << "unique_artists," << current_stats_.unique_artists << "\n\n";
+
+    out << "day_offset,plays\n";
+    for (std::size_t i = 0; i < current_stats_.weekly_activity.size(); ++i) {
+        out << static_cast<int>(i) - 6 << "," << current_stats_.weekly_activity[i] << "\n";
+    }
+
+    out << "\nrank,id,title,artist,album,duration_ms,plays,thumbnail\n";
+    for (std::size_t i = 0; i < current_stats_.top_tracks.size(); ++i) {
+        const auto &track = current_stats_.top_tracks[i];
+        int plays = i < current_stats_.top_tracks_plays.size()
+            ? current_stats_.top_tracks_plays[i]
+            : 0;
+        out << (i + 1) << ","
+            << csvCell(rs(track.id)) << ","
+            << csvCell(rs(track.title)) << ","
+            << csvCell(rs(track.artist)) << ","
+            << csvCell(rs(track.album)) << ","
+            << track.duration_ms << ","
+            << plays << ","
+            << csvCell(rs(track.thumbnail)) << "\n";
+    }
+
+    out.flush();
+    return file.error() == QFileDevice::NoError;
 }

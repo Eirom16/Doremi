@@ -22,14 +22,14 @@ void RippleButton::init() {
     updateStyle();
     
     m_radiusAnim = new QVariantAnimation(this);
-    m_radiusAnim->setDuration(450);
+    m_radiusAnim->setDuration(DesignTokens::duration(450));
     m_radiusAnim->setEasingCurve(QEasingCurve::OutCubic);
     connect(m_radiusAnim, &QVariantAnimation::valueChanged, this, [this](const QVariant &val) {
         setRippleRadius(val.toReal());
     });
     
     m_opacityAnim = new QVariantAnimation(this);
-    m_opacityAnim->setDuration(450);
+    m_opacityAnim->setDuration(DesignTokens::duration(450));
     m_opacityAnim->setEasingCurve(QEasingCurve::OutCubic);
     connect(m_opacityAnim, &QVariantAnimation::valueChanged, this, [this](const QVariant &val) {
         setRippleOpacity(val.toReal());

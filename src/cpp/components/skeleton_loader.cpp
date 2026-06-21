@@ -7,7 +7,7 @@ SkeletonLoader::SkeletonLoader(QWidget *parent)
     : QWidget(parent)
 {
     m_shimmerAnim = new QVariantAnimation(this);
-    m_shimmerAnim->setDuration(1400);
+    m_shimmerAnim->setDuration(DesignTokens::duration(1400));
     m_shimmerAnim->setStartValue(-0.3);
     m_shimmerAnim->setEndValue(1.3);
     m_shimmerAnim->setLoopCount(-1); // Infinite loop
@@ -17,7 +17,11 @@ SkeletonLoader::SkeletonLoader(QWidget *parent)
         setShimmerOffset(val.toReal());
     });
     
-    m_shimmerAnim->start();
+    if (DesignTokens::reducedMotion()) {
+        setShimmerOffset(0.2);
+    } else {
+        m_shimmerAnim->start();
+    }
 }
 
 void SkeletonLoader::paintEvent(QPaintEvent *) {

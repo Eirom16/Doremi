@@ -436,6 +436,58 @@ impl PlaylistRepo {
         })
     }
 
+    pub fn move_track(playlist_id: &str, from: i32, to: i32) -> SqlResult<()> {
+        with_db(|conn| {
+            let mut tracks = {
+                let mut stmt = conn.prepare(
+                    "SELECT playlist_id, track_id, position, title, artist, album, duration_ms, thumbnail, added_at
+                     FROM playlist_tracks WHERE playlist_id = ?1 ORDER BY position",
+                )?;
+                let rows = stmt.query_map(params![playlist_id], |r| {
+                    Ok(PlaylistTrack {
+                        playlist_id: r.get(0)?,
+                        track_id: r.get(1)?,
+                        position: r.get(2)?,
+                        title: r.get(3)?,
+                        artist: r.get(4)?,
+                        album: r.get(5)?,
+                        duration_ms: r.get(6)?,
+                        thumbnail: r.get(7)?,
+                        added_at: r.get(8)?,
+                    })
+                })?;
+                rows.collect::<SqlResult<Vec<_>>>()?
+            };
+            let len = tracks.len() as i32;
+            if from < 0 || to < 0 || from >= len || to >= len || from == to {
+                return Ok(());
+            }
+
+            let moved = tracks.remove(from as usize);
+            tracks.insert(to as usize, moved);
+
+            conn.execute("BEGIN IMMEDIATE", [])?;
+            let result = (|| -> SqlResult<()> {
+                for (position, track) in tracks.iter().enumerate() {
+                    conn.execute(
+                        "UPDATE playlist_tracks SET position = ?1
+                         WHERE playlist_id = ?2 AND track_id = ?3",
+                        params![position as i32, playlist_id, track.track_id],
+                    )?;
+                }
+                Ok(())
+            })();
+
+            match result {
+                Ok(()) => conn.execute("COMMIT", []).map(|_| ()),
+                Err(e) => {
+                    let _ = conn.execute("ROLLBACK", []);
+                    Err(e)
+                }
+            }
+        })
+    }
+
     pub fn tracks(playlist_id: &str) -> SqlResult<Vec<PlaylistTrack>> {
         with_db(|conn| {
             let mut stmt = conn.prepare(
@@ -463,6 +515,53 @@ impl PlaylistRepo {
 pub struct PlayHistoryRepo;
 
 impl PlayHistoryRepo {
+    pub fn record_start(
+        track_id: &str,
+        title: &str,
+        artist: &str,
+        album: &str,
+        duration_ms: i64,
+        thumbnail: &str,
+    ) -> SqlResult<()> {
+        with_db(|conn| {
+            conn.execute(
+                "INSERT INTO recently_played (track_id, title, artist, album, duration_ms, thumbnail, play_count, progress_ms, skipped)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0, 0, 1)
+                 ON CONFLICT(track_id) DO UPDATE SET
+                     played_at = datetime('now'),
+                     progress_ms = 0,
+                     skipped = 1,
+                     title = ?2,
+                     artist = ?3,
+                     album = ?4,
+                     duration_ms = ?5,
+                     thumbnail = ?6",
+                params![track_id, title, artist, album, duration_ms, thumbnail],
+            ).map(|_| ())
+        })
+    }
+
+    pub fn record_success(track_id: &str) -> SqlResult<()> {
+        with_db(|conn| {
+            conn.execute(
+                "UPDATE recently_played SET
+                     play_count = play_count + 1,
+                     skipped = 0
+                 WHERE track_id = ?1",
+                params![track_id],
+            ).map(|_| ())
+        })
+    }
+
+    pub fn update_progress(track_id: &str, progress_ms: i64) -> SqlResult<()> {
+        with_db(|conn| {
+            conn.execute(
+                "UPDATE recently_played SET progress_ms = ?2 WHERE track_id = ?1",
+                params![track_id, progress_ms],
+            ).map(|_| ())
+        })
+    }
+
     pub fn record(
         track_id: &str,
         title: &str,
@@ -522,38 +621,93 @@ impl PlayHistoryRepo {
         with_db(|conn| conn.execute("DELETE FROM recently_played", []).map(|_| ()))
     }
 
+    pub fn remove(track_id: &str) -> SqlResult<()> {
+        with_db(|conn| {
+            conn.execute(
+                "DELETE FROM recently_played WHERE track_id = ?1",
+                params![track_id],
+            )
+            .map(|_| ())
+        })
+    }
+
     pub fn total_play_time(days: i64) -> SqlResult<i64> {
         with_db(|conn| {
-            conn.query_row(
-                "SELECT COALESCE(SUM(duration_ms), 0) FROM recently_played
-                 WHERE played_at >= datetime('now', ?1)",
-                params![format!("-{} days", days)],
-                |r| r.get(0),
-            )
+            if days < 0 {
+                conn.query_row(
+                    "SELECT COALESCE(SUM(duration_ms), 0) FROM recently_played",
+                    [],
+                    |r| r.get(0),
+                )
+            } else {
+                conn.query_row(
+                    "SELECT COALESCE(SUM(duration_ms), 0) FROM recently_played
+                     WHERE played_at >= datetime('now', ?1)",
+                    params![format!("-{} days", days)],
+                    |r| r.get(0),
+                )
+            }
+        })
+    }
+
+    pub fn total_plays(days: i64) -> SqlResult<i64> {
+        with_db(|conn| {
+            if days < 0 {
+                conn.query_row(
+                    "SELECT COALESCE(SUM(play_count), 0) FROM recently_played",
+                    [],
+                    |r| r.get(0),
+                )
+            } else {
+                conn.query_row(
+                    "SELECT COALESCE(SUM(play_count), 0) FROM recently_played
+                     WHERE played_at >= datetime('now', ?1)",
+                    params![format!("-{} days", days)],
+                    |r| r.get(0),
+                )
+            }
         })
     }
 
     pub fn unique_artists(days: i64) -> SqlResult<i64> {
         with_db(|conn| {
-            conn.query_row(
-                "SELECT COUNT(DISTINCT artist) FROM recently_played
-                 WHERE played_at >= datetime('now', ?1)",
-                params![format!("-{} days", days)],
-                |r| r.get(0),
-            )
+            if days < 0 {
+                conn.query_row(
+                    "SELECT COUNT(DISTINCT artist) FROM recently_played",
+                    [],
+                    |r| r.get(0),
+                )
+            } else {
+                conn.query_row(
+                    "SELECT COUNT(DISTINCT artist) FROM recently_played
+                     WHERE played_at >= datetime('now', ?1)",
+                    params![format!("-{} days", days)],
+                    |r| r.get(0),
+                )
+            }
         })
     }
 
     pub fn top_tracks(limit: i64, days: i64) -> SqlResult<Vec<RecentTrack>> {
         with_db(|conn| {
-            let mut stmt = conn.prepare(
-                "SELECT id, track_id, title, artist, album, duration_ms, thumbnail, played_at,
-                        play_count, progress_ms, skipped
-                 FROM recently_played
-                 WHERE played_at >= datetime('now', ?1)
-                 ORDER BY play_count DESC LIMIT ?2",
-            )?;
-            let rows = stmt.query_map(params![format!("-{} days", days), limit], |r| {
+            let mut stmt = if days < 0 {
+                conn.prepare(
+                    "SELECT id, track_id, title, artist, album, duration_ms, thumbnail, played_at,
+                            play_count, progress_ms, skipped
+                     FROM recently_played
+                     ORDER BY play_count DESC LIMIT ?1",
+                )?
+            } else {
+                conn.prepare(
+                    "SELECT id, track_id, title, artist, album, duration_ms, thumbnail, played_at,
+                            play_count, progress_ms, skipped
+                     FROM recently_played
+                     WHERE played_at >= datetime('now', ?1)
+                     ORDER BY play_count DESC LIMIT ?2",
+                )?
+            };
+            
+            let map_row = |r: &rusqlite::Row| {
                 Ok(RecentTrack {
                     id: r.get(0)?,
                     track_id: r.get(1)?,
@@ -567,7 +721,13 @@ impl PlayHistoryRepo {
                     progress_ms: r.get(9)?,
                     skipped: r.get(10)?,
                 })
-            })?;
+            };
+
+            let rows = if days < 0 {
+                stmt.query_map(params![limit], map_row)?
+            } else {
+                stmt.query_map(params![format!("-{} days", days), limit], map_row)?
+            };
             rows.collect()
         })
     }
@@ -962,10 +1122,14 @@ mod tests {
     use super::*;
     use crate::db::Database;
 
+    static TEST_MUTEX: once_cell::sync::Lazy<std::sync::Mutex<()>> =
+        once_cell::sync::Lazy::new(|| std::sync::Mutex::new(()));
+
     fn with_test_conn<F, R>(f: F) -> R
     where
         F: FnOnce() -> R,
     {
+        let _guard = TEST_MUTEX.lock().unwrap();
         use crate::db::{init_connection, take_connection};
         let conn = rusqlite::Connection::open_in_memory().unwrap();
         Database::run_migrations(&conn).unwrap();
@@ -1040,6 +1204,39 @@ mod tests {
     }
 
     #[test]
+    fn playlist_move_track_persists_order() {
+        with_test_conn(|| {
+            let playlist_id = PlaylistRepo::create("Move Test", "").unwrap();
+            for (position, track_id) in ["a", "b", "c"].iter().enumerate() {
+                PlaylistRepo::add_track(
+                    &playlist_id,
+                    &PlaylistTrack {
+                        playlist_id: playlist_id.clone(),
+                        track_id: track_id.to_string(),
+                        position: position as i32,
+                        title: format!("Track {track_id}"),
+                        artist: "Artist".to_string(),
+                        album: String::new(),
+                        duration_ms: 0,
+                        thumbnail: String::new(),
+                        added_at: String::new(),
+                    },
+                )
+                .unwrap();
+            }
+
+            PlaylistRepo::move_track(&playlist_id, 0, 2).unwrap();
+
+            let ordered_ids: Vec<String> = PlaylistRepo::tracks(&playlist_id)
+                .unwrap()
+                .into_iter()
+                .map(|track| track.track_id)
+                .collect();
+            assert_eq!(ordered_ids, ["b", "c", "a"]);
+        });
+    }
+
+    #[test]
     fn test_recently_played_sql() {
         with_test_conn(|| {
             crate::db::with_db(|conn| {
@@ -1050,6 +1247,43 @@ mod tests {
                     .query_row("SELECT COUNT(*) FROM recently_played", [], |r| r.get(0))
                     .unwrap();
                 assert_eq!(count, 1);
+                Ok(())
+            })
+            .unwrap();
+
+            PlayHistoryRepo::remove("t1").unwrap();
+
+            crate::db::with_db(|conn| {
+                let count: i64 = conn
+                    .query_row("SELECT COUNT(*) FROM recently_played", [], |r| r.get(0))
+                    .unwrap();
+                assert_eq!(count, 0);
+                Ok(())
+            })
+            .unwrap();
+        });
+    }
+
+    #[test]
+    fn test_history_indexes_created_by_migrations() {
+        with_test_conn(|| {
+            crate::db::with_db(|conn| {
+                let mut stmt = conn.prepare("PRAGMA index_list('recently_played')")?;
+                let indexes = stmt
+                    .query_map([], |row| row.get::<_, String>(1))?
+                    .collect::<SqlResult<Vec<_>>>()?;
+
+                assert!(indexes.iter().any(|idx| idx == "idx_recently_played_track_id"));
+                assert!(indexes.iter().any(|idx| idx == "idx_recently_played_played_at"));
+                assert!(indexes.iter().any(|idx| idx == "idx_recently_played_play_count"));
+                assert!(indexes.iter().any(|idx| idx == "idx_recently_played_played_at_artist"));
+
+                let mut stmt = conn.prepare("PRAGMA index_list('search_history')")?;
+                let search_indexes = stmt
+                    .query_map([], |row| row.get::<_, String>(1))?
+                    .collect::<SqlResult<Vec<_>>>()?;
+
+                assert!(search_indexes.iter().any(|idx| idx == "idx_search_history_searched_at"));
                 Ok(())
             })
             .unwrap();

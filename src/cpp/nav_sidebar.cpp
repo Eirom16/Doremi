@@ -121,6 +121,28 @@ void NavSidebar::set_active_route(const std::string &route) {
     }
 }
 
+void NavSidebar::set_compact(bool compact) {
+    if (compact_ == compact) {
+        return;
+    }
+    compact_ = compact;
+    setFixedWidth(compact_ ? 76 : 210);
+
+    for (auto &nb : buttons_) {
+        if (auto *layout = qobject_cast<QHBoxLayout *>(nb.btn->layout())) {
+            layout->setContentsMargins(compact_ ? 22 : 20, 0, compact_ ? 0 : 16, 0);
+            layout->setSpacing(compact_ ? 0 : 12);
+        }
+        for (auto *label : nb.btn->findChildren<QLabel *>()) {
+            if (label->objectName() == "nav_text") {
+                label->setVisible(!compact_);
+            }
+        }
+    }
+
+    update_profile(authenticated_, user_name_, avatar_url_);
+}
+
 void NavSidebar::on_button_clicked(const std::string &route) {
     set_active_route(route);
     emit route_changed(route);
@@ -146,6 +168,9 @@ void NavSidebar::update_theme() {
             break;
         }
     }
+    const bool was_compact = compact_;
+    compact_ = !was_compact;
+    set_compact(was_compact);
 
     update_profile(authenticated_, user_name_, avatar_url_);
 }
@@ -157,7 +182,7 @@ void NavSidebar::update_profile(bool authenticated, const std::string &name, con
 
     const auto &c = DesignTokens::current();
     if (authenticated) {
-        profile_btn_->setText(QString::fromStdString(" " + name));
+        profile_btn_->setText(compact_ ? "" : QString::fromStdString(" " + name));
         profile_btn_->setIcon(IconProvider::getIcon("account_circle", c.accent, 20));
         DesignTokens::applyAccessible(
             profile_btn_,
@@ -165,7 +190,7 @@ void NavSidebar::update_profile(bool authenticated, const std::string &name, con
             "Abre el menu de cuenta.",
             "Cuenta");
     } else {
-        profile_btn_->setText(" Iniciar sesión");
+        profile_btn_->setText(compact_ ? "" : " Iniciar sesión");
         profile_btn_->setIcon(IconProvider::getIcon("login", c.text_secondary, 20));
         DesignTokens::applyAccessible(
             profile_btn_,

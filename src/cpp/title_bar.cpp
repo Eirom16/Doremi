@@ -9,26 +9,28 @@ TitleBar::TitleBar(QWidget *parent)
 {
     const auto &c = DesignTokens::current();
 
-    auto *layout = new QHBoxLayout(this);
-    layout->setContentsMargins(16, 6, 16, 6);
-    layout->setSpacing(12);
+    layout_ = new QHBoxLayout(this);
+    layout_->setContentsMargins(16, 6, 16, 6);
+    layout_->setSpacing(12);
 
-    auto *logo = new QLabel("Doremi", this);
-    logo->setFont(DesignTokens::getFont("heading_sm", 16));
-    logo->setStyleSheet(QString("font-weight: bold; color: %1; background: transparent;").arg(c.accent.name()));
-    
-    auto *logo_icon = IconProvider::createIconLabel("music_note", 18, c.accent, true, this);
-    
-    auto *logo_layout = new QHBoxLayout();
+    logo_zone_ = new QWidget(this);
+    auto *logo_layout = new QHBoxLayout(logo_zone_);
     logo_layout->setContentsMargins(0, 0, 0, 0);
     logo_layout->setSpacing(6);
-    logo_layout->addWidget(logo_icon);
-    logo_layout->addWidget(logo);
+    logo_icon_ = IconProvider::createIconLabel("music_note", 18, c.accent, true, logo_zone_);
+    logo_label_ = new QLabel("Doremi", logo_zone_);
+    logo_label_->setFont(DesignTokens::getFont("heading_sm", 16));
+    logo_label_->setStyleSheet(QString("font-weight: bold; color: %1; background: transparent;").arg(c.accent.name()));
+    logo_layout->addWidget(logo_icon_);
+    logo_layout->addWidget(logo_label_);
+    logo_layout->addStretch(1);
     
-    layout->addLayout(logo_layout);
-    layout->addSpacing(24);
+    layout_->addWidget(logo_zone_);
+    layout_->addSpacing(24);
 
     search_input_ = new QLineEdit(this);
+    search_input_->setMinimumWidth(360);
+    search_input_->setMaximumWidth(560);
     search_input_->setPlaceholderText("Buscar canciones, artistas, álbumes...");
     search_input_->setFont(DesignTokens::getFont("body", 13));
     search_input_->setFocusPolicy(Qt::StrongFocus);
@@ -47,7 +49,8 @@ TitleBar::TitleBar(QWidget *parent)
     search_input_->addAction(IconProvider::getIcon("search", c.text_secondary, 18), QLineEdit::LeadingPosition);
     
     search_input_->setStyleSheet(DesignTokens::textInputStyle());
-    layout->addWidget(search_input_, 1);
+    layout_->addWidget(search_input_, 1);
+    layout_->addStretch(1);
 
     debounce_timer_ = new QTimer(this);
     debounce_timer_->setSingleShot(true);
@@ -98,6 +101,17 @@ void TitleBar::focus_search() {
     search_input_->selectAll();
 }
 
+void TitleBar::set_sidebar_offset(int width) {
+    if (!logo_zone_) {
+        return;
+    }
+    const int logo_zone_width = qMax(44, width - 32);
+    logo_zone_->setFixedWidth(logo_zone_width);
+    if (logo_label_) {
+        logo_label_->setVisible(width >= 150);
+    }
+}
+
 void TitleBar::update_theme() {
     const auto &c = DesignTokens::current();
     
@@ -106,9 +120,11 @@ void TitleBar::update_theme() {
         .arg(QString("rgba(%1, %2, %3, %4)").arg(c.border.red()).arg(c.border.green()).arg(c.border.blue()).arg(c.border.alpha() / 255.0))
     );
     
-    auto *logo = findChild<QLabel*>();
-    if (logo && logo->text() == "Doremi") {
-        logo->setStyleSheet(QString("font-weight: bold; color: %1; background: transparent;").arg(c.accent.name()));
+    if (logo_icon_) {
+        IconProvider::setupIconLabel(logo_icon_, "music_note", 18, c.accent, true);
+    }
+    if (logo_label_) {
+        logo_label_->setStyleSheet(QString("font-weight: bold; color: %1; background: transparent;").arg(c.accent.name()));
     }
     
     if (search_input_) {

@@ -1,4 +1,5 @@
 #include <QApplication>
+#include <QGuiApplication>
 #include <QShortcut>
 #include <QKeySequence>
 #include <QWidget>
@@ -13,12 +14,16 @@
 #include <QPixmap>
 #include <QPainter>
 #include <QPointer>
+#include <QPixmapCache>
 #include <QScrollArea>
 #include <QScrollBar>
 #include <QFile>
 #include <QCryptographicHash>
 #include <QStandardPaths>
 #include <QDir>
+#include <QHash>
+#include <QMutex>
+#include <QMutexLocker>
 #include <QWebEngineProfile>
 #include <QWebEngineCookieStore>
 #include <QNetworkCookie>
@@ -47,6 +52,7 @@
 #include "welcome_view.h"
 #include "login_dialog.h"
 #include "components/toast_notification.h"
+#include "components/offline_banner.h"
 #include "components/theme_transition.h"
 #include "ffi_utils.h"
 #include "doremi/src/bridge.rs.h"
@@ -127,24 +133,34 @@ DoremiMainWindow::DoremiMainWindow(QWidget *parent)
 
 
     stack_->setCurrentIndex(1); // start at home
-    body_scroll_ = new QScrollArea(central);
+    auto *right_container = new QWidget(central);
+    auto *right_layout = new QVBoxLayout(right_container);
+    right_layout->setContentsMargins(0, 0, 0, 0);
+    right_layout->setSpacing(0);
+
+    offline_banner_ = new OfflineBannerWidget(right_container);
+    right_layout->addWidget(offline_banner_);
+
+    body_scroll_ = new QScrollArea(right_container);
     body_scroll_->setWidgetResizable(true);
     body_scroll_->setFrameShape(QFrame::NoFrame);
     body_scroll_->setStyleSheet("background: transparent; border: none;");
     body_scroll_->setWidget(stack_);
-    body->addWidget(body_scroll_, 1);
+    right_layout->addWidget(body_scroll_, 1);
+
+    body->addWidget(right_container, 1);
 
     root->addLayout(body, 1);
 
-    auto *player_shell = new QWidget(central);
-    player_shell->setAttribute(Qt::WA_StyledBackground, true);
-    player_shell->setStyleSheet("background: transparent;");
-    auto *player_shell_layout = new QHBoxLayout(player_shell);
-    player_shell_layout->setContentsMargins(16, 0, 16, 12);
-    player_shell_layout->setSpacing(0);
-    player_bar_ = new PlayerBar(player_shell);
-    player_shell_layout->addWidget(player_bar_);
-    root->addWidget(player_shell);
+    player_shell_ = new QWidget(central);
+    player_shell_->setAttribute(Qt::WA_StyledBackground, true);
+    player_shell_->setStyleSheet("background: transparent;");
+    player_shell_layout_ = new QHBoxLayout(player_shell_);
+    player_shell_layout_->setContentsMargins(16, 0, 16, 12);
+    player_shell_layout_->setSpacing(0);
+    player_bar_ = new PlayerBar(player_shell_);
+    player_shell_layout_->addWidget(player_bar_);
+    root->addWidget(player_shell_);
 
     setCentralWidget(central);
 
@@ -181,6 +197,7 @@ DoremiMainWindow::DoremiMainWindow(QWidget *parent)
         app->setWindowIcon(win_icon);
 
     setStyleSheet(DesignTokens::getGlobalStyleSheet());
+    update_responsive_layout();
     setup_shortcuts();
     setup_tray();
     connect_signals();
@@ -306,11 +323,13 @@ void DoremiMainWindow::connect_signals() {
     QObject::connect(this, &DoremiMainWindow::window_closed, this, []() { on_window_close_requested(); });
 
     QObject::connect(title_bar_, &TitleBar::search_submitted, this, [this](const std::string &q) {
+        if (!ensure_online_action("buscar en YouTube Music")) return;
         search_view_->set_query(q);
         stack_->setCurrentIndex(2);
         on_search_submitted(q, "all");
     });
-    QObject::connect(title_bar_, &TitleBar::search_text_changed, this, [](const std::string &q) {
+    QObject::connect(title_bar_, &TitleBar::search_text_changed, this, [this](const std::string &q) {
+        if (!is_online_) return;
         on_search_suggestions_requested(q);
     });
 
@@ -354,7 +373,10 @@ void DoremiMainWindow::connect_signals() {
     QObject::connect(now_playing_view_, &NowPlayingView::related_add_to_queue_requested, this,
         [](Track track) { on_add_to_queue_end(track); });
     QObject::connect(now_playing_view_, &NowPlayingView::download_clicked, this,
-        [](Track track) { on_download_requested(track); });
+        [this](Track track) {
+            if (!ensure_online_action("descargar canciones")) return;
+            on_download_requested(track);
+        });
 
     QObject::connect(this, &DoremiMainWindow::shuffle_toggled, this,
         [](bool on) { on_shuffle_toggled(on); });
@@ -367,7 +389,8 @@ void DoremiMainWindow::connect_signals() {
         });
 
     QObject::connect(settings_view_, &SettingsView::lastfm_auth_requested, this,
-        [](const std::string &apiKey, const std::string &apiSecret, const std::string &username, const std::string &password) {
+        [this](const std::string &apiKey, const std::string &apiSecret, const std::string &username, const std::string &password) {
+            if (!ensure_online_action("conectar Last.fm")) return;
             on_lastfm_auth_requested(apiKey, apiSecret, username, password);
         });
 
@@ -382,24 +405,38 @@ void DoremiMainWindow::connect_signals() {
         });
     QObject::connect(search_view_, &SearchView::search_requested, this,
         [this](const std::string &query, const std::string &filter) {
+            if (!ensure_online_action("buscar en YouTube Music")) return;
             title_bar_->set_search_text(query);
             search_view_->set_query(query);
             on_search_submitted(query, filter);
         });
     QObject::connect(search_view_, &SearchView::album_requested, this,
-        [](const std::string &browse_id) { on_album_requested(browse_id); });
+        [this](const std::string &browse_id) {
+            if (!ensure_online_action("abrir detalles de álbum")) return;
+            on_album_requested(browse_id);
+        });
     QObject::connect(search_view_, &SearchView::artist_requested, this,
-        [](const std::string &browse_id) { on_artist_requested(browse_id); });
+        [this](const std::string &browse_id) {
+            if (!ensure_online_action("abrir detalles de artista")) return;
+            on_artist_requested(browse_id);
+        });
     QObject::connect(search_view_, &SearchView::playlist_requested, this,
-        [](const std::string &playlist_id) { on_playlist_requested(playlist_id); });
+        [this](const std::string &playlist_id) {
+            if (!ensure_online_action("abrir detalles de playlist")) return;
+            on_playlist_requested(playlist_id);
+        });
     QObject::connect(search_view_, &SearchView::show_requested, this,
-        [](const std::string &browse_id) { on_show_requested(browse_id); });
+        [this](const std::string &browse_id) {
+            if (!ensure_online_action("abrir detalles de podcast")) return;
+            on_show_requested(browse_id);
+        });
     QObject::connect(search_view_, &SearchView::add_favorite_requested, this,
         [](Track track) {
             on_add_favorite(track);
         });
     QObject::connect(search_view_, &SearchView::download_requested, this,
-        [](Track track) {
+        [this](Track track) {
+            if (!ensure_online_action("descargar canciones")) return;
             on_download_requested(track);
         });
     QObject::connect(search_view_, &SearchView::add_to_queue_next_requested, this,
@@ -414,28 +451,58 @@ void DoremiMainWindow::connect_signals() {
     QObject::connect(home_view_, &HomeView::play_requested, this,
         [](Track track) { on_search_item_clicked(track); });
     QObject::connect(home_view_, &HomeView::album_requested, this,
-        [](const std::string &id) { on_album_requested(id); });
+        [this](const std::string &id) {
+            if (!ensure_online_action("abrir detalles de álbum")) return;
+            on_album_requested(id);
+        });
     QObject::connect(home_view_, &HomeView::artist_requested, this,
-        [](const std::string &id) { on_artist_requested(id); });
+        [this](const std::string &id) {
+            if (!ensure_online_action("abrir detalles de artista")) return;
+            on_artist_requested(id);
+        });
     QObject::connect(home_view_, &HomeView::playlist_requested, this,
-        [](const std::string &id) { on_playlist_requested(id); });
+        [this](const std::string &id) {
+            if (!ensure_online_action("abrir detalles de playlist")) return;
+            on_playlist_requested(id);
+        });
     QObject::connect(home_view_, &HomeView::show_requested, this,
-        [](const std::string &id) { on_show_requested(id); });
+        [this](const std::string &id) {
+            if (!ensure_online_action("abrir detalles de podcast")) return;
+            on_show_requested(id);
+        });
     QObject::connect(home_view_, &HomeView::retry_requested, this,
-        []() { on_home_retry_requested(); });
+        [this]() {
+            if (!ensure_online_action("recargar inicio")) return;
+            on_home_retry_requested();
+        });
     QObject::connect(home_view_, &HomeView::load_more_requested, this,
-        []() { on_home_load_more_requested(); });
+        [this]() {
+            if (!ensure_online_action("cargar más contenido")) return;
+            on_home_load_more_requested();
+        });
 
     QObject::connect(trending_view_, &TrendingView::play_requested, this,
         [](Track track) { on_search_item_clicked(track); });
     QObject::connect(trending_view_, &TrendingView::album_requested, this,
-        [](const std::string &id) { on_album_requested(id); });
+        [this](const std::string &id) {
+            if (!ensure_online_action("abrir detalles de álbum")) return;
+            on_album_requested(id);
+        });
     QObject::connect(trending_view_, &TrendingView::artist_requested, this,
-        [](const std::string &id) { on_artist_requested(id); });
+        [this](const std::string &id) {
+            if (!ensure_online_action("abrir detalles de artista")) return;
+            on_artist_requested(id);
+        });
     QObject::connect(trending_view_, &TrendingView::playlist_requested, this,
-        [](const std::string &id) { on_playlist_requested(id); });
+        [this](const std::string &id) {
+            if (!ensure_online_action("abrir detalles de playlist")) return;
+            on_playlist_requested(id);
+        });
     QObject::connect(trending_view_, &TrendingView::retry_requested, this,
-        []() { on_trending_retry_requested(); });
+        [this]() {
+            if (!ensure_online_action("recargar tendencias")) return;
+            on_trending_retry_requested();
+        });
 
     QObject::connect(library_view_, &LibraryView::tab_changed, this,
         [](const std::string &tab) {
@@ -456,7 +523,8 @@ void DoremiMainWindow::connect_signals() {
     QObject::connect(library_view_, &LibraryView::remove_favorite_show_requested, this,
         [](const std::string &id) { on_remove_favorite_show(id); });
     QObject::connect(library_view_, &LibraryView::download_requested, this,
-        [](Track track) {
+        [this](Track track) {
+            if (!ensure_online_action("descargar canciones")) return;
             on_download_requested(track);
         });
     QObject::connect(library_view_, &LibraryView::add_to_queue_next_requested, this,
@@ -464,7 +532,10 @@ void DoremiMainWindow::connect_signals() {
     QObject::connect(library_view_, &LibraryView::add_to_queue_end_requested, this,
         [](Track track) { on_add_to_queue_end(track); });
     QObject::connect(library_view_, &LibraryView::show_requested, this,
-        [](const std::string &id) { on_show_requested(id); });
+        [this](const std::string &id) {
+            if (!ensure_online_action("abrir detalles de podcast")) return;
+            on_show_requested(id);
+        });
     QObject::connect(library_view_, &LibraryView::create_playlist_requested, this,
         [](const std::string &name, const std::string &desc, const std::string &privacy) {
             on_create_playlist(name, desc, privacy);
@@ -499,7 +570,10 @@ void DoremiMainWindow::connect_signals() {
     QObject::connect(album_detail_view_, &AlbumDetailView::back_requested, this,
         [this]() { navigate_back_from_detail(); });
     QObject::connect(album_detail_view_, &AlbumDetailView::artist_requested, this,
-        [](const std::string &artist_id) { on_artist_requested(artist_id); });
+        [this](const std::string &artist_id) {
+            if (!ensure_online_action("abrir detalles de artista")) return;
+            on_artist_requested(artist_id);
+        });
 
     // Artist detail view
     QObject::connect(artist_detail_view_, &ArtistDetailView::play_requested, this,
@@ -507,7 +581,8 @@ void DoremiMainWindow::connect_signals() {
             on_search_item_clicked(track);
         });
     QObject::connect(artist_detail_view_, &ArtistDetailView::album_requested, this,
-        [](const std::string &album_id) {
+        [this](const std::string &album_id) {
+            if (!ensure_online_action("abrir detalles de álbum")) return;
             on_album_requested(album_id);
         });
     QObject::connect(artist_detail_view_, &ArtistDetailView::back_requested, this,
@@ -544,7 +619,8 @@ void DoremiMainWindow::connect_signals() {
             on_play_all(v, false);
         });
     QObject::connect(album_detail_view_, &AlbumDetailView::download_all_requested, this,
-        [](std::vector<Track> tracks, std::string parent_id, std::string parent_title, std::string parent_thumbnail) {
+        [this](std::vector<Track> tracks, std::string parent_id, std::string parent_title, std::string parent_thumbnail) {
+            if (!ensure_online_action("descargar álbumes")) return;
             rust::Vec<Track> v;
             for (const auto &t : tracks) v.push_back(t);
             on_batch_download_requested(v, parent_id, parent_title, parent_thumbnail);
@@ -556,7 +632,8 @@ void DoremiMainWindow::connect_signals() {
             on_play_all(v, false);
         });
     QObject::connect(playlist_detail_view_, &PlaylistDetailView::download_all_requested, this,
-        [](std::vector<Track> tracks, std::string parent_id, std::string parent_title, std::string parent_thumbnail) {
+        [this](std::vector<Track> tracks, std::string parent_id, std::string parent_title, std::string parent_thumbnail) {
+            if (!ensure_online_action("descargar playlists")) return;
             rust::Vec<Track> v;
             for (const auto &t : tracks) v.push_back(t);
             on_batch_download_requested(v, parent_id, parent_title, parent_thumbnail);
@@ -582,6 +659,26 @@ void DoremiMainWindow::connect_signals() {
         [](const std::string &pl_id, const std::string &t_id) {
             on_remove_playlist_track(pl_id, t_id);
     });
+    QObject::connect(playlist_detail_view_, &PlaylistDetailView::track_moved, this,
+        [](const std::string &pl_id, int from, int to) {
+            on_move_playlist_track(pl_id, from, to);
+    });
+}
+
+bool DoremiMainWindow::ensure_online_action(const QString &action_description) {
+    if (is_online_) {
+        return true;
+    }
+
+    show_notif(
+        QString("Sin conexión: no se puede %1. Puedes seguir usando descargas, historial y biblioteca local.")
+            .arg(action_description)
+            .toStdString(),
+        "warning");
+    if (offline_banner_) {
+        offline_banner_->showBanner();
+    }
+    return false;
 }
 
 
@@ -639,10 +736,12 @@ void DoremiMainWindow::navigate_to_internal(const std::string &route, bool recor
         stack_->setCurrentIndex(5);
     } else if (route == "downloads") {
         stack_->setCurrentIndex(6);
+        on_downloads_requested();
     } else if (route == "stats") {
         stack_->setCurrentIndex(7);
     } else if (route == "history") {
         stack_->setCurrentIndex(8);
+        on_history_requested();
     } else if (route == "album_detail") {
         stack_->setCurrentIndex(9);
     } else if (route == "artist_detail") {
@@ -802,6 +901,7 @@ void DoremiMainWindow::set_playback_playing(bool playing) {
 
 void DoremiMainWindow::resizeEvent(QResizeEvent *event) {
     QMainWindow::resizeEvent(event);
+    update_responsive_layout();
     if (now_playing_view_) {
         now_playing_view_->setGeometry(rect());
     }
@@ -809,6 +909,22 @@ void DoremiMainWindow::resizeEvent(QResizeEvent *event) {
         theme_transition_->setGeometry(rect());
     }
     ToastNotification::repositionActiveToasts();
+}
+
+void DoremiMainWindow::update_responsive_layout() {
+    if (nav_sidebar_) {
+        nav_sidebar_->set_compact(width() < 1120);
+    }
+    const int sidebar_width = nav_sidebar_ ? nav_sidebar_->width() : 0;
+    if (title_bar_) {
+        title_bar_->set_sidebar_offset(sidebar_width);
+    }
+    if (player_shell_layout_) {
+        player_shell_layout_->setContentsMargins(sidebar_width + 16, 0, 16, 12);
+    }
+    if (player_bar_) {
+        player_bar_->set_compact(width() < 1120);
+    }
 }
 
 void DoremiMainWindow::set_dominant_colors(const std::vector<std::string> &colors) {
@@ -863,13 +979,26 @@ void DoremiMainWindow::set_stats_data(const StatsData &stats) {
     }
 }
 
-void DoremiMainWindow::set_history_data(const rust::Vec<Track> &history, const rust::Vec<rust::String> &played_at) {
+void DoremiMainWindow::set_online_status(bool is_online) {
+    is_online_ = is_online;
+    if (offline_banner_) {
+        if (is_online) {
+            offline_banner_->hideBanner();
+        } else {
+            offline_banner_->showBanner();
+        }
+    }
+}
+
+void DoremiMainWindow::set_history_data(const rust::Vec<Track> &history, const rust::Vec<rust::String> &played_at, const rust::Vec<rust::String> &feedback_tokens) {
     if (history_view_) {
         std::vector<Track> h;
         for (const auto &t : history) h.push_back(t);
         std::vector<std::string> pa;
         for (const auto &x : played_at) pa.push_back(Ffi::to_std_string(x));
-        history_view_->set_history(h, pa);
+        std::vector<std::string> ft;
+        for (const auto &y : feedback_tokens) ft.push_back(Ffi::to_std_string(y));
+        history_view_->set_history(h, pa, ft);
     }
 }
 
@@ -920,27 +1049,46 @@ void DoremiMainWindow::setup_tray() {
 // ── Placeholder thumbnail generation ──────────────────────
 
 rust::String get_or_create_thumbnail(rust::Str title, int32_t variant) {
+    static QMutex placeholder_cache_mutex;
+    static QHash<QString, std::string> placeholder_cache;
+
     const std::string title_copy = Ffi::to_std_string(title);
+    const QByteArray hash = QCryptographicHash::hash(
+        QByteArray::fromStdString(title_copy + std::to_string(variant)),
+        QCryptographicHash::Md5);
+    const QString thumb_dir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + "/artwork";
+    const QString filename = QString("placeholder_%1_%2.png")
+        .arg(QString(hash.toHex().left(12)))
+        .arg(variant);
+    const QString filepath_q = thumb_dir + "/" + filename;
+
+    {
+        QMutexLocker locker(&placeholder_cache_mutex);
+        auto it = placeholder_cache.constFind(filepath_q);
+        if (it != placeholder_cache.constEnd() && QFile::exists(filepath_q)) {
+            return rust::String(it.value());
+        }
+    }
+
+    QDir().mkpath(thumb_dir);
+    if (QFile::exists(filepath_q)) {
+        const std::string cached_path = Ffi::to_std_string(filepath_q);
+        QMutexLocker locker(&placeholder_cache_mutex);
+        placeholder_cache.insert(filepath_q, cached_path);
+        return rust::String(cached_path);
+    }
+
     const std::string filepath = Ffi::on_gui_blocking(
         "get_or_create_thumbnail",
         std::string(),
-        [title_copy, variant]() {
-            QByteArray hash = QCryptographicHash::hash(
-                QByteArray::fromStdString(title_copy + std::to_string(variant)),
-                QCryptographicHash::Md5);
+        [title_copy, variant, hash, filepath_q]() {
             int r = 50 + (static_cast<unsigned char>(hash[0]) % 156);
             int g = 30 + (static_cast<unsigned char>(hash[1]) % 120);
             int b = 70 + (static_cast<unsigned char>(hash[2]) % 140);
 
             QColor c1(r, g, b);
             QColor c2((r + 60) % 256, (g + 40) % 256, (b + 80) % 256);
-            QString thumb_dir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + "/artwork";
-            QDir().mkpath(thumb_dir);
-            QString filename = QString("placeholder_%1_%2.png")
-                .arg(QString(hash.toHex().left(12)))
-                .arg(variant);
-            QString filepath = thumb_dir + "/" + filename;
-            if (QFile::exists(filepath)) return Ffi::to_std_string(filepath);
+            if (QFile::exists(filepath_q)) return Ffi::to_std_string(filepath_q);
 
             QPixmap px(128, 128);
             px.fill(Qt::transparent);
@@ -962,9 +1110,13 @@ rust::String get_or_create_thumbnail(rust::Str title, int32_t variant) {
             painter.setFont(font);
             painter.drawText(QRect(0, 0, 128, 128), Qt::AlignCenter, QString(first));
             painter.end();
-            px.save(filepath, "PNG");
-            return Ffi::to_std_string(filepath);
+            px.save(filepath_q, "PNG");
+            return Ffi::to_std_string(filepath_q);
         });
+    if (!filepath.empty()) {
+        QMutexLocker locker(&placeholder_cache_mutex);
+        placeholder_cache.insert(filepath_q, filepath);
+    }
     return rust::String(filepath);
 }
 
@@ -972,7 +1124,7 @@ rust::String get_or_create_thumbnail(rust::Str title, int32_t variant) {
 
 namespace {
 constexpr uint16_t kBridgeContractMajor = 1;
-constexpr uint16_t kBridgeContractMinor = 2;
+constexpr uint16_t kBridgeContractMinor = 3;
 }
 
 uint16_t bridge_contract_major() {
@@ -985,9 +1137,12 @@ uint16_t bridge_contract_minor() {
 
 void create_main_window(rust::Str, rust::Str, rust::Str, int32_t) {
     if (!QApplication::instance()) {
+        QGuiApplication::setHighDpiScaleFactorRoundingPolicy(
+            Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
         static const char *argv[] = {"doremi", nullptr};
         static int argc = 1;
         new QApplication(argc, const_cast<char **>(argv));
+        QPixmapCache::setCacheLimit(65536);
     }
     g_main_window = new DoremiMainWindow();
 }
@@ -1027,6 +1182,7 @@ void apply_theme(rust::Str theme_mode, rust::Str accent_color) {
             if (window_ptr->title_bar()) window_ptr->title_bar()->update_theme();
             if (window_ptr->nav_sidebar()) window_ptr->nav_sidebar()->update_theme();
             if (window_ptr->player_bar()) window_ptr->player_bar()->update_theme();
+            if (window_ptr->home_view()) window_ptr->home_view()->update_theme();
         };
         if (window.isVisible() && window.theme_transition()) {
             window.theme_transition()->start_transition(apply_fn);
@@ -1431,6 +1587,12 @@ void set_stats_data(StatsData stats) {
     });
 }
 
+void set_online_status(bool is_online) {
+    mutate_main_window("set_online_status", [is_online](DoremiMainWindow &window) {
+        window.set_online_status(is_online);
+    });
+}
+
 
 
 // ── Player state sync ──
@@ -1515,17 +1677,21 @@ void set_batch_download_progress(rust::Str parent_id, int32_t total, int32_t com
 
 // ── History ──
 
-void set_history_data(rust::Vec<Track> history, rust::Vec<rust::String> played_at) {
+void set_history_data(rust::Vec<Track> history, rust::Vec<rust::String> played_at, rust::Vec<rust::String> feedback_tokens) {
     std::vector<Track> h;
     for (const auto &t : history) h.push_back(t);
     std::vector<std::string> pa;
     for (const auto &x : played_at) pa.push_back(Ffi::to_std_string(x));
-    mutate_main_window("set_history_data", [h = std::move(h), pa = std::move(pa)](DoremiMainWindow &window) {
+    std::vector<std::string> ft;
+    for (const auto &y : feedback_tokens) ft.push_back(Ffi::to_std_string(y));
+    mutate_main_window("set_history_data", [h = std::move(h), pa = std::move(pa), ft = std::move(ft)](DoremiMainWindow &window) {
         rust::Vec<Track> r_history;
         for (const auto &t : h) r_history.push_back(t);
         rust::Vec<rust::String> r_played_at;
         for (const auto &x : pa) r_played_at.push_back(x);
-        window.set_history_data(r_history, r_played_at);
+        rust::Vec<rust::String> r_feedback_tokens;
+        for (const auto &y : ft) r_feedback_tokens.push_back(y);
+        window.set_history_data(r_history, r_played_at, r_feedback_tokens);
     });
 }
 

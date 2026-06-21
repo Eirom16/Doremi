@@ -367,9 +367,16 @@ void NowPlayingView::showView() {
     show();
     raise();
 
+    if (DesignTokens::reducedMotion()) {
+        move(0, 0);
+        nebula_bg_->setPlaying(is_playing_);
+        waveform_bars_->setPlaying(is_playing_);
+        return;
+    }
+
     // Slide up animation
     auto *anim = new QPropertyAnimation(this, "pos", this);
-    anim->setDuration(350);
+    anim->setDuration(DesignTokens::duration(350));
     anim->setEasingCurve(QEasingCurve::OutExpo);
     anim->setStartValue(QPoint(0, parent_h));
     anim->setEndValue(QPoint(0, 0));
@@ -384,9 +391,16 @@ void NowPlayingView::hideView() {
     
     int parent_h = parentWidget()->height();
 
+    if (DesignTokens::reducedMotion()) {
+        move(0, parent_h);
+        hide();
+        emit close_clicked();
+        return;
+    }
+
     // Slide down animation
     auto *anim = new QPropertyAnimation(this, "pos", this);
-    anim->setDuration(250);
+    anim->setDuration(DesignTokens::duration(250));
     anim->setEasingCurve(QEasingCurve::InCubic);
     anim->setStartValue(pos());
     anim->setEndValue(QPoint(0, parent_h));

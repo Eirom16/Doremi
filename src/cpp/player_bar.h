@@ -18,6 +18,7 @@ public:
     void set_volume_value(int32_t volume);
     void set_shuffle(bool on);
     void set_repeat_mode(int mode); // 0=None, 1=All, 2=One
+    void set_compact(bool compact);
     void update_theme();
     bool shuffle_on() const { return shuffle_on_; }
     int  repeat_mode() const { return repeat_mode_; }
@@ -40,10 +41,13 @@ private:
     QPushButton *shuffle_btn_;
     QPushButton *repeat_btn_;
     QSlider    *progress_;
+    QWidget    *left_container_ = nullptr;
+    QWidget    *right_container_ = nullptr;
     QLabel     *track_label_;
     QLabel     *artwork_label_;
     QLabel     *time_label_;
     QSlider    *volume_slider_;
+    bool        compact_ = false;
     bool        shuffle_on_ = false;
     int         repeat_mode_ = 0;
     static const char *REPEAT_LABELS[];

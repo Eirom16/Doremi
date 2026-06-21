@@ -5,7 +5,7 @@ use std::process::Command;
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
 
-const GITHUB_API_URL: &str = "https://api.github.com/repos/Eirom16/pyrolist/releases/latest";
+const GITHUB_API_URL: &str = "https://api.github.com/repos/Eirom16/Doremi/releases/latest";
 const USER_AGENT: &str = "Doremi-Updater/2.0.0 (Linux)";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

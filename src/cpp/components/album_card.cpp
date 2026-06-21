@@ -28,7 +28,7 @@ AlbumCard::AlbumCard(const QString &title, const QString &artist, const QString 
     setCursor(Qt::PointingHandCursor);
     
     m_hoverAnim = new QVariantAnimation(this);
-    m_hoverAnim->setDuration(150);
+    m_hoverAnim->setDuration(DesignTokens::duration(150));
     m_hoverAnim->setEasingCurve(QEasingCurve::OutCubic);
     connect(m_hoverAnim, &QVariantAnimation::valueChanged, this, [this](const QVariant &val) {
         setHoverProgress(val.toReal());

@@ -4,6 +4,7 @@
 #include <QWidget>
 #include <QPixmap>
 #include <QImage>
+#include <QSize>
 #include <QTimer>
 
 class ArtworkBackdrop : public QWidget {
@@ -24,6 +25,8 @@ private:
 
     QPixmap source_;
     QPixmap blurred_;
+    QSize blurred_size_;
+    qint64 last_blur_ms_ = 0;
     QTimer *debounce_timer_;
 };
 

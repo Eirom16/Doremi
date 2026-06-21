@@ -1,5 +1,6 @@
 use image::GenericImageView;
 use std::path::Path;
+use std::time::UNIX_EPOCH;
 
 /// Simple conversion from RGB to HSV
 fn rgb_to_hsv(r: u8, g: u8, b: u8) -> (f32, f32, f32) {
@@ -60,6 +61,22 @@ fn rgb_dist_sq(c1: &(f32, f32, f32), c2: &(f32, f32, f32)) -> f32 {
 /// Extract 3 dominant colors from an image, adjusted for dark mode ambient gradients.
 /// Returns a list of hex strings like ["#1a2b3c", "#2d3e4f", "#3e4f5a"].
 pub fn extract_dominant_colors<P: AsRef<Path>>(path: P) -> Vec<String> {
+    let path = path.as_ref();
+    let cache_key = dominant_colors_cache_key(path);
+    if let Some(key) = &cache_key {
+        if let Some(entry) = crate::db::cache::ResponseCache::get::<Vec<String>>(key) {
+            return entry.data;
+        }
+    }
+
+    let colors = extract_dominant_colors_uncached(path);
+    if let Some(key) = &cache_key {
+        let _ = crate::db::cache::ResponseCache::set(key, &colors, None);
+    }
+    colors
+}
+
+fn extract_dominant_colors_uncached(path: &Path) -> Vec<String> {
     let default_colors = vec![
         "#8B5CF6".to_string(), // Purple
         "#3B82F6".to_string(), // Blue
@@ -147,4 +164,50 @@ pub fn extract_dominant_colors<P: AsRef<Path>>(path: P) -> Vec<String> {
     }
 
     result
+}
+
+fn dominant_colors_cache_key(path: &Path) -> Option<String> {
+    let meta = std::fs::metadata(path).ok()?;
+    let modified = meta
+        .modified()
+        .ok()
+        .and_then(|value| value.duration_since(UNIX_EPOCH).ok())
+        .map(|value| value.as_secs())
+        .unwrap_or_default();
+    let key_src = format!("{}:{}:{modified}", path.to_string_lossy(), meta.len());
+    Some(format!("color:dominant:{:x}", md5::compute(key_src.as_bytes())))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::{init_connection, take_connection, Database};
+
+    fn setup_test_db() {
+        let _ = take_connection();
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        Database::run_migrations(&conn).unwrap();
+        init_connection(conn);
+    }
+
+    #[test]
+    fn dominant_colors_are_cached_by_file_identity() {
+        setup_test_db();
+        let path = std::env::temp_dir().join(format!(
+            "doremi-color-cache-test-{}.png",
+            std::process::id()
+        ));
+        let image = image::RgbImage::from_pixel(8, 8, image::Rgb([200, 40, 80]));
+        image.save(&path).unwrap();
+
+        let key = dominant_colors_cache_key(&path).unwrap();
+        let colors = extract_dominant_colors(&path);
+        let cached = crate::db::cache::ResponseCache::get::<Vec<String>>(&key).unwrap();
+
+        assert_eq!(cached.data, colors);
+        assert_eq!(colors.len(), 3);
+
+        let _ = std::fs::remove_file(path);
+        let _ = take_connection();
+    }
 }

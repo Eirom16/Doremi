@@ -14,6 +14,7 @@ class NavSidebar : public QWidget {
 public:
     explicit NavSidebar(QWidget *parent = nullptr);
     void set_active_route(const std::string &route);
+    void set_compact(bool compact);
     void update_theme();
     void update_profile(bool authenticated, const std::string &name, const std::string &avatar_url);
 
@@ -31,6 +32,7 @@ private:
     std::vector<NavButton> buttons_;
     QPushButton *profile_btn_ = nullptr;
     bool authenticated_ = false;
+    bool compact_ = false;
     std::string user_name_;
     std::string avatar_url_;
 

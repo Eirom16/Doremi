@@ -1,6 +1,12 @@
 #include "playlist_detail_view.h"
 #include "design_tokens.h"
 #include "icon_provider.h"
+#include <QApplication>
+#include <QDrag>
+#include <QDragEnterEvent>
+#include <QDragMoveEvent>
+#include <QDropEvent>
+#include <QMimeData>
 #include <QPainter>
 #include <QPainterPath>
 #include <QPushButton>
@@ -14,7 +20,7 @@
 PlaylistTrackRow::PlaylistTrackRow(int num, const QString &title, const QString &artist,
                                    const QString &duration, Track track,
                                    QWidget *parent)
-    : QWidget(parent), track_(std::move(track))
+    : QWidget(parent), index_(num - 1), track_(std::move(track))
 {
     const auto &c = DesignTokens::current();
     bool unavailable = track_.id.empty();
@@ -94,9 +100,37 @@ PlaylistTrackRow::PlaylistTrackRow(int num, const QString &title, const QString 
 }
 
 void PlaylistTrackRow::mousePressEvent(QMouseEvent *event) {
+    if (event->button() == Qt::LeftButton && !track_.id.empty()) {
+        drag_start_position_ = event->position().toPoint();
+        dragging_ = false;
+    }
     QWidget::mousePressEvent(event);
-    if (event->button() == Qt::LeftButton && !track_.id.empty())
+}
+
+void PlaylistTrackRow::mouseMoveEvent(QMouseEvent *event) {
+    if (track_.id.empty() ||
+        !(event->buttons() & Qt::LeftButton) ||
+        (event->position().toPoint() - drag_start_position_).manhattanLength() < QApplication::startDragDistance()) {
+        QWidget::mouseMoveEvent(event);
+        return;
+    }
+
+    dragging_ = true;
+    auto *mime = new QMimeData();
+    mime->setData("application/x-doremi-playlist-track-index", QByteArray::number(index_));
+    auto *drag = new QDrag(this);
+    drag->setMimeData(mime);
+    drag->setPixmap(grab());
+    drag->setHotSpot(event->position().toPoint());
+    drag->exec(Qt::MoveAction);
+}
+
+void PlaylistTrackRow::mouseReleaseEvent(QMouseEvent *event) {
+    if (event->button() == Qt::LeftButton && !dragging_ && !track_.id.empty()) {
         emit play_requested(track_);
+    }
+    dragging_ = false;
+    QWidget::mouseReleaseEvent(event);
 }
 
 void PlaylistTrackRow::contextMenuEvent(QContextMenuEvent *event) {
@@ -130,7 +164,15 @@ void PlaylistTrackRow::contextMenuEvent(QContextMenuEvent *event) {
     } else if (chosen == end) {
         on_add_to_queue_end(track_);
     } else if (chosen == remove) {
-        emit remove_requested(playlist_id_, static_cast<std::string>(track_.id));
+        auto reply = QMessageBox::question(
+            this,
+            "Quitar de la playlist",
+            "¿Quieres quitar esta pista de la playlist?",
+            QMessageBox::Yes | QMessageBox::No,
+            QMessageBox::No);
+        if (reply == QMessageBox::Yes) {
+            emit remove_requested(playlist_id_, static_cast<std::string>(track_.id));
+        }
     }
 }
 
@@ -370,9 +412,18 @@ void PlaylistDetailView::setupLayout() {
     // Tracks container
     tracks_widget_ = new QWidget(this);
     tracks_widget_->setStyleSheet("background: transparent;");
+    tracks_widget_->setAcceptDrops(true);
+    tracks_widget_->installEventFilter(this);
     tracks_layout_ = new QVBoxLayout(tracks_widget_);
     tracks_layout_->setContentsMargins(0, 0, 0, 0);
     tracks_layout_->setSpacing(2);
+
+    drop_indicator_ = new QFrame(tracks_widget_);
+    drop_indicator_->setFixedHeight(2);
+    drop_indicator_->setStyleSheet(QString("background-color: %1; border-radius: 1px;")
+        .arg(c.accent.name()));
+    drop_indicator_->hide();
+
     content_layout_->addWidget(tracks_widget_);
 
     main_vbox->addLayout(content_layout_);
@@ -429,14 +480,19 @@ void PlaylistDetailView::set_playlist_info(const Playlist &playlist) {
 
 void PlaylistDetailView::set_playlist_tracks(const std::vector<Track> &tracks) {
     tracks_ = tracks;
+    rebuild_tracks();
+}
+
+void PlaylistDetailView::rebuild_tracks() {
+    hideDropIndicator();
     QLayoutItem *item;
     while ((item = tracks_layout_->takeAt(0)) != nullptr) {
         if (item->widget()) item->widget()->deleteLater();
         delete item;
     }
 
-    for (size_t i = 0; i < tracks.size(); ++i) {
-        const auto &t = tracks[i];
+    for (size_t i = 0; i < tracks_.size(); ++i) {
+        const auto &t = tracks_[i];
         QString dur;
         if (t.duration_ms > 0) {
             int secs = static_cast<int>(t.duration_ms / 1000);
@@ -454,10 +510,22 @@ void PlaylistDetailView::set_playlist_tracks(const std::vector<Track> &tracks) {
         row->setPlaylistId(playlist_id_);
         connect(row, &PlaylistTrackRow::play_requested, this, &PlaylistDetailView::play_requested);
         connect(row, &PlaylistTrackRow::remove_requested, this, &PlaylistDetailView::remove_track_from_playlist_requested);
+        connect(row, &PlaylistTrackRow::move_requested, this, [this](int from, int to) {
+            if (from < 0 || from >= static_cast<int>(tracks_.size()) ||
+                to < 0 || to >= static_cast<int>(tracks_.size()) ||
+                from == to) {
+                return;
+            }
+            auto moved = tracks_[static_cast<size_t>(from)];
+            tracks_.erase(tracks_.begin() + from);
+            tracks_.insert(tracks_.begin() + to, moved);
+            rebuild_tracks();
+            emit track_moved(playlist_id_, from, to);
+        });
         tracks_layout_->addWidget(row);
     }
 
-    if (tracks.empty()) {
+    if (tracks_.empty()) {
         const auto &c = DesignTokens::current();
         auto *empty = new QLabel("Esta playlist está vacía.", tracks_widget_);
         empty->setAlignment(Qt::AlignCenter);
@@ -465,6 +533,87 @@ void PlaylistDetailView::set_playlist_tracks(const std::vector<Track> &tracks) {
         empty->setStyleSheet(QString("color: %1; padding: 30px;").arg(c.text_muted.name()));
         tracks_layout_->addWidget(empty);
     }
+}
+
+bool PlaylistDetailView::eventFilter(QObject *watched, QEvent *event) {
+    if (watched != tracks_widget_) {
+        return QWidget::eventFilter(watched, event);
+    }
+
+    constexpr auto mime_type = "application/x-doremi-playlist-track-index";
+    if (event->type() == QEvent::DragEnter) {
+        auto *drag_event = static_cast<QDragEnterEvent *>(event);
+        if (drag_event->mimeData()->hasFormat(mime_type)) {
+            drag_event->acceptProposedAction();
+            return true;
+        }
+    } else if (event->type() == QEvent::DragMove) {
+        auto *drag_event = static_cast<QDragMoveEvent *>(event);
+        if (drag_event->mimeData()->hasFormat(mime_type)) {
+            bool ok = false;
+            const int source = drag_event->mimeData()->data(mime_type).toInt(&ok);
+            int indicator_y = 0;
+            const int target = ok ? dropIndexAt(drag_event->position().toPoint(), source, &indicator_y) : -1;
+            if (target >= 0) {
+                drop_indicator_->setGeometry(0, indicator_y, tracks_widget_->width(), 2);
+                drop_indicator_->raise();
+                drop_indicator_->show();
+                drag_event->acceptProposedAction();
+                return true;
+            }
+        }
+    } else if (event->type() == QEvent::DragLeave) {
+        hideDropIndicator();
+        return true;
+    } else if (event->type() == QEvent::Drop) {
+        auto *drop_event = static_cast<QDropEvent *>(event);
+        if (drop_event->mimeData()->hasFormat(mime_type)) {
+            bool ok = false;
+            const int source = drop_event->mimeData()->data(mime_type).toInt(&ok);
+            const int target = ok ? dropIndexAt(drop_event->position().toPoint(), source, nullptr) : -1;
+            hideDropIndicator();
+            if (target >= 0 && target != source) {
+                auto moved = tracks_[static_cast<size_t>(source)];
+                tracks_.erase(tracks_.begin() + source);
+                tracks_.insert(tracks_.begin() + target, moved);
+                rebuild_tracks();
+                emit track_moved(playlist_id_, source, target);
+            }
+            drop_event->acceptProposedAction();
+            return true;
+        }
+    }
+
+    return QWidget::eventFilter(watched, event);
+}
+
+int PlaylistDetailView::dropIndexAt(const QPoint &position, int source_index, int *indicator_y) const {
+    const int count = static_cast<int>(tracks_.size());
+    if (count <= 1 || source_index < 0 || source_index >= count) return -1;
+
+    int row_number = 0;
+    for (int i = 0; i < tracks_layout_->count(); ++i) {
+        QWidget *w = tracks_layout_->itemAt(i)->widget();
+        auto *row = qobject_cast<PlaylistTrackRow *>(w);
+        if (!row) continue;
+
+        const QRect row_rect = row->geometry();
+        if (position.y() < row_rect.center().y()) {
+            if (indicator_y) *indicator_y = row_rect.top();
+            return row_number > source_index ? row_number - 1 : row_number;
+        }
+        row_number++;
+    }
+
+    if (indicator_y) {
+        QWidget *last = tracks_layout_->itemAt(tracks_layout_->count() - 1)->widget();
+        *indicator_y = last ? last->geometry().bottom() + tracks_layout_->spacing() : tracks_widget_->height();
+    }
+    return count - 1;
+}
+
+void PlaylistDetailView::hideDropIndicator() {
+    if (drop_indicator_) drop_indicator_->hide();
 }
 
 void PlaylistDetailView::clear() {

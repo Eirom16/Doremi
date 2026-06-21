@@ -1,4 +1,5 @@
 #include "animator.h"
+#include "design_tokens.h"
 #include <QGraphicsOpacityEffect>
 #include <QPropertyAnimation>
 #include <QPoint>
@@ -6,6 +7,13 @@
 
 void Animator::fadeIn(QWidget *widget, int duration, QEasingCurve::Type easing) {
     if (!widget) return;
+    duration = DesignTokens::duration(duration);
+    if (duration == 0) {
+        widget->show();
+        widget->raise();
+        widget->setGraphicsEffect(nullptr);
+        return;
+    }
     
     QGraphicsOpacityEffect *effect = qobject_cast<QGraphicsOpacityEffect*>(widget->graphicsEffect());
     if (!effect) {
@@ -33,6 +41,12 @@ void Animator::fadeIn(QWidget *widget, int duration, QEasingCurve::Type easing) 
 
 void Animator::fadeOut(QWidget *widget, int duration, QEasingCurve::Type easing) {
     if (!widget || !widget->isVisible()) return;
+    duration = DesignTokens::duration(duration);
+    if (duration == 0) {
+        widget->hide();
+        widget->setGraphicsEffect(nullptr);
+        return;
+    }
     
     QGraphicsOpacityEffect *effect = qobject_cast<QGraphicsOpacityEffect*>(widget->graphicsEffect());
     if (!effect) {
@@ -57,12 +71,18 @@ void Animator::fadeOut(QWidget *widget, int duration, QEasingCurve::Type easing)
 
 void Animator::slideIn(QWidget *widget, Direction direction, int duration, QEasingCurve::Type easing) {
     if (!widget) return;
+    duration = DesignTokens::duration(duration);
     
     QWidget *parent = widget->parentWidget();
     if (!parent) return;
     
     QRect endRect = widget->geometry();
     QRect startRect = endRect;
+    if (duration == 0) {
+        widget->show();
+        widget->raise();
+        return;
+    }
     
     int parentWidth = parent->width();
     int parentHeight = parent->height();
@@ -98,9 +118,16 @@ void Animator::slideIn(QWidget *widget, Direction direction, int duration, QEasi
 
 void Animator::scale(QWidget *widget, qreal startVal, qreal endVal, int duration, QEasingCurve::Type easing) {
     if (!widget) return;
+    duration = DesignTokens::duration(duration);
     
     QRect orig = widget->geometry();
     QPoint center = orig.center();
+    if (duration == 0) {
+        const int w = static_cast<int>(orig.width() * endVal);
+        const int h = static_cast<int>(orig.height() * endVal);
+        widget->setGeometry(QRect(center.x() - w / 2, center.y() - h / 2, w, h));
+        return;
+    }
     
     QPropertyAnimation *anim = new QPropertyAnimation(widget, "geometry");
     anim->setDuration(duration);
@@ -121,9 +148,14 @@ void Animator::scale(QWidget *widget, qreal startVal, qreal endVal, int duration
 
 void Animator::animateHeight(QWidget *widget, int startHeight, int endHeight, int duration, QEasingCurve::Type easing) {
     if (!widget) return;
+    duration = DesignTokens::duration(duration);
     
     widget->setFixedHeight(startHeight);
     widget->show();
+    if (duration == 0) {
+        widget->setFixedHeight(endHeight);
+        return;
+    }
     
     QPropertyAnimation *anim = new QPropertyAnimation(widget, "maximumHeight");
     anim->setDuration(duration);

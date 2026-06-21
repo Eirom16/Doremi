@@ -21,6 +21,16 @@ void WaveformBars::setPlaying(bool playing) {
     if (m_isPlaying == playing) return;
     m_isPlaying = playing;
 
+    if (DesignTokens::reducedMotion()) {
+        m_timer->stop();
+        for (int i = 0; i < m_barCount; ++i) {
+            m_targetHeights[i] = 3.0;
+            m_heights[i] = 3.0;
+        }
+        update();
+        return;
+    }
+
     if (m_isPlaying) {
         m_timer->start();
     } else {
@@ -33,6 +43,11 @@ void WaveformBars::setPlaying(bool playing) {
 }
 
 void WaveformBars::onTimerTick() {
+    if (DesignTokens::reducedMotion()) {
+        m_timer->stop();
+        return;
+    }
+
     bool hasDelta = false;
     for (int i = 0; i < m_barCount; ++i) {
         if (m_isPlaying) {

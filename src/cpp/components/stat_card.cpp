@@ -58,7 +58,7 @@ void StatCard::setValue(int target_value, const QString &prefix, const QString &
     }
 
     count_anim_ = new QVariantAnimation(this);
-    count_anim_->setDuration(800);
+    count_anim_->setDuration(DesignTokens::duration(800));
     count_anim_->setEasingCurve(QEasingCurve::OutCubic);
     count_anim_->setStartValue(0);
     count_anim_->setEndValue(target_value_);
@@ -67,7 +67,11 @@ void StatCard::setValue(int target_value, const QString &prefix, const QString &
         setDisplayValue(val.toInt());
     });
 
-    count_anim_->start();
+    if (DesignTokens::reducedMotion()) {
+        setDisplayValue(target_value_);
+    } else {
+        count_anim_->start();
+    }
 }
 
 void StatCard::setValueText(const QString &text) {

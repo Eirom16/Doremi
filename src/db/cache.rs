@@ -41,6 +41,26 @@ impl ResponseCache {
         }
     }
 
+    pub fn get_stale<T: serde::de::DeserializeOwned>(key: &str) -> Option<CacheEntry<T>> {
+        let guard = super::DB.lock().ok()?;
+        let conn = guard.as_ref()?;
+        let row: Result<(String, String, Option<String>), _> = conn.query_row(
+            "SELECT response, cached_at, expires_at FROM response_cache WHERE cache_key = ?1",
+            params![key],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        );
+        match row {
+            Ok((response, cached_at, expires_at)) => {
+                serde_json::from_str(&response).ok().map(|data| CacheEntry {
+                    data,
+                    cached_at,
+                    expires_at,
+                })
+            }
+            Err(_) => None,
+        }
+    }
+
     pub fn set<T: Serialize>(key: &str, data: &T, ttl_secs: Option<u64>) -> rusqlite::Result<()> {
         with_db(|conn| {
             let json = serde_json::to_string(data).unwrap_or_default();
@@ -152,5 +172,14 @@ mod tests {
         setup_test_db();
         let entry: Option<CacheEntry<String>> = ResponseCache::get("nonexistent");
         assert!(entry.is_none());
+    }
+
+    #[test]
+    fn test_stale_cache_ignores_expiry() {
+        setup_test_db();
+        ResponseCache::set("expired", &"cached value", Some(0)).unwrap();
+        std::thread::sleep(std::time::Duration::from_secs(1));
+        let stale: Option<CacheEntry<String>> = ResponseCache::get_stale("expired");
+        assert_eq!(stale.unwrap().data, "cached value");
     }
 }

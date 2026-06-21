@@ -104,6 +104,20 @@ void ThemeTransitionOverlay::start_transition(std::function<void()> on_midpoint)
     
     show();
     raise();
+
+    if (DesignTokens::reducedMotion()) {
+        midpoint_fired_ = true;
+        if (on_midpoint_callback_) {
+            on_midpoint_callback_();
+        }
+        update_styles();
+        update();
+        progress_bar_->setValue(100);
+        percent_lbl_->setText("100%");
+        opacity_effect_->setOpacity(1.0);
+        hide();
+        return;
+    }
     
     if (progress_anim_) {
         progress_anim_->stop();
@@ -111,7 +125,7 @@ void ThemeTransitionOverlay::start_transition(std::function<void()> on_midpoint)
     }
     
     progress_anim_ = new QVariantAnimation(this);
-    progress_anim_->setDuration(450);
+    progress_anim_->setDuration(DesignTokens::duration(450));
     progress_anim_->setStartValue(0);
     progress_anim_->setEndValue(100);
     progress_anim_->setEasingCurve(QEasingCurve::OutCubic);
@@ -137,7 +151,7 @@ void ThemeTransitionOverlay::start_transition(std::function<void()> on_midpoint)
             fade_anim_->deleteLater();
         }
         fade_anim_ = new QPropertyAnimation(opacity_effect_, "opacity", this);
-        fade_anim_->setDuration(250);
+        fade_anim_->setDuration(DesignTokens::duration(250));
         fade_anim_->setStartValue(1.0);
         fade_anim_->setEndValue(0.0);
         fade_anim_->setEasingCurve(QEasingCurve::InOutSine);

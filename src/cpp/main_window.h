@@ -6,6 +6,7 @@
 #include <QScrollArea>
 #include "components/fade_stack.h"
 #include <QLabel>
+#include <QString>
 #include <QTimer>
 #include <QSystemTrayIcon>
 #include <QMenu>
@@ -46,7 +47,7 @@ class ShowDetailView;
 class WelcomeView;
 class ThemeTransitionOverlay;
 class QNetworkCookie;
-
+class OfflineBannerWidget;
 
 
 class DoremiMainWindow : public QMainWindow {
@@ -67,8 +68,9 @@ public:
     void set_related_tracks(const rust::Vec<Track> &tracks);
     void set_current_track(const Track &track);
     void set_context_playlists(const rust::Vec<Playlist> &playlists);
-    void set_history_data(const rust::Vec<Track> &history, const rust::Vec<rust::String> &played_at);
+    void set_history_data(const rust::Vec<Track> &history, const rust::Vec<rust::String> &played_at, const rust::Vec<rust::String> &feedback_tokens);
     void set_stats_data(const StatsData &stats);
+    void set_online_status(bool is_online);
 
 
     TitleBar* title_bar() const { return title_bar_; }
@@ -116,13 +118,17 @@ private:
     void navigate_to_internal(const std::string &route, bool record_history);
     void save_route_view_state();
     void restore_route_view_state(const std::string &route);
+    void update_responsive_layout();
     void navigate_back();
     void navigate_back_from_detail();
     void navigate_forward();
+    bool ensure_online_action(const QString &action_description);
     TitleBar *title_bar_;
     NavSidebar *nav_sidebar_;
     FadeStack *stack_;
     QScrollArea *body_scroll_;
+    QWidget *player_shell_ = nullptr;
+    QHBoxLayout *player_shell_layout_ = nullptr;
     PlayerBar *player_bar_;
     HomeView *home_view_;
     SearchView *search_view_;
@@ -138,10 +144,12 @@ private:
     PlaylistDetailView *playlist_detail_view_;
     ShowDetailView *show_detail_view_;
     WelcomeView *welcome_view_;
+    OfflineBannerWidget *offline_banner_ = nullptr;
 
     QSystemTrayIcon *tray_icon_;
     QAction *play_action_ = nullptr;
     bool playback_playing_ = false;
+    bool is_online_ = true;
     bool stop_on_close_ = false;
     std::string current_route_ = "home";
     std::string detail_return_route_ = "home";
@@ -240,13 +248,14 @@ void set_current_track(Track track);
 void set_prefetch_status(rust::Str track_id, rust::Str status);
 void set_stats_data(StatsData stats);
 
-void set_history_data(rust::Vec<Track> history, rust::Vec<rust::String> played_at);
+void set_history_data(rust::Vec<Track> history, rust::Vec<rust::String> played_at, rust::Vec<rust::String> feedback_tokens);
 
 void set_album_detail(Album album, rust::Vec<Track> tracks);
 
 void set_artist_detail(Artist artist, rust::Vec<Track> tracks, rust::Vec<Album> albums);
 
 void set_playlist_detail(Playlist playlist, rust::Vec<Track> tracks);
+void set_online_status(bool is_online);
 void set_show_detail(Show show, rust::Vec<Episode> episodes);
 
 void update_youtube_auth_state(bool authenticated, rust::Str name, rust::Str avatar_url);

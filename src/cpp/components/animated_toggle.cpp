@@ -14,14 +14,14 @@ AnimatedToggle::AnimatedToggle(QWidget *parent)
     m_trackColor = c.bg_elevated;
     
     m_posAnim = new QVariantAnimation(this);
-    m_posAnim->setDuration(220);
+    m_posAnim->setDuration(DesignTokens::duration(220));
     m_posAnim->setEasingCurve(QEasingCurve::InOutCubic);
     connect(m_posAnim, &QVariantAnimation::valueChanged, this, [this](const QVariant &val) {
         setThumbPosition(val.toReal());
     });
     
     m_colorAnim = new QVariantAnimation(this);
-    m_colorAnim->setDuration(220);
+    m_colorAnim->setDuration(DesignTokens::duration(220));
     m_colorAnim->setEasingCurve(QEasingCurve::InOutCubic);
     connect(m_colorAnim, &QVariantAnimation::valueChanged, this, [this](const QVariant &val) {
         setTrackColor(val.value<QColor>());

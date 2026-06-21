@@ -176,7 +176,7 @@ void ToastNotification::showOrQueue(QWidget *parent,
     Animator::fadeIn(toast, 250);
     
     QPropertyAnimation *slide = new QPropertyAnimation(toast, "pos");
-    slide->setDuration(250);
+    slide->setDuration(DesignTokens::duration(250));
     slide->setStartValue(toast->pos());
     slide->setEndValue(QPoint(targetX, targetY + 20 - 20));
     slide->setEasingCurve(QEasingCurve::OutCubic);
@@ -193,7 +193,7 @@ void ToastNotification::startTimeout() {
     m_dismissTimer->setInterval(3500);
 
     m_progressAnim = new QVariantAnimation(this);
-    m_progressAnim->setDuration(3500);
+    m_progressAnim->setDuration(DesignTokens::duration(3500));
     m_progressAnim->setStartValue(1.0);
     m_progressAnim->setEndValue(0.0);
     connect(m_progressAnim, &QVariantAnimation::valueChanged, this, [this](const QVariant &val) {
@@ -205,7 +205,9 @@ void ToastNotification::startTimeout() {
     });
 
     m_dismissTimer->start();
-    m_progressAnim->start();
+    if (!DesignTokens::reducedMotion()) {
+        m_progressAnim->start();
+    }
 }
 
 void ToastNotification::refreshTimeout() {
@@ -274,7 +276,7 @@ void ToastNotification::updateStackPositions() {
         int targetY = parentHeight - bottomMargin - (static_cast<int>(i) + 1) * (toastHeight + spacing);
 
         QPropertyAnimation *anim = new QPropertyAnimation(toast, "pos");
-        anim->setDuration(250);
+        anim->setDuration(DesignTokens::duration(250));
         anim->setStartValue(toast->pos());
         anim->setEndValue(QPoint(targetX, targetY));
         anim->setEasingCurve(QEasingCurve::OutCubic);

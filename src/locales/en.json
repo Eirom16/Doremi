@@ -194,5 +194,9 @@
     "ytdlp_not_found": "yt-dlp not found",
     "ytdlp_required": "yt-dlp is required for music playback and downloads",
     "ffmpeg_not_found": "ffmpeg not found",
-    "ffmpeg_warning": "ffmpeg not found. Downloads will not be converted to MP3 (saved in original format)"
+    "ffmpeg_warning": "ffmpeg not found. Downloads will not be converted to MP3 (saved in original format)",
+    "sync_offset": "Sync",
+    "sync_delay_tooltip_minus": "Advance lyrics by 0.5s",
+    "sync_delay_tooltip_plus": "Delay lyrics by 0.5s",
+    "sync_delay_tooltip_reset": "Reset sync"
 }

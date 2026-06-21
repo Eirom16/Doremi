@@ -19,20 +19,20 @@ HomeView::HomeView(QWidget *parent)
     content_->setContentsMargins(24, 24, 24, 24);
     content_->setSpacing(28);
 
-    auto *welcome = new QLabel("¡Bienvenido a Doremi!", this);
-    welcome->setFont(DesignTokens::getFont("display", 24));
-    welcome->setStyleSheet(QString("font-weight: bold; color: %1; background: transparent;")
+    welcome_label_ = new QLabel("¡Bienvenido a Doremi!", this);
+    welcome_label_->setObjectName("homeWelcome");
+    welcome_label_->setFont(DesignTokens::getFont("display", 24));
+    welcome_label_->setStyleSheet(QString("font-weight: bold; color: %1; background: transparent;")
         .arg(c.text_primary.name()));
-    content_->addWidget(welcome);
+    content_->addWidget(welcome_label_);
 
     // Sections are added dynamically via add_section() from Rust
     content_->addStretch(1);
 }
 
 void HomeView::set_welcome_message(const std::string &msg) {
-    auto *label = qobject_cast<QLabel *>(content_->itemAt(0)->widget());
-    if (label) {
-        label->setText(QString::fromStdString(msg));
+    if (welcome_label_) {
+        welcome_label_->setText(QString::fromStdString(msg));
     }
 }
 
@@ -46,6 +46,7 @@ QWidget *HomeView::add_section_widget(const std::string &title,
     lay->setSpacing(10);
 
     auto *header = new QLabel(QString::fromStdString(title), section);
+    header->setObjectName("sectionHeader");
     header->setFont(DesignTokens::getFont("heading_sm", 16));
     header->setStyleSheet(QString("color: %1; font-weight: bold; background: transparent;")
         .arg(c.text_primary.name()));
@@ -151,6 +152,7 @@ void HomeView::set_state(const std::string &state, const std::string &message) {
         }
     } else {
         auto *label = new QLabel(QString::fromStdString(message), state_widget_);
+        label->setObjectName("stateMessage");
         label->setAlignment(Qt::AlignCenter);
         label->setWordWrap(true);
         label->setFont(DesignTokens::getFont("body", 13));
@@ -169,4 +171,20 @@ void HomeView::set_state(const std::string &state, const std::string &message) {
         }
     }
     content_->insertWidget(1, state_widget_);
+}
+
+void HomeView::update_theme() {
+    const auto &c = DesignTokens::current();
+    if (welcome_label_) {
+        welcome_label_->setStyleSheet(QString("font-weight: bold; color: %1; background: transparent;")
+            .arg(c.text_primary.name()));
+    }
+    for (auto *label : findChildren<QLabel *>()) {
+        if (label->objectName() == "sectionHeader") {
+            label->setStyleSheet(QString("color: %1; font-weight: bold; background: transparent;")
+                .arg(c.text_primary.name()));
+        } else if (label->objectName() == "stateMessage") {
+            label->setStyleSheet(QString("color: %1; padding: 36px;").arg(c.text_muted.name()));
+        }
+    }
 }

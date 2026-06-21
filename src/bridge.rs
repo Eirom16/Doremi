@@ -2,12 +2,14 @@ use crate::player::PlayerService;
 use crate::services::search::SearchService;
 use once_cell::sync::OnceCell;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 static PLAYER: OnceCell<Arc<PlayerService>> = OnceCell::new();
 static SEARCH: OnceCell<SearchService> = OnceCell::new();
+static IS_ONLINE: AtomicBool = AtomicBool::new(true);
 
 pub const CONTRACT_MAJOR: u16 = 1;
-pub const CONTRACT_MINOR: u16 = 2;
+pub const CONTRACT_MINOR: u16 = 3;
 
 fn versions_are_compatible(
     required_major: u16,
@@ -147,6 +149,7 @@ pub mod bridge {
         unique_artists: i32,
         weekly_activity: Vec<i32>,
         top_tracks: Vec<Track>,
+        top_tracks_plays: Vec<i32>,
     }
 
     // Rust callbacks invoked from C++
@@ -191,7 +194,9 @@ pub mod bridge {
         fn on_rename_playlist(playlist_id: &str, name: &str);
         fn on_delete_playlist(playlist_id: &str);
         fn on_remove_playlist_track(playlist_id: &str, track_id: &str);
+        fn on_move_playlist_track(playlist_id: &str, from: i32, to: i32);
         fn on_download_requested(track: Track);
+        fn on_downloads_requested();
         fn on_batch_download_requested(
             tracks: Vec<Track>,
             parent_id: &str,
@@ -199,6 +204,7 @@ pub mod bridge {
             parent_thumbnail: &str,
         );
         fn on_download_cancel_requested(video_id: &str);
+        fn on_delete_download(video_id: &str, delete_file: bool);
         fn on_add_to_queue_next(track: Track);
         fn on_add_to_queue_end(track: Track);
         fn on_play_all(tracks: Vec<Track>, shuffle: bool);
@@ -216,6 +222,7 @@ pub mod bridge {
         fn on_stats_requested(days: i32);
         fn on_history_requested();
         fn on_clear_history();
+        fn on_delete_history_item(track_id: &str, feedback_token: &str);
         fn on_youtube_login_success(headers_json: &str, name: &str, avatar_url: &str);
         fn on_youtube_session_refresh(headers_json: &str);
         fn on_youtube_logout();
@@ -338,13 +345,14 @@ pub mod bridge {
         fn set_related_tracks(tracks: Vec<Track>);
         fn set_stats_data(stats: StatsData);
 
-        fn set_history_data(history: Vec<Track>, played_at: Vec<String>);
+        fn set_history_data(history: Vec<Track>, played_at: Vec<String>, feedback_tokens: Vec<String>);
 
         fn set_album_detail(album: Album, tracks: Vec<Track>);
 
         fn set_artist_detail(artist: Artist, tracks: Vec<Track>, albums: Vec<Album>);
 
         fn set_playlist_detail(playlist: Playlist, tracks: Vec<Track>);
+        fn set_online_status(is_online: bool);
         fn update_youtube_auth_state(authenticated: bool, name: &str, avatar_url: &str);
         fn set_update_available(
             version: &str,
@@ -586,6 +594,96 @@ impl LibraryTab {
     }
 }
 
+fn is_online() -> bool {
+    IS_ONLINE.load(Ordering::SeqCst)
+}
+
+pub fn is_connectivity_online() -> bool {
+    is_online()
+}
+
+pub(crate) fn should_run_online_startup_work() -> bool {
+    is_connectivity_online()
+}
+
+fn load_local_library_tab(tab: LibraryTab) {
+    use crate::db::repo::*;
+    match tab {
+        LibraryTab::Songs => {
+            if let Ok(tracks) = FavoritesRepo::all_tracks() {
+                let songs: Vec<crate::bridge::bridge::Track> = tracks
+                    .iter()
+                    .map(|t| crate::bridge::bridge::Track {
+                        id: t.id.clone(),
+                        title: t.title.clone(),
+                        artist: t.artist.clone(),
+                        album: t.album.clone(),
+                        duration_ms: t.duration_ms,
+                        thumbnail: t.thumbnail.clone(),
+                    })
+                    .collect();
+                crate::bridge::bridge::set_library_songs(songs);
+            }
+        }
+        LibraryTab::Albums => {
+            if let Ok(albums) = FavoritesRepo::all_albums() {
+                let a_list: Vec<crate::bridge::bridge::Album> = albums
+                    .iter()
+                    .map(|a| crate::bridge::bridge::Album {
+                        id: a.id.clone(),
+                        title: a.title.clone(),
+                        artist: a.artist.clone(),
+                        year: a.year.map(|y| y.to_string()).unwrap_or_default(),
+                        thumbnail: a.thumbnail.clone(),
+                        track_count: 0,
+                        artist_id: String::new(),
+                    })
+                    .collect();
+                crate::bridge::bridge::set_library_albums(a_list);
+            }
+        }
+        LibraryTab::Artists => {
+            if let Ok(artists) = FavoritesRepo::all_artists() {
+                let art_list: Vec<crate::bridge::bridge::Artist> = artists
+                    .iter()
+                    .map(|a| crate::bridge::bridge::Artist {
+                        id: a.id.clone(),
+                        name: a.name.clone(),
+                        thumbnail: a.thumbnail.clone(),
+                        description: String::new(),
+                        subscribers: String::new(),
+                    })
+                    .collect();
+                crate::bridge::bridge::set_library_artists(art_list);
+            }
+        }
+        LibraryTab::Playlists => {
+            if let Ok(playlists) = PlaylistRepo::all() {
+                let p_list: Vec<crate::bridge::bridge::Playlist> = playlists
+                    .iter()
+                    .map(|p| {
+                        let count = PlaylistRepo::tracks(&p.id)
+                            .ok()
+                            .map(|t| t.len() as i32)
+                            .unwrap_or(0);
+                        crate::bridge::bridge::Playlist {
+                            id: p.id.clone(),
+                            name: p.name.clone(),
+                            description: p.description.clone(),
+                            thumbnail: p.artwork.clone(),
+                            track_count: count,
+                            owner: String::new(),
+                            privacy: String::new(),
+                        }
+                    })
+                    .collect();
+                crate::bridge::bridge::set_library_playlists(p_list);
+            }
+        }
+        LibraryTab::Shows => refresh_library_shows_ui(),
+    }
+}
+
 pub fn on_library_tab_changed(tab_key: &str) {
     log::info!("Library tab changed: {tab_key}");
     let tab_key = tab_key.to_string();
@@ -595,7 +693,11 @@ pub fn on_library_tab_changed(tab_key: &str) {
             return;
         };
 
-        if is_youtube_authenticated() {
+        if !is_online() {
+            tokio::task::spawn_blocking(move || load_local_library_tab(tab))
+                .await
+                .ok();
+        } else if is_youtube_authenticated() {
             let service = crate::services::library::LibraryService::new(true);
             match tab {
                 LibraryTab::Songs => service.load_songs().await,
@@ -605,83 +707,7 @@ pub fn on_library_tab_changed(tab_key: &str) {
                 LibraryTab::Shows => refresh_library_shows_ui(),
             }
         } else {
-            tokio::task::spawn_blocking(move || {
-                use crate::db::repo::*;
-                match tab {
-                    LibraryTab::Songs => {
-                        if let Ok(tracks) = FavoritesRepo::all_tracks() {
-                            let songs: Vec<crate::bridge::bridge::Track> = tracks
-                                .iter()
-                                .map(|t| crate::bridge::bridge::Track {
-                                    id: t.id.clone(),
-                                    title: t.title.clone(),
-                                    artist: t.artist.clone(),
-                                    album: t.album.clone(),
-                                    duration_ms: t.duration_ms,
-                                    thumbnail: t.thumbnail.clone(),
-                                })
-                                .collect();
-                            crate::bridge::bridge::set_library_songs(songs);
-                        }
-                    }
-                    LibraryTab::Albums => {
-                        if let Ok(albums) = FavoritesRepo::all_albums() {
-                            let a_list: Vec<crate::bridge::bridge::Album> = albums
-                                .iter()
-                                .map(|a| crate::bridge::bridge::Album {
-                                    id: a.id.clone(),
-                                    title: a.title.clone(),
-                                    artist: a.artist.clone(),
-                                    year: a.year.map(|y| y.to_string()).unwrap_or_default(),
-                                    thumbnail: a.thumbnail.clone(),
-                                    track_count: 0,
-                                    artist_id: String::new(),
-                                })
-                                .collect();
-                            crate::bridge::bridge::set_library_albums(a_list);
-                        }
-                    }
-                    LibraryTab::Artists => {
-                        if let Ok(artists) = FavoritesRepo::all_artists() {
-                            let art_list: Vec<crate::bridge::bridge::Artist> = artists
-                                .iter()
-                                .map(|a| crate::bridge::bridge::Artist {
-                                    id: a.id.clone(),
-                                    name: a.name.clone(),
-                                    thumbnail: a.thumbnail.clone(),
-                                    description: String::new(),
-                                    subscribers: String::new(),
-                                })
-                                .collect();
-                            crate::bridge::bridge::set_library_artists(art_list);
-                        }
-                    }
-                    LibraryTab::Playlists => {
-                        if let Ok(playlists) = PlaylistRepo::all() {
-                            let p_list: Vec<crate::bridge::bridge::Playlist> = playlists
-                                .iter()
-                                .map(|p| {
-                                    let count = PlaylistRepo::tracks(&p.id)
-                                        .ok()
-                                        .map(|t| t.len() as i32)
-                                        .unwrap_or(0);
-                                    crate::bridge::bridge::Playlist {
-                                        id: p.id.clone(),
-                                        name: p.name.clone(),
-                                        description: p.description.clone(),
-                                        thumbnail: p.artwork.clone(),
-                                        track_count: count,
-                                        owner: String::new(),
-                                        privacy: String::new(),
-                                    }
-                                })
-                                .collect();
-                            crate::bridge::bridge::set_library_playlists(p_list);
-                        }
-                    }
-                    LibraryTab::Shows => refresh_library_shows_ui(),
-                }
-            })
+            tokio::task::spawn_blocking(move || load_local_library_tab(tab))
             .await
             .ok();
         }
@@ -691,8 +717,10 @@ pub fn on_library_tab_changed(tab_key: &str) {
 #[cfg(test)]
 mod contract_tests {
     use super::{
-        is_contract_compatible, versions_are_compatible, LibraryTab, CONTRACT_MAJOR, CONTRACT_MINOR,
+        is_contract_compatible, should_run_online_startup_work, versions_are_compatible, LibraryTab,
+        CONTRACT_MAJOR, CONTRACT_MINOR, IS_ONLINE,
     };
+    use std::sync::atomic::Ordering;
 
     #[test]
     fn bridge_contract_rejects_incompatible_versions() {
@@ -700,6 +728,13 @@ mod contract_tests {
         assert!(is_contract_compatible(CONTRACT_MAJOR, CONTRACT_MINOR + 1));
         assert!(!is_contract_compatible(CONTRACT_MAJOR + 1, CONTRACT_MINOR));
         assert!(!versions_are_compatible(1, 2, 1, 1));
+    }
+
+    #[test]
+    fn offline_startup_skips_online_work() {
+        let previous = IS_ONLINE.swap(false, Ordering::SeqCst);
+        assert!(!should_run_online_startup_work());
+        IS_ONLINE.store(previous, Ordering::SeqCst);
     }
 
     #[test]
@@ -985,6 +1020,10 @@ pub fn on_download_requested(track: bridge::Track) {
     }
 }
 
+pub fn on_downloads_requested() {
+    crate::services::download::DownloadManager::refresh_downloads_ui();
+}
+
 pub fn on_batch_download_requested(
     tracks: Vec<bridge::Track>,
     parent_id: &str,
@@ -1005,6 +1044,40 @@ pub fn on_batch_download_requested(
 
 pub fn on_download_cancel_requested(video_id: &str) {
     crate::services::download::DownloadManager::get_instance().cancel_download(video_id);
+}
+
+pub fn on_delete_download(video_id: &str, delete_file: bool) {
+    log::info!("Delete download requested for: {video_id} (delete_file={delete_file})");
+    let video_id_owned = video_id.to_string();
+    tokio::task::spawn_blocking(move || {
+        let path_res = crate::db::with_db(|conn| {
+            let mut stmt = conn.prepare("SELECT file_path FROM downloads WHERE video_id = ?1")?;
+            let path: Result<String, _> = stmt.query_row(rusqlite::params![video_id_owned], |r| r.get(0));
+            match path {
+                Ok(p) => Ok(Some(p)),
+                Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+                Err(e) => Err(e),
+            }
+        });
+
+        if let Ok(Some(file_path)) = path_res {
+            if let Err(e) = crate::db::repo::DownloadsRepo::remove(&video_id_owned) {
+                log::error!("Failed to remove download from DB: {e}");
+            }
+            if delete_file && !file_path.is_empty() {
+                let path = std::path::Path::new(&file_path);
+                if path.exists() {
+                    if let Err(e) = std::fs::remove_file(path) {
+                        log::error!("Failed to remove downloaded file from disk: {e}");
+                    } else {
+                        log::info!("Deleted file from disk: {file_path}");
+                    }
+                }
+            }
+        }
+        
+        crate::services::download::DownloadManager::refresh_downloads_ui();
+    });
 }
 
 pub fn on_add_to_playlist(track: bridge::Track, playlist_id: &str) {
@@ -1075,6 +1148,28 @@ pub fn on_remove_playlist_track(playlist_id: &str, track_id: &str) {
     if let Some(detail) = load_local_playlist_detail(&playlist_id) {
         crate::bridge::bridge::set_playlist_detail(detail.0, detail.1);
     }
+}
+
+pub fn on_move_playlist_track(playlist_id: &str, from: i32, to: i32) {
+    let playlist_id = playlist_id.to_string();
+    log::info!("Moving playlist track in {playlist_id}: {from} -> {to}");
+    tokio::spawn(async move {
+        let playlist_for_task = playlist_id.clone();
+        let result = tokio::task::spawn_blocking(move || {
+            crate::db::repo::PlaylistRepo::move_track(&playlist_for_task, from, to)
+        })
+        .await;
+
+        match result {
+            Ok(Ok(())) => {
+                if let Some(detail) = load_local_playlist_detail(&playlist_id) {
+                    crate::bridge::bridge::set_playlist_detail(detail.0, detail.1);
+                }
+            }
+            Ok(Err(e)) => log::error!("Failed to move playlist track: {e}"),
+            Err(e) => log::error!("Playlist track move task failed: {e}"),
+        }
+    });
 }
 
 fn load_local_playlist_detail(
@@ -1452,6 +1547,18 @@ fn reload_discovery_feeds() {
     });
 }
 
+pub fn set_connectivity_online(is_online: bool) {
+    let was_online = IS_ONLINE.swap(is_online, Ordering::SeqCst);
+    crate::bridge::bridge::set_online_status(is_online);
+
+    if is_online && !was_online {
+        log::info!("Connectivity restored; retrying pending online loads");
+        reload_discovery_feeds();
+        crate::services::download::DownloadManager::refresh_downloads_ui();
+        crate::services::download::DownloadManager::get_instance().resume_unfinished_downloads();
+    }
+}
+
 pub fn on_lastfm_auth_requested(api_key: &str, api_secret: &str, username: &str, password: &str) {
     use zeroize::{Zeroize, Zeroizing};
 
@@ -1578,98 +1685,43 @@ pub fn on_stats_requested(days: i32) {
     log::info!("Stats requested for {days} days");
     tokio::spawn(async move {
         let stats_res = tokio::task::spawn_blocking(move || {
-            let total_time_ms = crate::db::with_db(|conn| {
-                conn.query_row("SELECT SUM(duration_ms) FROM recently_played", [], |r| {
-                    let val: Option<i64> = r.get(0)?;
-                    Ok(val.unwrap_or(0))
-                })
-            })
-            .unwrap_or(0);
-
-            let total_plays = crate::db::with_db(|conn| {
-                conn.query_row("SELECT COUNT(*) FROM recently_played", [], |r| {
-                    let val: i32 = r.get(0)?;
-                    Ok(val)
-                })
-            })
-            .unwrap_or(0);
-
-            let unique_artists = crate::db::with_db(|conn| {
-                conn.query_row(
-                    "SELECT COUNT(DISTINCT artist) FROM recently_played",
-                    [],
-                    |r| {
-                        let val: i32 = r.get(0)?;
-                        Ok(val)
-                    },
-                )
-            })
-            .unwrap_or(0);
+            let days_i64 = days as i64;
+            let total_time_ms = crate::db::repo::PlayHistoryRepo::total_play_time(days_i64).unwrap_or(0);
+            let total_plays = crate::db::repo::PlayHistoryRepo::total_plays(days_i64).unwrap_or(0) as i32;
+            let unique_artists = crate::db::repo::PlayHistoryRepo::unique_artists(days_i64).unwrap_or(0) as i32;
 
             // Weekly activity: last 7 days daily counts
             let mut weekly_activity = vec![0; 7];
-            if let Ok(results) = crate::db::with_db(|conn| {
-                let mut stmt = conn.prepare(
-                    "SELECT strftime('%Y-%m-%d', played_at) as play_day, COUNT(*) as cnt
-                     FROM recently_played
-                     WHERE played_at >= datetime('now', '-7 days')
-                     GROUP BY play_day
-                     ORDER BY play_day DESC
-                     LIMIT 7",
-                )?;
-                let rows = stmt.query_map([], |r| {
-                    let day_str: String = r.get(0)?;
-                    let count: i32 = r.get(1)?;
-                    Ok((day_str, count))
-                })?;
-                let list: Result<Vec<(String, i32)>, rusqlite::Error> = rows.collect();
-                list
-            }) {
+            if let Ok(results) = crate::db::repo::PlayHistoryRepo::weekly_activity() {
                 let now = chrono::Local::now();
                 for i in 0..7 {
                     let d = now - chrono::Duration::days(6 - i as i64);
                     let d_str = d.format("%Y-%m-%d").to_string();
                     if let Some((_, cnt)) = results.iter().find(|(day, _)| day == &d_str) {
-                        weekly_activity[i] = *cnt;
+                        weekly_activity[i] = *cnt as i32;
                     }
                 }
             }
 
             // Top 5 Tracks
             let mut top_tracks = Vec::new();
+            let mut top_tracks_plays = Vec::new();
 
-            if let Ok(results) = crate::db::with_db(|conn| {
-                let mut stmt = conn.prepare(
-                    "SELECT track_id, title, artist, duration_ms, thumbnail, COUNT(*) as cnt
-                     FROM recently_played
-                     GROUP BY track_id, title, artist
-                     ORDER BY cnt DESC
-                     LIMIT 5",
-                )?;
-                let rows = stmt.query_map([], |r| {
-                    let id: String = r.get(0)?;
-                    let title: String = r.get(1)?;
-                    let artist: String = r.get(2)?;
-                    let duration_ms: i64 = r.get(3)?;
-                    let thumb: String = r.get(4)?;
-                    Ok((id, title, artist, duration_ms, thumb))
-                })?;
-                let list: Result<Vec<_>, rusqlite::Error> = rows.collect();
-                list
-            }) {
-                for row in results {
-                    let (id, title, artist, duration_ms, mut thumb) = row;
+            if let Ok(results) = crate::db::repo::PlayHistoryRepo::top_tracks(5, days_i64) {
+                for recent in results {
+                    let mut thumb = recent.thumbnail.clone();
                     if thumb.is_empty() {
-                        thumb = crate::bridge::bridge::get_or_create_thumbnail(&title, 0);
+                        thumb = crate::bridge::bridge::get_or_create_thumbnail(&recent.title, 0);
                     }
                     top_tracks.push(crate::bridge::bridge::Track {
-                        id,
-                        title,
-                        artist,
-                        album: String::new(),
-                        duration_ms,
+                        id: recent.track_id,
+                        title: recent.title,
+                        artist: recent.artist,
+                        album: recent.album,
+                        duration_ms: recent.duration_ms,
                         thumbnail: thumb,
                     });
+                    top_tracks_plays.push(recent.play_count as i32);
                 }
             }
 
@@ -1688,6 +1740,7 @@ pub fn on_stats_requested(days: i32) {
                 unique_artists,
                 weekly_activity,
                 top_tracks,
+                top_tracks_plays,
             }
         })
         .await;
@@ -1756,13 +1809,15 @@ fn remote_played_at(label: &str, index: usize) -> String {
 pub fn on_history_requested() {
     log::info!("History requested");
     tokio::spawn(async move {
-        if crate::api::auth::is_authenticated() {
+        if is_online() && crate::api::auth::is_authenticated() {
             match crate::api::innertube::remote_history().await {
                 Ok(items) => {
                     let mut history = Vec::with_capacity(items.len());
                     let mut played_at = Vec::with_capacity(items.len());
+                    let mut feedback_tokens = Vec::with_capacity(items.len());
                     for (index, item) in items.into_iter().enumerate() {
                         played_at.push(remote_played_at(&item.played, index));
+                        feedback_tokens.push(item.feedback_token.clone().unwrap_or_default());
                         history.push(bridge::Track {
                             id: item.track.id,
                             title: item.track.title,
@@ -1772,7 +1827,7 @@ pub fn on_history_requested() {
                             thumbnail: item.track.thumbnail,
                         });
                     }
-                    crate::bridge::bridge::set_history_data(history, played_at);
+                    crate::bridge::bridge::set_history_data(history, played_at, feedback_tokens);
                     return;
                 }
                 Err(error) => {
@@ -1783,7 +1838,8 @@ pub fn on_history_requested() {
 
         let local = tokio::task::spawn_blocking(load_local_history).await;
         if let Ok((history, played_at)) = local {
-            crate::bridge::bridge::set_history_data(history, played_at);
+            let tokens = vec![String::new(); history.len()];
+            crate::bridge::bridge::set_history_data(history, played_at, tokens);
         }
     });
 }
@@ -1792,6 +1848,29 @@ pub fn on_clear_history() {
     log::info!("Clear history requested");
     tokio::task::spawn_blocking(|| {
         crate::db::repo::PlayHistoryRepo::clear().ok();
+    });
+}
+
+pub fn on_delete_history_item(track_id: &str, feedback_token: &str) {
+    log::info!("Delete history item requested for track_id: {track_id}");
+    let track_id_owned = track_id.to_string();
+    let token_owned = feedback_token.to_string();
+    tokio::spawn(async move {
+        let local_res = tokio::task::spawn_blocking(move || {
+            crate::db::repo::PlayHistoryRepo::remove(&track_id_owned)
+        }).await;
+
+        if let Ok(Err(e)) = local_res {
+            log::error!("Failed to remove local history item: {e}");
+        }
+
+        if crate::api::auth::is_authenticated() && !token_owned.is_empty() {
+            if let Err(e) = crate::api::endpoints::remove_remote_history_items(&[token_owned]).await {
+                log::error!("Failed to remove remote history item: {e}");
+            }
+        }
+
+        on_history_requested();
     });
 }
 
@@ -1897,6 +1976,14 @@ pub fn is_youtube_authenticated() -> bool {
 
 pub fn on_check_for_updates_requested() {
     log::info!("Update check requested from UI");
+    if !is_connectivity_online() {
+        crate::bridge::bridge::show_notification(
+            "Sin conexión: no se puede buscar actualizaciones.",
+            "warning",
+        );
+        return;
+    }
+
     tokio::spawn(async {
         if let Some(release) = crate::services::updater::check_for_updates().await {
             crate::bridge::bridge::set_update_available(

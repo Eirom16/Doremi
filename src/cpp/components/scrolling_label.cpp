@@ -1,4 +1,5 @@
 #include "scrolling_label.h"
+#include "design_tokens.h"
 #include <QPainter>
 #include <QLinearGradient>
 #include <QPixmap>
@@ -34,7 +35,9 @@ void ScrollingLabel::updateTextWidth() {
     m_direction = 1;
     m_pauseTicks = 50; // Pause at the beginning (2 seconds)
     
-    if (m_textWidth > width() && width() > 0) {
+    if (DesignTokens::reducedMotion()) {
+        m_scrollTimer->stop();
+    } else if (m_textWidth > width() && width() > 0) {
         if (!m_scrollTimer->isActive()) {
             m_scrollTimer->start();
         }
@@ -50,6 +53,13 @@ void ScrollingLabel::resizeEvent(QResizeEvent *event) {
 }
 
 void ScrollingLabel::onTimerTick() {
+    if (DesignTokens::reducedMotion()) {
+        m_scrollOffset = 0;
+        m_scrollTimer->stop();
+        update();
+        return;
+    }
+
     if (m_textWidth <= width()) {
         m_scrollTimer->stop();
         return;

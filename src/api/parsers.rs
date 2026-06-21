@@ -190,28 +190,45 @@ fn find_library_contents(json: &Value) -> Option<&Value> {
     if let Some(shelf) = json.get("musicShelfContinuation") {
         return Some(shelf);
     }
-    for tab_idx in 0..4 {
-        let path = format!(
-            "/contents/singleColumnBrowseResultsRenderer/tabs/{}/tabRenderer/content/sectionListRenderer/contents/0",
-            tab_idx
-        );
-        if let Some(item) = json.pointer(&path) {
-            if let Some(grid) = item.get("gridRenderer") {
-                return Some(grid);
-            }
-            if let Some(shelf) = item.get("musicShelfRenderer") {
-                return Some(shelf);
-            }
-            if let Some(contents) = item.pointer("/itemSectionRenderer/contents/0") {
-                if let Some(grid) = contents.get("gridRenderer") {
+    
+    // Support continuationContents wrapping
+    if let Some(cont) = json.get("continuationContents") {
+        if let Some(grid) = cont.get("gridContinuation") {
+            return Some(grid);
+        }
+        if let Some(shelf) = cont.get("musicShelfContinuation") {
+            return Some(shelf);
+        }
+        if let Some(shelf) = cont.get("musicPlaylistShelfContinuation") {
+            return Some(shelf);
+        }
+    }
+
+    for col_type in &["singleColumnBrowseResultsRenderer", "twoColumnBrowseResultsRenderer"] {
+        for tab_idx in 0..4 {
+            let path = format!(
+                "/contents/{}/tabs/{}/tabRenderer/content/sectionListRenderer/contents/0",
+                col_type, tab_idx
+            );
+            if let Some(item) = json.pointer(&path) {
+                if let Some(grid) = item.get("gridRenderer") {
                     return Some(grid);
                 }
-                if let Some(shelf) = contents.get("musicShelfRenderer") {
+                if let Some(shelf) = item.get("musicShelfRenderer") {
                     return Some(shelf);
+                }
+                if let Some(contents) = item.pointer("/itemSectionRenderer/contents/0") {
+                    if let Some(grid) = contents.get("gridRenderer") {
+                        return Some(grid);
+                    }
+                    if let Some(shelf) = contents.get("musicShelfRenderer") {
+                        return Some(shelf);
+                    }
                 }
             }
         }
     }
+
     if let Some(item) = json.pointer("/contents/sectionListRenderer/contents/0") {
         if let Some(grid) = item.get("gridRenderer") {
             return Some(grid);

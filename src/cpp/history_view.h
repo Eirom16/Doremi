@@ -13,13 +13,16 @@ class HistoryRow : public QWidget {
 public:
     HistoryRow(const Track &track,
                const std::string &played_at,
+               const std::string &feedback_token,
                QWidget *parent = nullptr);
 
 signals:
     void play_requested(Track track);
+    void delete_requested(const std::string &track_id, const std::string &feedback_token);
 
 protected:
     void mousePressEvent(QMouseEvent *event) override;
+    void contextMenuEvent(QContextMenuEvent *event) override;
     void enterEvent(QEnterEvent *event) override;
     void leaveEvent(QEvent *event) override;
 
@@ -27,6 +30,7 @@ private:
     Track track_;
     QString title_;
     QString artist_;
+    std::string feedback_token_;
 };
 
 class HistoryView : public QWidget {
@@ -35,7 +39,8 @@ public:
     explicit HistoryView(QWidget *parent = nullptr);
 
     void set_history(const std::vector<Track> &tracks,
-                     const std::vector<std::string> &played_at);
+                     const std::vector<std::string> &played_at,
+                     const std::vector<std::string> &feedback_tokens);
     void clear_history();
 
 signals:

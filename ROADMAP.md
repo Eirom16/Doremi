@@ -299,10 +299,10 @@ El port se considera terminado cuando Doremi cubra los flujos reales de Pyrolist
 
 - [x] Hecho - Mantener player bar y full player perfectamente sincronizados.
 - [x] Portar tabs de lyrics, queue y related.
-- [ ] Parsear LRC con timestamps mejorados y metadatos.
-- [ ] Aplicar delay manual, alineacion, spacing, colores y animacion elegida.
-- [ ] Auto scroll configurable y click para seek a una linea.
-- [ ] Fallback entre letra sincronizada, plana y no encontrada.
+- [x] Hecho - Parsear LRC con timestamps mejorados y metadatos.
+- [x] Hecho - Aplicar delay manual, alineacion, spacing, colores y animacion elegida.
+- [x] Hecho - Auto scroll configurable y click para seek a una linea.
+- [x] Hecho - Fallback entre letra sincronizada, plana y no encontrada.
 - [x] Cache persistente de letras con TTL/version.
 - [x] Prefetch con generacion, debounce y timeout.
 - [x] Mostrar related real y permitir agregar/reproducir.
@@ -311,15 +311,15 @@ El port se considera terminado cuando Doremi cubra los flujos reales de Pyrolist
 
 ### P3.6 Historial y estadisticas
 
-- [ ] Unificar semantica de una reproduccion contabilizada.
-- [ ] Guardar progreso escuchado y evitar contar skips accidentales.
-- [ ] Conservar play count, last played, album y thumbnail.
-- [ ] Agrupar historial por fecha y permitir limpiar/eliminar.
-- [ ] Reproducir y descargar desde historial usando ID.
-- [ ] Stats: tiempo total, plays, artistas unicos, actividad semanal y top tracks.
-- [ ] Añadir rangos 7 dias, 30 dias, año y todo.
-- [ ] Optimizar queries e indices para historiales grandes.
-- [ ] Exportar estadisticas a JSON/CSV opcionalmente.
+- [x] Hecho - Unificar semantica de una reproduccion contabilizada.
+- [x] Hecho - Guardar progreso escuchado y evitar contar skips accidentales.
+- [x] Hecho - Conservar play count, last played, album y thumbnail.
+- [x] Hecho - Agrupar historial por fecha y permitir limpiar/eliminar.
+- [x] Hecho - Reproducir y descargar desde historial usando ID.
+- [x] Hecho - Stats: tiempo total, plays, artistas unicos, actividad semanal y top tracks.
+- [x] Hecho - Añadir rangos 7 dias, 30 dias, año y todo.
+- [x] Hecho - Optimizar queries e indices para historiales grandes.
+- [x] Hecho - Exportar estadisticas a JSON/CSV opcionalmente.
 
 ### P3.7 Podcasts / Shows
 
@@ -356,31 +356,31 @@ Soporte para podcasts y shows de YouTube Music (y potencialmente RSS). YouTube M
 - [x] Controlar concurrencia mediante semaphore.
 - [x] Capturar stdout estructuradamente de `yt-dlp --newline` con regex.
 - [x] Hecho - Detectar ausencia/version incompatible de `yt-dlp` y `ffmpeg`.
-- [ ] Permitir ubicacion, formato y calidad configurables.
-- [ ] Sanitizar nombres de forma portable y resolver colisiones.
+- [x] Hecho - Permitir ubicacion, formato y calidad configurables.
+- [x] Hecho - Sanitizar nombres de forma portable y resolver colisiones.
 - [x] Hecho - Escribir a archivo temporal y hacer rename atomico al completar.
 - [x] Hecho - Limpiar parciales tras cancelacion o crash segun politica.
-- [ ] Guardar metadata y artwork local.
-- [ ] Verificar existencia/integridad antes de marcar completado.
+- [x] Hecho - Guardar metadata y artwork local.
+- [x] Hecho - Verificar existencia/integridad antes de marcar completado.
 
 ### P4.2 Albums y playlists
 
 - [x] Crear tareas padre e hijas para albums/playlists (via `parent_playlist_id`).
 - [x] Mostrar progreso agregado y por pista via `set_batch_download_progress`.
 - [x] Preservar orden original.
-- [ ] Reanudar lote parcialmente descargado.
-- [ ] Borrar track o coleccion, con opcion de mantener archivos.
-- [ ] Reconciliar DB cuando archivos son movidos o borrados externamente.
+- [x] Hecho - Reanudar lote parcialmente descargado.
+- [x] Hecho - Borrar track o coleccion, con opcion de mantener archivos.
+- [x] Reconciliar DB cuando archivos son movidos o borrados externamente.
 
 ### P4.3 Offline
 
-- [ ] Monitor de conectividad con debounce.
-- [ ] Banner offline y notificaciones de reconexion.
-- [ ] Resolver automaticamente a archivo local antes de red.
-- [ ] Permitir navegar biblioteca, descargas, historial y cache sin conexion.
-- [ ] Desactivar o explicar acciones que necesitan red.
-- [ ] Reintentar cargas pendientes al recuperar conexion.
-- [ ] Probar inicio completamente offline.
+- [x] Monitor de conectividad con debounce.
+- [x] Banner offline y notificaciones de reconexion.
+- [x] Resolver automaticamente a archivo local antes de red.
+- [x] Hecho - Permitir navegar biblioteca, descargas, historial y cache sin conexion.
+- [x] Hecho - Desactivar o explicar acciones que necesitan red.
+- [x] Hecho - Reintentar cargas pendientes al recuperar conexion.
+- [x] Hecho - Probar inicio completamente offline.
 
 ## P5 - Calidad visual, UX y accesibilidad
 
@@ -391,32 +391,34 @@ Soporte para podcasts y shows de YouTube Music (y potencialmente RSS). YouTube M
 - [x] Definir componentes oficiales y variantes de estado.
 - [ ] Portar los componentes faltantes de Pyrolist solo cuando tengan uso real.
 - [x] Añadir estados hover, pressed, focused, disabled, loading y selected.
-- [ ] Verificar dark/light y colores de acento con contraste adecuado.
-- [ ] Soportar escala HiDPI y distintos device pixel ratios.
-- [ ] Adaptar layouts a ventanas pequeñas y ultrawide.
-- [ ] Reducir movimiento cuando el sistema lo solicite.
+- [x] Verificar dark/light y colores de acento con contraste adecuado.
+- [x] Hecho - Soportar escala HiDPI y distintos device pixel ratios.
+- [x] Adaptar layouts a ventanas pequeñas y ultrawide.
+- [x] Reducir movimiento cuando el sistema lo solicite.
 
 ### P5.2 Assets e imagenes
 
-- [ ] Implementar `ArtworkCache` en Rust con deduplicacion y limites.
-- [ ] Descargar, decodificar y escalar fuera del hilo GUI.
-- [ ] Usar formatos/tamaños apropiados para cada widget.
-- [ ] Añadir cache LRU y limpieza por cuota.
-- [ ] Evitar regenerar placeholders en disco innecesariamente.
-- [ ] Extraer colores dominantes con cache por artwork.
-- [ ] Medir blur, escalado y fondos animados; usar GPU solo si aporta.
-- [ ] Empaquetar iconos y assets sin depender del directorio de desarrollo.
+- [x] Hecho - Implementar `ArtworkCache` en Rust con deduplicacion y limites.
+- [x] Hecho - Descargar, decodificar y escalar fuera del hilo GUI.
+- [x] Hecho - Usar formatos/tamaños apropiados para cada widget.
+- [x] Hecho - Añadir cache LRU y limpieza por cuota.
+- [x] Hecho - Evitar regenerar placeholders en disco innecesariamente.
+- [x] Hecho - Extraer colores dominantes con cache por artwork.
+- [x] Hecho - Medir blur, escalado y fondos animados; usar GPU solo si aporta.
+- [x] Hecho - Empaquetar iconos y assets sin depender del directorio de desarrollo.
 
 ### P5.3 Interaccion
 
-- [ ] Mini player flotante y modo compacto.
+- [x] Mini player flotante y modo compacto.
+- [x] Corregir mini player flotante y solape del boton principal con la linea de tiempo.
 - [x] Navegacion atras/adelante con historial de rutas.
-- [ ] Restaurar scroll y foco al regresar.
+- [x] Restaurar scroll y foco al regresar.
 - [x] Tooltips consistentes y shortcuts visibles.
-- [ ] Drag and drop para cola y playlists.
-- [ ] Toasts accionables con cola y deduplicacion.
+- [x] Sistema vertical de pestanas por categoria en configuracion.
+- [x] Hecho - Drag and drop para cola y playlists.
+- [x] Toasts accionables con cola y deduplicacion.
 - [ ] Centro de notificaciones opcional.
-- [ ] Confirmaciones solo en acciones destructivas.
+- [x] Hecho - Confirmaciones solo en acciones destructivas.
 - [ ] Errores con retry y detalle tecnico desplegable.
 
 ### P5.4 Accesibilidad e i18n

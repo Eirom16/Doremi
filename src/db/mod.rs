@@ -299,6 +299,74 @@ impl Database {
             )?;
         }
 
+        if version < 10 {
+            let has_song_id = Self::column_exists(conn, "downloads", "song_id")?;
+            if has_song_id {
+                log::info!("Migrating downloads table schema (renaming song_id to video_id and adjusting columns)...");
+                conn.execute_batch(
+                    "BEGIN TRANSACTION;
+                     CREATE TABLE IF NOT EXISTS downloads_new (
+                        video_id TEXT PRIMARY KEY,
+                        title TEXT NOT NULL,
+                        artist TEXT NOT NULL,
+                        album TEXT NOT NULL DEFAULT '',
+                        file_path TEXT NOT NULL,
+                        thumbnail_url TEXT NOT NULL DEFAULT '',
+                        duration_ms INTEGER NOT NULL DEFAULT 0,
+                        downloaded_at TEXT NOT NULL DEFAULT (datetime('now')),
+                        parent_playlist_id TEXT,
+                        parent_playlist_title TEXT,
+                        parent_playlist_thumbnail_url TEXT,
+                        status TEXT NOT NULL DEFAULT 'completed',
+                        progress REAL NOT NULL DEFAULT 100.0,
+                        error TEXT NOT NULL DEFAULT '',
+                        cancelled INTEGER NOT NULL DEFAULT 0
+                     );
+                     
+                     INSERT INTO downloads_new (
+                        video_id, title, artist, album, file_path, thumbnail_url,
+                        duration_ms, downloaded_at, status, progress, error, cancelled
+                     )
+                     SELECT 
+                        song_id, title, artist, COALESCE(album, ''), file_path, COALESCE(thumbnail_url, ''),
+                        duration_ms, COALESCE(datetime(downloaded_at, 'unixepoch'), datetime('now')), status, progress, COALESCE(error, ''), cancelled
+                     FROM downloads;
+                     
+                     DROP TABLE downloads;
+                     ALTER TABLE downloads_new RENAME TO downloads;
+                     CREATE INDEX IF NOT EXISTS idx_downloads_status ON downloads(status);
+                     COMMIT;"
+                )?;
+            } else {
+                log::info!("Ensuring downloads table columns are correct...");
+                Self::add_column_if_missing(conn, "downloads", "parent_playlist_id", "TEXT")?;
+                Self::add_column_if_missing(conn, "downloads", "parent_playlist_title", "TEXT")?;
+                Self::add_column_if_missing(conn, "downloads", "parent_playlist_thumbnail_url", "TEXT")?;
+                Self::add_column_if_missing(conn, "downloads", "status", "TEXT NOT NULL DEFAULT 'completed'")?;
+                Self::add_column_if_missing(conn, "downloads", "progress", "REAL NOT NULL DEFAULT 100.0")?;
+                Self::add_column_if_missing(conn, "downloads", "error", "TEXT NOT NULL DEFAULT ''")?;
+                Self::add_column_if_missing(conn, "downloads", "cancelled", "INTEGER NOT NULL DEFAULT 0")?;
+            }
+            conn.execute(
+                "INSERT OR IGNORE INTO schema_version (version) VALUES (10)",
+                [],
+            )?;
+        }
+
+        if version < 11 {
+            conn.execute_batch(
+                "CREATE INDEX IF NOT EXISTS idx_recently_played_played_at
+                    ON recently_played(played_at DESC);
+                 CREATE INDEX IF NOT EXISTS idx_recently_played_play_count
+                    ON recently_played(play_count DESC, played_at DESC);
+                 CREATE INDEX IF NOT EXISTS idx_recently_played_played_at_artist
+                    ON recently_played(played_at DESC, artist);
+                 CREATE INDEX IF NOT EXISTS idx_search_history_searched_at
+                    ON search_history(searched_at DESC);
+                 INSERT OR IGNORE INTO schema_version (version) VALUES (11);",
+            )?;
+        }
+
         Ok(())
     }
 
@@ -404,7 +472,7 @@ mod tests {
                 |r| r.get(0),
             )
             .unwrap();
-        assert_eq!(version, 9);
+        assert_eq!(version, 10);
     }
 
     #[test]
@@ -476,6 +544,55 @@ mod tests {
                 |r| r.get(0),
             )
             .unwrap();
-        assert_eq!(version, 9);
+        assert_eq!(version, 10);
+    }
+
+    #[test]
+    fn test_downloads_song_id_migration() {
+        let conn = Connection::open_in_memory().unwrap();
+        // First run migrations on clean DB to create all tables
+        Database::run_migrations(&conn).unwrap();
+
+        // Now drop downloads table and replace it with the legacy song_id-based one
+        conn.execute_batch(
+            "DROP TABLE downloads;
+             CREATE TABLE downloads (
+                song_id TEXT PRIMARY KEY,
+                title TEXT NOT NULL,
+                artist TEXT NOT NULL,
+                album TEXT,
+                file_path TEXT NOT NULL,
+                duration_ms INTEGER NOT NULL,
+                status TEXT NOT NULL,
+                progress REAL NOT NULL,
+                downloaded_at INTEGER NOT NULL,
+                thumbnail_url TEXT,
+                error TEXT NOT NULL DEFAULT '',
+                cancelled INTEGER NOT NULL DEFAULT 0
+             );
+             INSERT INTO downloads (
+                song_id, title, artist, file_path, duration_ms, status, progress, downloaded_at
+             ) VALUES (
+                'test-id', 'Test Title', 'Test Artist', '/path/to/file.mp3', 180000, 'completed', 100.0, 1780621169
+             );
+             DELETE FROM schema_version WHERE version = 10;"
+        ).unwrap();
+
+        // Run migrations again - it will run version 10 migration!
+        Database::run_migrations(&conn).unwrap();
+
+        assert!(Database::column_exists(&conn, "downloads", "video_id").unwrap());
+        assert!(!Database::column_exists(&conn, "downloads", "song_id").unwrap());
+
+        let (title, artist, path, downloaded_at): (String, String, String, String) = conn.query_row(
+            "SELECT title, artist, file_path, downloaded_at FROM downloads WHERE video_id = 'test-id'",
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
+        ).unwrap();
+
+        assert_eq!(title, "Test Title");
+        assert_eq!(artist, "Test Artist");
+        assert_eq!(path, "/path/to/file.mp3");
+        assert!(downloaded_at.starts_with("2026-"));
     }
 }

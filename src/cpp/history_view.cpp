@@ -9,12 +9,15 @@
 #include <QTimeZone>
 #include <QPushButton>
 #include <QMessageBox>
+#include <QMenu>
+#include <QContextMenuEvent>
 #include "doremi/src/bridge.rs.h"
 
 HistoryRow::HistoryRow(const Track &track,
                        const std::string &played_at,
+                       const std::string &feedback_token,
                        QWidget *parent)
-    : QWidget(parent), track_(track), title_(QString::fromStdString(static_cast<std::string>(track.title))), artist_(QString::fromStdString(static_cast<std::string>(track.artist)))
+    : QWidget(parent), track_(track), title_(QString::fromStdString(static_cast<std::string>(track.title))), artist_(QString::fromStdString(static_cast<std::string>(track.artist))), feedback_token_(feedback_token)
 {
     const auto &c = DesignTokens::current();
     setFixedHeight(64);
@@ -101,9 +104,28 @@ HistoryRow::HistoryRow(const Track &track,
         }
     }
 
-    auto *play_icon = IconProvider::createIconLabel("play_arrow", 18, c.text_muted, false, this);
-    play_icon->setToolTip("Reproducir");
-    layout->addWidget(play_icon);
+    auto *delete_btn = new QPushButton(this);
+    delete_btn->setFixedSize(28, 28);
+    delete_btn->setCursor(Qt::PointingHandCursor);
+    delete_btn->setFlat(true);
+    delete_btn->setStyleSheet(QString(
+        "QPushButton { background: transparent; border: none; border-radius: 4px; }"
+        "QPushButton:hover { background: rgba(%1, %2, %3, 0.1); }"
+    ).arg(c.text_primary.red()).arg(c.text_primary.green()).arg(c.text_primary.blue()));
+    delete_btn->setIcon(IconProvider::getIcon("delete", c.text_muted, 18));
+    delete_btn->setToolTip("Eliminar del historial");
+    connect(delete_btn, &QPushButton::clicked, this, [this]() {
+        auto reply = QMessageBox::question(
+            this,
+            "Eliminar del historial",
+            "¿Quieres eliminar esta reproducción del historial?",
+            QMessageBox::Yes | QMessageBox::No,
+            QMessageBox::No);
+        if (reply == QMessageBox::Yes) {
+            emit delete_requested(static_cast<std::string>(track_.id), feedback_token_);
+        }
+    });
+    layout->addWidget(delete_btn);
 
     setLayout(layout);
     setObjectName("HistoryRow");
@@ -114,6 +136,48 @@ void HistoryRow::mousePressEvent(QMouseEvent *event) {
     QWidget::mousePressEvent(event);
     if (event->button() == Qt::LeftButton) {
         emit play_requested(track_);
+    }
+}
+
+void HistoryRow::contextMenuEvent(QContextMenuEvent *event) {
+    QMenu menu;
+    QAction *play = menu.addAction("Reproducir");
+    
+    bool is_fav = get_track_favorite_state(static_cast<std::string>(track_.id));
+    QAction *fav = menu.addAction(is_fav ? "Quitar de favoritos" : "Agregar a favoritos");
+    
+    QAction *dl = menu.addAction("Descargar");
+    menu.addSeparator();
+    QAction *next = menu.addAction("Reproducir siguiente");
+    QAction *end = menu.addAction("Agregar a la cola");
+    menu.addSeparator();
+    QAction *remove = menu.addAction("Eliminar del historial");
+
+    QAction *chosen = menu.exec(event->globalPos());
+    if (chosen == play) {
+        emit play_requested(track_);
+    } else if (chosen == fav) {
+        if (is_fav) {
+            on_remove_favorite(static_cast<std::string>(track_.id));
+        } else {
+            on_add_favorite(track_);
+        }
+    } else if (chosen == dl) {
+        on_download_requested(track_);
+    } else if (chosen == next) {
+        on_add_to_queue_next(track_);
+    } else if (chosen == end) {
+        on_add_to_queue_end(track_);
+    } else if (chosen == remove) {
+        auto reply = QMessageBox::question(
+            this,
+            "Eliminar del historial",
+            "¿Quieres eliminar esta reproducción del historial?",
+            QMessageBox::Yes | QMessageBox::No,
+            QMessageBox::No);
+        if (reply == QMessageBox::Yes) {
+            emit delete_requested(static_cast<std::string>(track_.id), feedback_token_);
+        }
     }
 }
 
@@ -220,7 +284,8 @@ void HistoryView::clear_history() {
 }
 
 void HistoryView::set_history(const std::vector<Track> &tracks,
-                               const std::vector<std::string> &played_at) {
+                              const std::vector<std::string> &played_at,
+                              const std::vector<std::string> &feedback_tokens) {
     clear_history();
 
     const auto &c = DesignTokens::current();
@@ -235,12 +300,13 @@ void HistoryView::set_history(const std::vector<Track> &tracks,
         return;
     }
 
-    size_t n = std::min(tracks.size(), played_at.size());
+    size_t n = std::min({tracks.size(), played_at.size(), feedback_tokens.size()});
 
     QString last_group;
     for (size_t i = 0; i < n; ++i) {
         const auto &t = tracks[i];
         const auto &pa = played_at[i];
+        const auto &ft = feedback_tokens[i];
 
         QString group = getGroupLabel(QString::fromStdString(pa));
         if (group != last_group) {
@@ -252,8 +318,11 @@ void HistoryView::set_history(const std::vector<Track> &tracks,
             content_layout_->addWidget(group_lbl);
         }
 
-        auto *row = new HistoryRow(t, pa, this);
+        auto *row = new HistoryRow(t, pa, ft, this);
         connect(row, &HistoryRow::play_requested, this, &HistoryView::play_requested);
+        connect(row, &HistoryRow::delete_requested, this, [](const std::string &track_id, const std::string &feedback_token) {
+            on_delete_history_item(track_id, feedback_token);
+        });
         content_layout_->addWidget(row);
     }
 

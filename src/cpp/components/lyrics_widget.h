@@ -10,6 +10,9 @@
 #include <QPropertyAnimation>
 #include <QGraphicsOpacityEffect>
 
+#include <QPushButton>
+#include <QHBoxLayout>
+
 // Custom interactive label for lyrics
 class LyricLabel : public QLabel {
     Q_OBJECT
@@ -36,7 +39,7 @@ private:
 };
 
 // Main Lyrics Widget
-class LyricsWidget : public QScrollArea {
+class LyricsWidget : public QWidget {
     Q_OBJECT
 public:
     explicit LyricsWidget(QWidget *parent = nullptr);
@@ -49,12 +52,16 @@ public:
     void setSubtitleAutoScroll(bool enabled);
     void setSubtitleGlowEffect(bool enabled);
 
-
 signals:
     void seek_requested(int position_ms);
 
 protected:
     void resizeEvent(QResizeEvent *event) override;
+
+private slots:
+    void onSyncMinusClicked();
+    void onSyncPlusClicked();
+    void onSyncResetClicked();
 
 private:
     void parseLrc(const QString &lrc_text);
@@ -62,6 +69,8 @@ private:
     void buildLyricsLayout();
     void highlightLine(int index);
     void smoothScrollTo(int y_pos);
+    void updateSyncLabel();
+    void updateSyncControlBarVisibility();
 
     struct LyricLine {
         int time_ms;
@@ -70,6 +79,7 @@ private:
         QGraphicsOpacityEffect *opacity_effect = nullptr;
     };
 
+    QScrollArea *scroll_area_;
     QWidget *container_;
     QVBoxLayout *layout_;
     QVector<LyricLine> lines_;
@@ -90,6 +100,17 @@ private:
     QLabel *time_caption_;
 
     bool has_synced_lyrics_ = false;
+
+    // Manual lyrics synchronization delay (in ms)
+    int manual_delay_ms_ = 0;
+    int last_position_ms_ = 0;
+
+    // Sync Control Bar UI
+    QWidget *sync_control_bar_ = nullptr;
+    QLabel *sync_offset_lbl_ = nullptr;
+    QPushButton *sync_minus_btn_ = nullptr;
+    QPushButton *sync_plus_btn_ = nullptr;
+    QPushButton *sync_reset_btn_ = nullptr;
 
     std::string alignment_ = "center";
     int base_font_size_ = 15;

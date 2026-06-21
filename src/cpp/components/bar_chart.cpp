@@ -17,7 +17,7 @@ BarChart::BarChart(QWidget *parent)
     values_ = {0, 0, 0, 0, 0, 0, 0};
     
     grow_anim_ = new QVariantAnimation(this);
-    grow_anim_->setDuration(800);
+    grow_anim_->setDuration(DesignTokens::duration(800));
     grow_anim_->setEasingCurve(QEasingCurve::OutCubic);
     grow_anim_->setStartValue(0.0);
     grow_anim_->setEndValue(1.0);
@@ -34,6 +34,10 @@ void BarChart::setData(const QVector<int> &values) {
     }
     
     grow_anim_->stop();
+    if (DesignTokens::reducedMotion()) {
+        setAnimationProgress(1.0);
+        return;
+    }
     grow_anim_->start();
 }
 
@@ -45,6 +49,10 @@ void BarChart::setAnimationProgress(qreal progress) {
 void BarChart::showEvent(QShowEvent *event) {
     QWidget::showEvent(event);
     grow_anim_->stop();
+    if (DesignTokens::reducedMotion()) {
+        setAnimationProgress(1.0);
+        return;
+    }
     grow_anim_->start();
 }
 

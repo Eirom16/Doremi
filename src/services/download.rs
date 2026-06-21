@@ -398,8 +398,8 @@ impl DownloadManager {
             .output()
             .is_ok();
 
-        let clean_artist = task.artist.replace("/", "_").replace("\\", "_");
-        let clean_title = task.title.replace("/", "_").replace("\\", "_");
+        let clean_artist = sanitize_filename(&task.artist);
+        let clean_title = sanitize_filename(&task.title);
         let filename_base = format!("{} - {}", clean_artist, clean_title);
 
         let temp_filename_base = format!("{}_download.tmp", task.video_id);
@@ -425,6 +425,9 @@ impl DownloadManager {
         let dl_quality = settings.downloads.quality.to_lowercase();
 
         if has_ffmpeg {
+            child.arg("--embed-metadata");
+            child.arg("--embed-thumbnail");
+
             if dl_format != "original" {
                 child
                     .arg("--extract-audio")
@@ -513,21 +516,15 @@ impl DownloadManager {
         }
 
         if !output.success() {
-            let stderr = child
-                .stderr
-                .take()
-                .map(|s| {
-                    use tokio::io::AsyncReadExt;
-                    let mut buf = String::new();
-                    let mut reader = tokio::io::BufReader::new(s);
-                    let _ = reader.read_to_string(&mut buf);
-                    buf
-                })
-                .unwrap_or_default();
-            let err_msg = if stderr.trim().is_empty() {
+            let mut stderr_str = String::new();
+            if let Some(mut s) = child.stderr.take() {
+                use tokio::io::AsyncReadExt;
+                let _ = s.read_to_string(&mut stderr_str).await;
+            }
+            let err_msg = if stderr_str.trim().is_empty() {
                 "yt-dlp exited with error".to_string()
             } else {
-                stderr.trim().to_string()
+                stderr_str.trim().to_string()
             };
             return Err(err_msg);
         }
@@ -571,11 +568,26 @@ impl DownloadManager {
             .extension()
             .and_then(|e| e.to_str())
             .unwrap_or(ext);
-        let final_path = out_dir.join(format!("{}.{}", filename_base, final_ext));
+        let mut final_path = out_dir.join(format!("{}.{}", filename_base, final_ext));
+        let mut index = 1;
+        while final_path.exists() {
+            final_path = out_dir.join(format!("{} ({}).{}", filename_base, index, final_ext));
+            index += 1;
+        }
 
         // Atomic rename
         std::fs::rename(&temp_final_path, &final_path)
             .map_err(|e| format!("Failed to rename temporary file to final path: {e}"))?;
+
+        if !final_path.exists() {
+            return Err("Downloaded file does not exist at final path".to_string());
+        }
+        let size = std::fs::metadata(&final_path)
+            .map(|m| m.len())
+            .unwrap_or(0);
+        if size == 0 {
+            return Err("Downloaded file is empty (0 bytes)".to_string());
+        }
 
         let file_path_str = final_path.to_str().unwrap_or_default().to_string();
 
@@ -598,7 +610,33 @@ impl DownloadManager {
         })
     }
 
+    pub fn reconcile_downloads() {
+        log::info!("Reconciling downloads database with disk files...");
+        if let Ok(downloads) = DownloadsRepo::all() {
+            for track in downloads {
+                if track.status == "completed" {
+                    let path = std::path::Path::new(&track.file_path);
+                    if !path.exists() || !path.is_file() {
+                        log::warn!(
+                            "File for downloaded track {} - {} not found at {}. Marking as failed.",
+                            track.artist,
+                            track.title,
+                            track.file_path
+                        );
+                        let _ = DownloadsRepo::update_status(
+                            &track.video_id,
+                            "failed",
+                            0.0,
+                            "El archivo fue movido o eliminado externamente",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
     pub fn refresh_downloads_ui() {
+        Self::reconcile_downloads();
         if let Ok(downloads) = DownloadsRepo::all() {
             let titles: Vec<String> = downloads.iter().map(|d| d.title.clone()).collect();
             let artists: Vec<String> = downloads.iter().map(|d| d.artist.clone()).collect();
@@ -622,5 +660,51 @@ impl DownloadManager {
                 avg_progress,
             );
         }
+    }
+}
+
+fn sanitize_filename(name: &str) -> String {
+    let mut clean = String::new();
+    for c in name.chars() {
+        if c.is_control() || "/\\?%*:|\"<>".contains(c) {
+            clean.push('_');
+        } else {
+            clean.push(c);
+        }
+    }
+    // Collapse multiple underscores
+    let mut collapsed = String::new();
+    let mut last_was_underscore = false;
+    for c in clean.chars() {
+        if c == '_' {
+            if !last_was_underscore {
+                collapsed.push('_');
+                last_was_underscore = true;
+            }
+        } else {
+            collapsed.push(c);
+            last_was_underscore = false;
+        }
+    }
+    let trimmed = collapsed.trim_matches(|c| c == '_' || c == ' ' || c == '.');
+    if trimmed.is_empty() {
+        "Track".to_string()
+    } else {
+        trimmed.to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_sanitize_filename() {
+        assert_eq!(sanitize_filename("Normal Title"), "Normal Title");
+        assert_eq!(sanitize_filename("Title / Slash"), "Title _ Slash");
+        assert_eq!(sanitize_filename("Title? * : | \" < > ."), "Title");
+        assert_eq!(sanitize_filename("   "), "Track");
+        assert_eq!(sanitize_filename("..."), "Track");
+        assert_eq!(sanitize_filename("Title with dot.mp3"), "Title with dot.mp3");
     }
 }

@@ -281,10 +281,17 @@ impl DoremiApp {
         crate::services::download::DownloadManager::refresh_downloads_ui();
         dl_manager.resume_unfinished_downloads();
 
+        // Start connectivity monitor
+        let _connectivity = crate::system::connectivity::ConnectivityMonitor::start();
+
         // Trigger update check after a short delay (3 seconds)
         tokio::spawn(async {
             tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-            crate::bridge::on_check_for_updates_requested();
+            if crate::bridge::should_run_online_startup_work() {
+                crate::bridge::on_check_for_updates_requested();
+            } else {
+                log::info!("Skipping startup update check while offline");
+            }
         });
 
         run_event_loop();

@@ -61,7 +61,7 @@ impl LyricsService {
         );
 
         let url = "https://lrclib.net/api/get";
-        let query = [("title", &clean_title), ("artist", &clean_artist)];
+        let query = [("track_name", &clean_title), ("artist_name", &clean_artist)];
 
         let resp = self
             .client

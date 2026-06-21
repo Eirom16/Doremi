@@ -1,5 +1,7 @@
 #include "lyrics_widget.h"
 #include "../design_tokens.h"
+#include "../icon_provider.h"
+#include "doremi/src/bridge.rs.h"
 #include <QScrollBar>
 #include <QRegularExpression>
 #include <QMouseEvent>
@@ -20,53 +22,69 @@ void LyricLabel::setFontSize(int size) {
 }
 
 void LyricLabel::mousePressEvent(QMouseEvent *event) {
-    QLabel::mousePressEvent(event);
     if (event->button() == Qt::LeftButton) {
         emit clicked(time_ms_);
     }
+    QLabel::mousePressEvent(event);
 }
 
 void LyricLabel::enterEvent(QEnterEvent *event) {
-    QLabel::enterEvent(event);
     is_hovered_ = true;
     if (auto *effect = qobject_cast<QGraphicsOpacityEffect*>(graphicsEffect())) {
         if (effect->opacity() < 0.9) {
+            if (DesignTokens::reducedMotion()) {
+                effect->setOpacity(0.85);
+                return;
+            }
             auto *anim = new QPropertyAnimation(effect, "opacity", this);
-            anim->setDuration(120);
+            anim->setDuration(DesignTokens::duration(120));
             anim->setStartValue(effect->opacity());
             anim->setEndValue(0.85);
             anim->start(QAbstractAnimation::DeleteWhenStopped);
         }
     }
+    QLabel::enterEvent(event);
 }
 
 void LyricLabel::leaveEvent(QEvent *event) {
-    QLabel::leaveEvent(event);
     is_hovered_ = false;
     if (auto *effect = qobject_cast<QGraphicsOpacityEffect*>(graphicsEffect())) {
         // If it's highlighted (opacity close to 1.0), don't fade out
         if (effect->opacity() < 0.95 && font_size_ < 18) {
+            if (DesignTokens::reducedMotion()) {
+                effect->setOpacity(0.4);
+                return;
+            }
             auto *anim = new QPropertyAnimation(effect, "opacity", this);
-            anim->setDuration(150);
+            anim->setDuration(DesignTokens::duration(150));
             anim->setStartValue(effect->opacity());
             anim->setEndValue(0.4);
             anim->start(QAbstractAnimation::DeleteWhenStopped);
         }
     }
+    QLabel::leaveEvent(event);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 
 LyricsWidget::LyricsWidget(QWidget *parent)
-    : QScrollArea(parent), scroll_animation_(nullptr)
+    : QWidget(parent), scroll_animation_(nullptr)
 {
-    setWidgetResizable(true);
-    setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    setFrameShape(QFrame::NoFrame);
-    setStyleSheet("background: transparent;");
+    const auto &c = DesignTokens::current();
 
-    container_ = new QWidget(this);
+    auto *main_layout = new QVBoxLayout(this);
+    main_layout->setContentsMargins(0, 0, 0, 0);
+    main_layout->setSpacing(0);
+
+    // Setup QScrollArea internally
+    scroll_area_ = new QScrollArea(this);
+    scroll_area_->setWidgetResizable(true);
+    scroll_area_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    scroll_area_->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    scroll_area_->setFrameShape(QFrame::NoFrame);
+    scroll_area_->setStyleSheet("background: transparent;");
+
+    container_ = new QWidget(scroll_area_);
     container_->setStyleSheet("background: transparent;");
     
     layout_ = new QVBoxLayout(container_);
@@ -77,12 +95,101 @@ LyricsWidget::LyricsWidget(QWidget *parent)
     top_spacer_ = nullptr;
     bottom_spacer_ = nullptr;
 
-    setWidget(container_);
+    scroll_area_->setWidget(container_);
+    main_layout->addWidget(scroll_area_, 1);
+
+    // Sync Control Bar setup (hidden by default, only shown for synced lyrics)
+    sync_control_bar_ = new QWidget(this);
+    sync_control_bar_->setObjectName("syncControlBar");
+    sync_control_bar_->setFixedHeight(40);
+    
+    // Set style: modern elevated capsule floating above bottom
+    QString barStyle = QString(
+        "QWidget#syncControlBar {"
+        "    background-color: %1;"
+        "    border: 1px solid %2;"
+        "    border-radius: 20px;"
+        "}"
+    ).arg(DesignTokens::rgba(c.bg_elevated)).arg(c.border.name());
+    sync_control_bar_->setStyleSheet(barStyle);
+
+    auto *bar_layout = new QHBoxLayout(sync_control_bar_);
+    bar_layout->setContentsMargins(16, 0, 16, 0);
+    bar_layout->setSpacing(12);
+
+    // Timing icon
+    auto *icon_lbl = IconProvider::createIconLabel("schedule", 16, c.text_secondary, true, sync_control_bar_);
+    bar_layout->addWidget(icon_lbl);
+
+    // Synchronization offset label
+    sync_offset_lbl_ = new QLabel(sync_control_bar_);
+    sync_offset_lbl_->setFont(DesignTokens::getFont("body", 11));
+    sync_offset_lbl_->setStyleSheet(QString("color: %1; border: none; background: transparent;").arg(c.text_secondary.name()));
+    bar_layout->addWidget(sync_offset_lbl_);
+
+    // Button style sheet
+    QString btnStyle = QString(
+        "QPushButton {"
+        "    background: transparent;"
+        "    border: none;"
+        "    color: %1;"
+        "    padding: 4px;"
+        "    border-radius: 12px;"
+        "    min-width: 24px;"
+        "    min-height: 24px;"
+        "}"
+        "QPushButton:hover {"
+        "    background-color: %2;"
+        "}"
+        "QPushButton:pressed {"
+        "    background-color: %3;"
+        "}"
+    ).arg(c.text_primary.name()).arg(DesignTokens::rgba(c.bg_overlay)).arg(DesignTokens::rgba(c.border));
+
+    // Minus button (-0.5s)
+    sync_minus_btn_ = new QPushButton(sync_control_bar_);
+    sync_minus_btn_->setIcon(IconProvider::getIcon("remove", c.text_primary, 14));
+    sync_minus_btn_->setStyleSheet(btnStyle);
+    sync_minus_btn_->setCursor(Qt::PointingHandCursor);
+    sync_minus_btn_->setToolTip(QString::fromStdString(std::string(doremi_tr("sync_delay_tooltip_minus"))));
+    bar_layout->addWidget(sync_minus_btn_);
+
+    // Plus button (+0.5s)
+    sync_plus_btn_ = new QPushButton(sync_control_bar_);
+    sync_plus_btn_->setIcon(IconProvider::getIcon("add", c.text_primary, 14));
+    sync_plus_btn_->setStyleSheet(btnStyle);
+    sync_plus_btn_->setCursor(Qt::PointingHandCursor);
+    sync_plus_btn_->setToolTip(QString::fromStdString(std::string(doremi_tr("sync_delay_tooltip_plus"))));
+    bar_layout->addWidget(sync_plus_btn_);
+
+    // Reset button
+    sync_reset_btn_ = new QPushButton(sync_control_bar_);
+    sync_reset_btn_->setIcon(IconProvider::getIcon("restart_alt", c.text_secondary, 14));
+    sync_reset_btn_->setStyleSheet(btnStyle);
+    sync_reset_btn_->setCursor(Qt::PointingHandCursor);
+    sync_reset_btn_->setToolTip(QString::fromStdString(std::string(doremi_tr("sync_delay_tooltip_reset"))));
+    bar_layout->addWidget(sync_reset_btn_);
+
+    main_layout->addWidget(sync_control_bar_, 0, Qt::AlignCenter);
+    
+    // Add small bottom margin to bar layout
+    main_layout->setContentsMargins(0, 0, 0, 12);
+
+    updateSyncLabel();
+    sync_control_bar_->hide();
+
+    // Connect signals
+    connect(sync_minus_btn_, &QPushButton::clicked, this, &LyricsWidget::onSyncMinusClicked);
+    connect(sync_plus_btn_, &QPushButton::clicked, this, &LyricsWidget::onSyncPlusClicked);
+    connect(sync_reset_btn_, &QPushButton::clicked, this, &LyricsWidget::onSyncResetClicked);
 }
 
 void LyricsWidget::setLyrics(const QString &plain, const QString &synced) {
     if (scroll_animation_) scroll_animation_->stop();
     active_index_ = -1;
+    manual_delay_ms_ = 0;
+    last_position_ms_ = 0;
+    updateSyncLabel();
     clearLayout();
 
     if (!synced.isEmpty()) {
@@ -101,18 +208,23 @@ void LyricsWidget::setLyrics(const QString &plain, const QString &synced) {
     }
 
     buildLyricsLayout();
-    verticalScrollBar()->setValue(0);
+    updateSyncControlBarVisibility();
+    scroll_area_->verticalScrollBar()->setValue(0);
 }
 
 void LyricsWidget::updatePosition(int position_ms) {
+    last_position_ms_ = position_ms;
     if (!has_synced_lyrics_ || lines_.isEmpty()) return;
 
-    // Binary search for last line with time_ms <= position_ms
+    // Apply manual synchronization delay
+    int adjusted_pos = position_ms - manual_delay_ms_;
+
+    // Binary search for last line with time_ms <= adjusted_pos
     int lo = 0, hi = lines_.size() - 1;
     int idx = -1;
     while (lo <= hi) {
         int mid = lo + (hi - lo) / 2;
-        if (lines_[mid].time_ms <= position_ms) {
+        if (lines_[mid].time_ms <= adjusted_pos) {
             idx = mid;
             lo = mid + 1;
         } else {
@@ -128,17 +240,42 @@ void LyricsWidget::updatePosition(int position_ms) {
 void LyricsWidget::parseLrc(const QString &lrc_text) {
     lines_.clear();
     has_synced_lyrics_ = false;
+    int file_offset_ms = 0;
 
-    // Matches [mm:ss.xx] Lyric text
-    QRegularExpression rx(R"(\[(\d+):(\d+)(?:\.(\d+))?\](.*))");
+    QRegularExpression offset_rx(R"(\[offset:\s*([+-]?\d+)\])", QRegularExpression::CaseInsensitiveOption);
+    QRegularExpression time_rx(R"(\[(\d+):(\d+)(?:\.(\d+))?\])");
+
     QStringList raw_lines = lrc_text.split('\n');
+
+    // First pass: extract file offset
+    for (const QString &line : raw_lines) {
+        QString trimmed = line.trimmed();
+        auto offset_match = offset_rx.match(trimmed);
+        if (offset_match.hasMatch()) {
+            file_offset_ms = offset_match.captured(1).toInt();
+            break;
+        }
+    }
+
+    // Second pass: parse timestamps and text
     for (const QString &line : raw_lines) {
         QString trimmed = line.trimmed();
         if (trimmed.isEmpty()) continue;
 
-        auto match = rx.match(trimmed);
-        if (match.hasMatch()) {
-            has_synced_lyrics_ = true;
+        // Skip metadata headers
+        if (trimmed.startsWith("[ar:") || trimmed.startsWith("[ti:") || 
+            trimmed.startsWith("[al:") || trimmed.startsWith("[by:") || 
+            trimmed.startsWith("[length:") || trimmed.startsWith("[offset:")) {
+            continue;
+        }
+
+        // Find all time tags in this line (handles multiple timestamps per line)
+        auto matches = time_rx.globalMatch(trimmed);
+        QVector<int> times;
+        int last_match_end = 0;
+
+        while (matches.hasNext()) {
+            auto match = matches.next();
             int mins = match.captured(1).toInt();
             int secs = match.captured(2).toInt();
             int ms = match.captured(3).isEmpty() ? 0 : match.captured(3).toInt();
@@ -148,13 +285,18 @@ void LyricsWidget::parseLrc(const QString &lrc_text) {
                 ms *= 100;
             }
             int total_ms = mins * 60000 + secs * 1000 + ms;
-            QString text = match.captured(4).trimmed();
+            times.push_back(total_ms);
+            last_match_end = match.capturedEnd();
+        }
+
+        if (!times.isEmpty()) {
+            has_synced_lyrics_ = true;
+            QString text = trimmed.mid(last_match_end).trimmed();
             
-            // Filter metadata tags like [offset:0] or [ar:Artist]
-            if (text.startsWith("ar:") || text.startsWith("ti:") || text.startsWith("al:") || text.startsWith("by:")) {
-                continue;
+            for (int time_ms : times) {
+                int adjusted_time = qMax(0, time_ms + file_offset_ms);
+                lines_.push_back({adjusted_time, text, nullptr, nullptr});
             }
-            lines_.push_back({total_ms, text, nullptr, nullptr});
         }
     }
 
@@ -164,7 +306,6 @@ void LyricsWidget::parseLrc(const QString &lrc_text) {
 }
 
 void LyricsWidget::clearLayout() {
-    // Delete existing widgets in layout
     QLayoutItem *item;
     while ((item = layout_->takeAt(0)) != nullptr) {
         if (item->widget()) {
@@ -179,7 +320,7 @@ void LyricsWidget::clearLayout() {
 void LyricsWidget::buildLyricsLayout() {
     const auto &c = DesignTokens::current();
 
-    int mid_h = viewport()->height() / 2;
+    int mid_h = scroll_area_->viewport()->height() / 2;
 
     // Top spacer
     top_spacer_ = new QWidget(container_);
@@ -203,21 +344,18 @@ void LyricsWidget::buildLyricsLayout() {
         for (int i = 0; i < lines_.size(); ++i) {
             auto &line = lines_[i];
             
-            // Clickable label
             line.label = new LyricLabel(line.text, line.time_ms, container_);
             line.label->setFontSize(base_font_size_);
             line.label->setAlignment(flag);
             line.label->setStyleSheet(QString("color: %1;").arg(c.text_secondary.name()));
             
             if (has_synced_lyrics_) {
-                // Apply opacity effect for fading in/out
                 line.opacity_effect = new QGraphicsOpacityEffect(line.label);
                 line.opacity_effect->setOpacity(0.4);
                 line.label->setGraphicsEffect(line.opacity_effect);
                 
                 connect(line.label, &LyricLabel::clicked, this, &LyricsWidget::seek_requested);
             } else {
-                // For plain lyrics, keep it fully visible and static
                 line.opacity_effect = new QGraphicsOpacityEffect(line.label);
                 line.opacity_effect->setOpacity(0.95);
                 line.label->setGraphicsEffect(line.opacity_effect);
@@ -233,7 +371,7 @@ void LyricsWidget::buildLyricsLayout() {
     bottom_spacer_->setStyleSheet("background: transparent;");
     layout_->addWidget(bottom_spacer_);
 
-    // Sync time caption (hidden by default)
+    // Sync time caption
     time_caption_ = new QLabel(container_);
     time_caption_->setFont(DesignTokens::getFont("caption", 10));
     time_caption_->setStyleSheet(QString("color: %1;").arg(c.text_muted.name()));
@@ -249,22 +387,30 @@ void LyricsWidget::highlightLine(int index) {
 
     const auto &c = DesignTokens::current();
 
-    // 1. Reset old active line and its neighbors
+    // 1. Reset old active line
     if (active_index_ >= 0 && active_index_ < lines_.size()) {
         auto &old_line = lines_[active_index_];
         if (old_line.label) {
-            auto *f_anim = new QPropertyAnimation(old_line.label, "fontSize", this);
-            f_anim->setDuration(200);
-            f_anim->setStartValue(old_line.label->fontSize());
-            f_anim->setEndValue(base_font_size_);
-            f_anim->start(QAbstractAnimation::DeleteWhenStopped);
+            if (DesignTokens::reducedMotion()) {
+                old_line.label->setFontSize(base_font_size_);
+            } else {
+                auto *f_anim = new QPropertyAnimation(old_line.label, "fontSize", this);
+                f_anim->setDuration(DesignTokens::duration(200));
+                f_anim->setStartValue(old_line.label->fontSize());
+                f_anim->setEndValue(base_font_size_);
+                f_anim->start(QAbstractAnimation::DeleteWhenStopped);
+            }
 
             if (old_line.opacity_effect) {
-                auto *o_anim = new QPropertyAnimation(old_line.opacity_effect, "opacity", this);
-                o_anim->setDuration(200);
-                o_anim->setStartValue(old_line.opacity_effect->opacity());
-                o_anim->setEndValue(0.4);
-                o_anim->start(QAbstractAnimation::DeleteWhenStopped);
+                if (DesignTokens::reducedMotion()) {
+                    old_line.opacity_effect->setOpacity(0.4);
+                } else {
+                    auto *o_anim = new QPropertyAnimation(old_line.opacity_effect, "opacity", this);
+                    o_anim->setDuration(DesignTokens::duration(200));
+                    o_anim->setStartValue(old_line.opacity_effect->opacity());
+                    o_anim->setEndValue(0.4);
+                    o_anim->start(QAbstractAnimation::DeleteWhenStopped);
+                }
             }
             old_line.label->setStyleSheet(QString("color: %1;").arg(c.text_secondary.name()));
         }
@@ -273,54 +419,39 @@ void LyricsWidget::highlightLine(int index) {
     // 2. Set new active index
     active_index_ = index;
 
-    const int stagger_range = 2;
-    // 3. Stagger animation for surrounding lines
-    for (int offset = -stagger_range; offset <= stagger_range; ++offset) {
-        if (offset == 0) continue;
-        int idx = index + offset;
-        if (idx < 0 || idx >= lines_.size()) continue;
-        auto &line = lines_[idx];
-        if (!line.label || !line.opacity_effect) continue;
-
-        float target_opacity = 0.4 + (stagger_range - abs(offset) + 1) * 0.15f;
-        if (target_opacity > 0.95f) target_opacity = 0.95f;
-
-        auto *o_anim = new QPropertyAnimation(line.opacity_effect, "opacity", this);
-        o_anim->setDuration(200);
-        o_anim->setStartValue(line.opacity_effect->opacity());
-        o_anim->setEndValue(target_opacity);
-        o_anim->setEasingCurve(QEasingCurve::OutCubic);
-        int delay = (abs(offset) - 1) * 40;
-        if (delay > 0) o_anim->setLoopCount(1);
-        o_anim->start(QAbstractAnimation::DeleteWhenStopped);
-    }
-
-    // 4. Highlight new active line
+    // 3. Highlight new active line
     auto &new_line = lines_[active_index_];
     if (new_line.label) {
-        auto *f_anim = new QPropertyAnimation(new_line.label, "fontSize", this);
-        f_anim->setDuration(250);
-        f_anim->setEasingCurve(QEasingCurve::OutBack);
-        f_anim->setStartValue(new_line.label->fontSize());
-        f_anim->setEndValue(base_font_size_ + 4);
-        f_anim->start(QAbstractAnimation::DeleteWhenStopped);
+        if (DesignTokens::reducedMotion()) {
+            new_line.label->setFontSize(base_font_size_ + 4);
+        } else {
+            auto *f_anim = new QPropertyAnimation(new_line.label, "fontSize", this);
+            f_anim->setDuration(DesignTokens::duration(250));
+            f_anim->setEasingCurve(QEasingCurve::OutBack);
+            f_anim->setStartValue(new_line.label->fontSize());
+            f_anim->setEndValue(base_font_size_ + 4);
+            f_anim->start(QAbstractAnimation::DeleteWhenStopped);
+        }
 
         if (new_line.opacity_effect) {
-            auto *o_anim = new QPropertyAnimation(new_line.opacity_effect, "opacity", this);
-            o_anim->setDuration(250);
-            o_anim->setStartValue(new_line.opacity_effect->opacity());
-            o_anim->setEndValue(1.0);
-            o_anim->start(QAbstractAnimation::DeleteWhenStopped);
+            if (DesignTokens::reducedMotion()) {
+                new_line.opacity_effect->setOpacity(1.0);
+            } else {
+                auto *o_anim = new QPropertyAnimation(new_line.opacity_effect, "opacity", this);
+                o_anim->setDuration(DesignTokens::duration(250));
+                o_anim->setStartValue(new_line.opacity_effect->opacity());
+                o_anim->setEndValue(1.0);
+                o_anim->start(QAbstractAnimation::DeleteWhenStopped);
+            }
         }
         
-        // Highlight active lyric line using accent color or vibrant white
         if (glow_effect_enabled_) {
             new_line.label->setStyleSheet(QString("color: %1; font-weight: bold;").arg(c.accent.name()));
         } else {
             new_line.label->setStyleSheet(QString("color: %1; font-weight: bold;").arg(c.text_primary.name()));
         }
 
-        // 5. Update sync time caption
+        // 4. Update sync time caption
         if (has_synced_lyrics_ && time_caption_) {
             int ms = new_line.time_ms;
             int mins = ms / 60000;
@@ -330,9 +461,9 @@ void LyricsWidget::highlightLine(int index) {
             time_caption_->show();
         }
 
-        // 6. Center scroll view on new active label
+        // 5. Center scroll view on new active label
         if (auto_scroll_enabled_) {
-            int target_y = new_line.label->geometry().center().y() - viewport()->height() / 2;
+            int target_y = new_line.label->geometry().center().y() - scroll_area_->viewport()->height() / 2;
             smoothScrollTo(target_y);
         }
     }
@@ -342,18 +473,22 @@ void LyricsWidget::smoothScrollTo(int y_pos) {
     if (scroll_animation_) {
         scroll_animation_->stop();
     } else {
-        scroll_animation_ = new QPropertyAnimation(verticalScrollBar(), "value", this);
+        scroll_animation_ = new QPropertyAnimation(scroll_area_->verticalScrollBar(), "value", this);
     }
-    scroll_animation_->setDuration(350);
+    if (DesignTokens::reducedMotion()) {
+        scroll_area_->verticalScrollBar()->setValue(y_pos);
+        return;
+    }
+    scroll_animation_->setDuration(DesignTokens::duration(350));
     scroll_animation_->setEasingCurve(QEasingCurve::InOutSine);
-    scroll_animation_->setStartValue(verticalScrollBar()->value());
+    scroll_animation_->setStartValue(scroll_area_->verticalScrollBar()->value());
     scroll_animation_->setEndValue(y_pos);
     scroll_animation_->start();
 }
 
 void LyricsWidget::resizeEvent(QResizeEvent *event) {
-    QScrollArea::resizeEvent(event);
-    int mid_h = viewport()->height() / 2;
+    QWidget::resizeEvent(event);
+    int mid_h = scroll_area_->viewport()->height() / 2;
     if (top_spacer_) top_spacer_->setFixedHeight(mid_h);
     if (bottom_spacer_) bottom_spacer_->setFixedHeight(mid_h);
 }
@@ -396,7 +531,7 @@ void LyricsWidget::setSubtitleAutoScroll(bool enabled) {
     if (enabled && active_index_ >= 0 && active_index_ < lines_.size()) {
         auto &line = lines_[active_index_];
         if (line.label) {
-            int target_y = line.label->geometry().center().y() - viewport()->height() / 2;
+            int target_y = line.label->geometry().center().y() - scroll_area_->viewport()->height() / 2;
             smoothScrollTo(target_y);
         }
     }
@@ -417,3 +552,37 @@ void LyricsWidget::setSubtitleGlowEffect(bool enabled) {
     }
 }
 
+void LyricsWidget::onSyncMinusClicked() {
+    manual_delay_ms_ -= 500;
+    updateSyncLabel();
+    updatePosition(last_position_ms_);
+}
+
+void LyricsWidget::onSyncPlusClicked() {
+    manual_delay_ms_ += 500;
+    updateSyncLabel();
+    updatePosition(last_position_ms_);
+}
+
+void LyricsWidget::onSyncResetClicked() {
+    manual_delay_ms_ = 0;
+    updateSyncLabel();
+    updatePosition(last_position_ms_);
+}
+
+void LyricsWidget::updateSyncLabel() {
+    if (!sync_offset_lbl_) return;
+    double secs = manual_delay_ms_ / 1000.0;
+    QString sign = "";
+    if (secs > 0) sign = "+";
+    sync_offset_lbl_->setText(QString("%1: %2%3s")
+        .arg(QString::fromStdString(std::string(doremi_tr("sync_offset"))))
+        .arg(sign)
+        .arg(QString::number(secs, 'f', 1)));
+}
+
+void LyricsWidget::updateSyncControlBarVisibility() {
+    if (sync_control_bar_) {
+        sync_control_bar_->setVisible(has_synced_lyrics_);
+    }
+}

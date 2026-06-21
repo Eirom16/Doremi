@@ -4,6 +4,7 @@
 #include <QWidget>
 #include <QVBoxLayout>
 #include <QLabel>
+#include <QString>
 #include "components/stat_card.h"
 #include "components/bar_chart.h"
 #include "doremi/src/bridge.rs.h"
@@ -40,7 +41,11 @@ protected:
 
 private:
     void setupLayout();
-    void buildTopTracks(const std::vector<Track> &tracks, int total_plays);
+    void buildTopTracks(const std::vector<Track> &tracks, const std::vector<int> &plays);
+    void exportStatsAsJson();
+    void exportStatsAsCsv();
+    bool writeStatsJson(const QString &path) const;
+    bool writeStatsCsv(const QString &path) const;
 
     QVBoxLayout *main_layout_;
 
@@ -52,6 +57,9 @@ private:
 
     QWidget *top_tracks_widget_;
     QVBoxLayout *top_tracks_layout_;
+
+    StatsData current_stats_;
+    bool has_stats_ = false;
 };
 
 #endif

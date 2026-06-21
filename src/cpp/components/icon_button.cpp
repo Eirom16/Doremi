@@ -16,7 +16,7 @@ IconButton::IconButton(const QString &iconName, QWidget *parent, int iconSize)
     DesignTokens::applyAccessible(this, label, QString(), label);
     
     m_hoverAnim = new QVariantAnimation(this);
-    m_hoverAnim->setDuration(120);
+    m_hoverAnim->setDuration(DesignTokens::duration(120));
     m_hoverAnim->setEasingCurve(QEasingCurve::OutCubic);
     connect(m_hoverAnim, &QVariantAnimation::valueChanged, this, [this](const QVariant &val) {
         setHoverProgress(val.toReal());

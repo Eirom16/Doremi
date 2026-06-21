@@ -9,6 +9,7 @@ pub mod mpris;
 pub mod player;
 pub mod services;
 pub mod utils;
+pub mod system;
 
 // Temporary: mark whole bridge to avoid unused warnings in Phase 0
 #[allow(unused_imports)]

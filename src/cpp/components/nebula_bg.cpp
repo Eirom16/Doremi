@@ -1,4 +1,5 @@
 #include "nebula_bg.h"
+#include "design_tokens.h"
 #include <QPainter>
 #include <QRadialGradient>
 #include <cmath>
@@ -48,7 +49,9 @@ NebulaBg::NebulaBg(QWidget *parent)
     timer_ = new QTimer(this);
     connect(timer_, &QTimer::timeout, this, &NebulaBg::onTick);
     // 20 fps (50ms interval) for smooth animations but low CPU usage
-    timer_->start(50);
+    if (!DesignTokens::reducedMotion()) {
+        timer_->start(50);
+    }
 }
 
 void NebulaBg::setColors(const QStringList &hex_colors) {
@@ -68,6 +71,16 @@ void NebulaBg::setColors(const QStringList &hex_colors) {
     // c4 is a blend or darker variant of primary for ambient base
     target_c4_ = target_c1_.darker(250);
 
+    if (DesignTokens::reducedMotion()) {
+        c1_ = target_c1_;
+        c2_ = target_c2_;
+        c3_ = target_c3_;
+        c4_ = target_c4_;
+        color_progress_ = 1.0f;
+        update();
+        return;
+    }
+
     color_progress_ = 0.0f;
     color_transition_time_.start();
     update();
@@ -76,10 +89,17 @@ void NebulaBg::setColors(const QStringList &hex_colors) {
 void NebulaBg::setPlaying(bool playing) {
     if (playing_ == playing) return;
     playing_ = playing;
+    if (DesignTokens::reducedMotion()) {
+        if (timer_) timer_->stop();
+    }
     update();
 }
 
 void NebulaBg::onTick() {
+    if (DesignTokens::reducedMotion()) {
+        if (timer_) timer_->stop();
+        return;
+    }
     if (color_progress_ < 1.0f) {
         int elapsed = color_transition_time_.elapsed();
         color_progress_ = static_cast<float>(elapsed) / TRANSITION_DURATION_MS;
@@ -117,7 +137,7 @@ void NebulaBg::paintEvent(QPaintEvent *) {
     active_c2.setAlpha(60);
     active_c3.setAlpha(50);
 
-    float time_sec = time_.elapsed() / 1000.0f;
+    float time_sec = DesignTokens::reducedMotion() ? 0.0f : time_.elapsed() / 1000.0f;
 
     // Use CompositionMode_Plus for premium organic lighting/glowing effect
     painter.setCompositionMode(QPainter::CompositionMode_Plus);

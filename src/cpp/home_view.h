@@ -15,6 +15,7 @@ public:
     void add_section(const std::string &title, const std::vector<HomeCard> &items);
     void clear_sections();
     void set_state(const std::string &state, const std::string &message);
+    void update_theme();
 signals:
     void play_requested(Track track);
     void album_requested(const std::string &browse_id);
@@ -26,6 +27,7 @@ signals:
 private:
     QWidget *add_section_widget(const std::string &title, const std::vector<HomeCard> &items);
     QVBoxLayout *content_;
+    QLabel *welcome_label_ = nullptr;
     QWidget *state_widget_ = nullptr;
 };
 

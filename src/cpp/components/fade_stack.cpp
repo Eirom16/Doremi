@@ -1,4 +1,5 @@
 #include "fade_stack.h"
+#include "../design_tokens.h"
 #include <QGraphicsOpacityEffect>
 #include <QPropertyAnimation>
 
@@ -22,6 +23,12 @@ void FadeStack::setCurrentIndex(int index) {
 
     currentW->setGraphicsEffect(nullptr);
     nextW->setGraphicsEffect(nullptr);
+
+    if (DesignTokens::reducedMotion()) {
+        m_isTransitioning = false;
+        QStackedWidget::setCurrentIndex(index);
+        return;
+    }
     
     m_isTransitioning = true;
     
@@ -30,7 +37,7 @@ void FadeStack::setCurrentIndex(int index) {
     currentW->setGraphicsEffect(outEffect);
     
     QPropertyAnimation *outAnim = new QPropertyAnimation(outEffect, "opacity");
-    outAnim->setDuration(120);
+    outAnim->setDuration(DesignTokens::duration(120));
     outAnim->setStartValue(1.0);
     outAnim->setEndValue(0.0);
     outAnim->setEasingCurve(QEasingCurve::InOutQuad);
@@ -47,7 +54,7 @@ void FadeStack::setCurrentIndex(int index) {
         nextW->setGraphicsEffect(inEffect);
         
         QPropertyAnimation *inAnim = new QPropertyAnimation(inEffect, "opacity");
-        inAnim->setDuration(120);
+        inAnim->setDuration(DesignTokens::duration(120));
         inAnim->setStartValue(0.0);
         inAnim->setEndValue(1.0);
         inAnim->setEasingCurve(QEasingCurve::InOutQuad);

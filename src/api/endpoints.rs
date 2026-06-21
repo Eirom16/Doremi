@@ -103,6 +103,13 @@ fn cached<T: serde::de::DeserializeOwned>(key: &str) -> Option<T> {
     crate::db::cache::ResponseCache::get(key).map(|entry| entry.data)
 }
 
+fn cached_offline<T: serde::de::DeserializeOwned>(key: &str) -> Option<T> {
+    if crate::bridge::is_connectivity_online() {
+        return None;
+    }
+    crate::db::cache::ResponseCache::get_stale(key).map(|entry| entry.data)
+}
+
 fn cache<T: serde::Serialize>(key: &str, value: &T, ttl_secs: u64) {
     if let Err(error) = crate::db::cache::ResponseCache::set(key, value, Some(ttl_secs)) {
         log::debug!("Could not cache YouTube Music response {key}: {error}");
@@ -178,6 +185,9 @@ pub async fn search_suggestions(query: &str) -> Result<Vec<String>, String> {
 
 pub async fn home_sections() -> Result<Vec<super::models::HomeSection>, String> {
     let key = cache_key("home");
+    if let Some(sections) = cached_offline(&key) {
+        return Ok(sections);
+    }
     if let Some(sections) = cached(&key) {
         return Ok(sections);
     }
@@ -207,6 +217,26 @@ pub async fn home_sections() -> Result<Vec<super::models::HomeSection>, String> 
 pub async fn home_sections_page(
     continuation: Option<&str>,
 ) -> Result<(Vec<super::models::HomeSection>, Option<String>), String> {
+    let page_cache_key = continuation
+        .filter(|token| !token.trim().is_empty())
+        .map(|token| cache_key(&format!("home_page:{:x}", md5::compute(token.as_bytes()))))
+        .unwrap_or_else(|| cache_key("home_page:root"));
+    if let Some(page) =
+        cached_offline::<(Vec<super::models::HomeSection>, Option<String>)>(&page_cache_key)
+    {
+        return Ok(page);
+    }
+    if continuation.is_none() {
+        let aggregate_key = cache_key("home");
+        if let Some(sections) = cached_offline::<Vec<super::models::HomeSection>>(&aggregate_key) {
+            return Ok((sections, None));
+        }
+    }
+    if let Some(page) = cached::<(Vec<super::models::HomeSection>, Option<String>)>(&page_cache_key)
+    {
+        return Ok(page);
+    }
+
     let mut body = context();
     if let Some(token) = continuation.filter(|token| !token.trim().is_empty()) {
         body["continuation"] = serde_json::json!(token);
@@ -215,7 +245,13 @@ pub async fn home_sections_page(
     }
     let response = super::transport::post("browse", body).await?;
     let page = super::parsers::parse_home_page(&response)?;
-    Ok((page.items, page.continuation))
+    let result = (page.items, page.continuation);
+    cache(&page_cache_key, &result, HOME_CACHE_TTL_SECS);
+    if continuation.is_none() {
+        let aggregate_key = cache_key("home");
+        cache(&aggregate_key, &result.0, HOME_CACHE_TTL_SECS);
+    }
+    Ok(result)
 }
 
 fn charts_body() -> Value {
@@ -228,6 +264,9 @@ fn charts_body() -> Value {
 
 pub async fn charts() -> Result<Vec<super::models::HomeSection>, String> {
     let key = cache_key("charts");
+    if let Some(sections) = cached_offline(&key) {
+        return Ok(sections);
+    }
     if let Some(sections) = cached(&key) {
         return Ok(sections);
     }

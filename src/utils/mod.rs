@@ -1,4 +1,5 @@
 pub mod backup;
+pub mod artwork_cache;
 pub mod color;
 pub mod dependencies;
 pub mod errors;

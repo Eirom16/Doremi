@@ -71,6 +71,8 @@ public:
     static void setAccentColor(const QString &hexColor);
 
     static QString rgba(const QColor &color);
+    static bool reducedMotion();
+    static int duration(int milliseconds);
     
     // QSS generators
     static QString getGlobalStyleSheet();

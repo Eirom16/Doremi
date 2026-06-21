@@ -70,6 +70,22 @@ fn qt_moc_headers(build: &mut cc::Build, header: &str, out_dir: &std::path::Path
     build.file(moc_out);
 }
 
+fn qt_resources(build: &mut cc::Build, qrc: &str, out_dir: &std::path::Path) {
+    let rcc_path = "/usr/bin/rcc";
+    let qrc_path = std::path::Path::new(qrc);
+    let stem = qrc_path.file_stem().unwrap().to_str().unwrap();
+    let rcc_out = out_dir.join(format!("qrc_{stem}.cpp"));
+
+    let status = std::process::Command::new(rcc_path)
+        .arg(qrc_path)
+        .arg("-o")
+        .arg(&rcc_out)
+        .status()
+        .unwrap_or_else(|e| panic!("rcc failed for {}: {}", qrc, e));
+    assert!(status.success(), "rcc returned non-zero for {}", qrc);
+    build.file(rcc_out);
+}
+
 fn main() {
     let qt_flags = qt_cflags();
     qt_link_libs();
@@ -98,6 +114,7 @@ fn main() {
         .file("src/cpp/components/scrolling_label.cpp")
         .file("src/cpp/components/animated_toggle.cpp")
         .file("src/cpp/components/toast_notification.cpp")
+        .file("src/cpp/components/offline_banner.cpp")
         .file("src/cpp/components/icon_button.cpp")
         .file("src/cpp/components/fade_stack.cpp")
         .file("src/cpp/components/song_card.cpp")
@@ -154,6 +171,7 @@ fn main() {
         "components/scrolling_label.h",
         "components/animated_toggle.h",
         "components/toast_notification.h",
+        "components/offline_banner.h",
         "components/icon_button.h",
         "components/fade_stack.h",
         "components/song_card.h",
@@ -186,9 +204,12 @@ fn main() {
     for hdr in &moc_headers {
         qt_moc_headers(&mut build, hdr, &out_dir);
     }
+    qt_resources(&mut build, "assets/resources.qrc", &out_dir);
 
     build.compile("doremi-qt");
 
+    println!("cargo:rerun-if-changed=assets/resources.qrc");
+    println!("cargo:rerun-if-changed=assets/fonts/MaterialSymbolsRounded.ttf");
     println!("cargo:rerun-if-changed=src/bridge.rs");
     println!("cargo:rerun-if-changed=src/cpp/main_window.cpp");
     println!("cargo:rerun-if-changed=src/cpp/main_window.h");
