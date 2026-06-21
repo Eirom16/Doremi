@@ -49,11 +49,13 @@ signals:
     void add_to_queue_next_requested(Track track);
     void add_to_queue_end_requested(Track track);
     void search_requested(const std::string &tab, const std::string &query, const std::string &sort_by);
+    void filter_source_changed(int source);
     void login_requested();
 private:
     QVBoxLayout *list_;
     QLineEdit *search_box_;
     QComboBox *sort_combo_;
+    QComboBox *source_combo_;
     std::vector<QPushButton *> tab_btns_;
     std::string active_tab_;
     bool authenticated_;

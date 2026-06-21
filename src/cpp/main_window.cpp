@@ -32,6 +32,11 @@
 #include <QDateTime>
 
 #include "main_window.h"
+#include "shortcut_manager.h"
+#include "tray_controller.h"
+#include "navigation_controller.h"
+#include "session_cookie_manager.h"
+#include "theme_controller.h"
 #include "title_bar.h"
 #include "nav_sidebar.h"
 #include "player_bar.h"
@@ -169,7 +174,15 @@ DoremiMainWindow::DoremiMainWindow(QWidget *parent)
 
     theme_transition_ = new ThemeTransitionOverlay(this);
     theme_transition_->hide();
-    setup_session_cookie_refresh();
+
+    // Initialize controllers
+    navigation_controller_ = new NavigationController(this);
+    shortcut_manager_ = new ShortcutManager(this);
+    tray_controller_ = new TrayController(this);
+    session_cookie_manager_ = new SessionCookieManager(this);
+    theme_controller_ = new ThemeController(this);
+
+    session_cookie_manager_->setup_session_cookie_refresh();
 
 
     // Window icon
@@ -198,8 +211,6 @@ DoremiMainWindow::DoremiMainWindow(QWidget *parent)
 
     setStyleSheet(DesignTokens::getGlobalStyleSheet());
     update_responsive_layout();
-    setup_shortcuts();
-    setup_tray();
     connect_signals();
 
     player_timer_ = new QTimer(this);
@@ -208,111 +219,26 @@ DoremiMainWindow::DoremiMainWindow(QWidget *parent)
     player_timer_->start();
 }
 
-void DoremiMainWindow::setup_session_cookie_refresh() {
-    auto *profile = QWebEngineProfile::defaultProfile();
-    if (!profile) return;
-    auto *store = profile->cookieStore();
-    if (!store) return;
-
-    session_cookie_timer_ = new QTimer(this);
-    session_cookie_timer_->setSingleShot(true);
-    session_cookie_timer_->setInterval(1500);
-    connect(session_cookie_timer_, &QTimer::timeout,
-            this, &DoremiMainWindow::persist_session_cookies);
-    connect(store, &QWebEngineCookieStore::cookieAdded, this,
-            [this](const QNetworkCookie &cookie) {
-                update_session_cookie(cookie, false);
-            });
-    connect(store, &QWebEngineCookieStore::cookieRemoved, this,
-            [this](const QNetworkCookie &cookie) {
-                update_session_cookie(cookie, true);
-            });
-    store->loadAllCookies();
-}
-
-void DoremiMainWindow::update_session_cookie(const QNetworkCookie &cookie, bool removed) {
-    QString domain = cookie.domain().toLower();
-    if (domain.startsWith('.')) domain.remove(0, 1);
-    const bool trusted = domain == "youtube.com" || domain.endsWith(".youtube.com") ||
-                         domain == "google.com" || domain.endsWith(".google.com");
-    if (!trusted) return;
-
-    const std::string name = cookie.name().toStdString();
-    if (name.empty()) return;
-    const bool expired = !cookie.isSessionCookie() &&
-                         cookie.expirationDate().isValid() &&
-                         cookie.expirationDate() <= QDateTime::currentDateTimeUtc();
-    if (removed || expired || cookie.value().isEmpty()) {
-        session_cookies_.erase(name);
-    } else {
-        session_cookies_[name] = cookie.value().toStdString();
-    }
-    session_cookie_timer_->start();
-}
-
-void DoremiMainWindow::persist_session_cookies() {
-    const bool has_sapisid = session_cookies_.count("SAPISID") ||
-                             session_cookies_.count("__Secure-3PAPISID") ||
-                             session_cookies_.count("__Secure-1PAPISID");
-    if (!has_sapisid) return;
-
-    QString cookie_string;
-    for (const auto &[name, value] : session_cookies_) {
-        if (!cookie_string.isEmpty()) cookie_string += "; ";
-        cookie_string += QString::fromStdString(name + "=" + value);
-    }
-    QJsonObject headers;
-    headers.insert("cookie", cookie_string);
-    headers.insert("x-goog-authuser", "0");
-    headers.insert("user-agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Doremi/2");
-    headers.insert("accept", "*/*");
-    headers.insert("origin", "https://music.youtube.com");
-    headers.insert("x-origin", "https://music.youtube.com");
-    const QString json = QJsonDocument(headers).toJson(QJsonDocument::Compact);
-    on_youtube_session_refresh(Ffi::to_std_string(json));
-}
-
 DoremiMainWindow::~DoremiMainWindow() { g_main_window = nullptr; }
 
-void DoremiMainWindow::setup_shortcuts() {
-    auto *space = new QShortcut(QKeySequence(Qt::Key_Space), this);
-    QObject::connect(space, &QShortcut::activated, this, [this]() { emit play_pause_triggered(); });
-    auto *right = new QShortcut(QKeySequence(Qt::Key_Right), this);
-    QObject::connect(right, &QShortcut::activated, this, [this]() { emit seek_triggered(5000); });
-    auto *left = new QShortcut(QKeySequence(Qt::Key_Left), this);
-    QObject::connect(left, &QShortcut::activated, this, [this]() { emit seek_triggered(-5000); });
-    auto *up = new QShortcut(QKeySequence(Qt::Key_Up), this);
-    QObject::connect(up, &QShortcut::activated, this, [this]() { emit volume_changed(5); });
-    auto *down = new QShortcut(QKeySequence(Qt::Key_Down), this);
-    QObject::connect(down, &QShortcut::activated, this, [this]() { emit volume_changed(-5); });
-    auto *focus_search = new QShortcut(QKeySequence("Ctrl+L"), this);
-    focus_search->setWhatsThis("Enfocar el buscador");
-    QObject::connect(focus_search, &QShortcut::activated, this, [this]() {
-        title_bar_->focus_search();
-    });
-    auto *focus_search_alt = new QShortcut(QKeySequence("Ctrl+K"), this);
-    focus_search_alt->setWhatsThis("Enfocar el buscador");
-    QObject::connect(focus_search_alt, &QShortcut::activated, this, [this]() {
-        title_bar_->focus_search();
-    });
-    auto *back = new QShortcut(QKeySequence::Back, this);
-    back->setWhatsThis("Volver a la pantalla anterior");
-    QObject::connect(back, &QShortcut::activated, this, [this]() { navigate_back(); });
-    auto *forward = new QShortcut(QKeySequence::Forward, this);
-    forward->setWhatsThis("Avanzar a la pantalla siguiente");
-    QObject::connect(forward, &QShortcut::activated, this, [this]() { navigate_forward(); });
+std::string DoremiMainWindow::current_route() const {
+    return navigation_controller_ ? navigation_controller_->current_route() : "home";
+}
 
-    // Media Keys
-    auto *media_play = new QShortcut(QKeySequence(Qt::Key_MediaPlay), this);
-    QObject::connect(media_play, &QShortcut::activated, this, [this]() { emit play_pause_triggered(); });
-    auto *media_pause = new QShortcut(QKeySequence(Qt::Key_MediaPause), this);
-    QObject::connect(media_pause, &QShortcut::activated, this, [this]() { emit play_pause_triggered(); });
-    auto *media_toggle = new QShortcut(QKeySequence(Qt::Key_MediaTogglePlayPause), this);
-    QObject::connect(media_toggle, &QShortcut::activated, this, [this]() { emit play_pause_triggered(); });
-    auto *media_next = new QShortcut(QKeySequence(Qt::Key_MediaNext), this);
-    QObject::connect(media_next, &QShortcut::activated, this, [this]() { emit next_triggered(); });
-    auto *media_prev = new QShortcut(QKeySequence(Qt::Key_MediaPrevious), this);
-    QObject::connect(media_prev, &QShortcut::activated, this, [this]() { emit previous_triggered(); });
+void DoremiMainWindow::navigate_to(const std::string &route) {
+    if (navigation_controller_) navigation_controller_->navigate_to(route);
+}
+
+void DoremiMainWindow::navigate_back() {
+    if (navigation_controller_) navigation_controller_->navigate_back();
+}
+
+void DoremiMainWindow::navigate_back_from_detail() {
+    if (navigation_controller_) navigation_controller_->navigate_back_from_detail();
+}
+
+void DoremiMainWindow::navigate_forward() {
+    if (navigation_controller_) navigation_controller_->navigate_forward();
 }
 
 void DoremiMainWindow::connect_signals() {
@@ -508,6 +434,14 @@ void DoremiMainWindow::connect_signals() {
         [](const std::string &tab) {
             on_library_tab_changed(tab);
         });
+    QObject::connect(library_view_, &LibraryView::search_requested, this,
+        [](const std::string &tab, const std::string &query, const std::string &sort_by) {
+            on_library_search(tab, query, sort_by);
+        });
+    QObject::connect(library_view_, &LibraryView::filter_source_changed, this,
+        [](int source) {
+            on_library_set_filter_source(source);
+        });
     QObject::connect(library_view_, &LibraryView::play_requested, this,
         [](Track track) {
             on_search_item_clicked(track);
@@ -686,144 +620,12 @@ void DoremiMainWindow::closeEvent(QCloseEvent *event) {
     if (stop_on_close_) {
         on_app_quit();
         event->accept();
-    } else if (tray_icon_ && tray_icon_->isVisible()) {
+    } else if (tray_controller_ && tray_controller_->isVisible()) {
         hide();
         event->ignore();
     } else {
         emit window_closed();
         event->accept();
-    }
-}
-
-void DoremiMainWindow::navigate_to(const std::string &route) {
-    navigate_to_internal(route, true);
-}
-
-void DoremiMainWindow::navigate_to_internal(const std::string &route, bool record_history) {
-    if (route.empty()) {
-        return;
-    }
-    save_route_view_state();
-
-    if (record_history && route != current_route_) {
-        back_routes_.push_back(current_route_);
-        if (back_routes_.size() > 80) {
-            back_routes_.erase(back_routes_.begin());
-        }
-        forward_routes_.clear();
-    }
-
-    const bool opens_detail = route == "album_detail" || route == "artist_detail" ||
-                              route == "playlist_detail" || route == "show_detail";
-    if (opens_detail && current_route_ != "album_detail" &&
-        current_route_ != "artist_detail" && current_route_ != "playlist_detail" &&
-        current_route_ != "show_detail") {
-        detail_return_route_ = current_route_;
-    }
-    nav_sidebar_->set_active_route(route);
-    if (route == "home") {
-        stack_->setCurrentIndex(1);
-    } else if (route == "search") {
-        stack_->setCurrentIndex(2);
-    } else if (route == "library") {
-        stack_->setCurrentIndex(3);
-        std::string tab = library_view_->current_tab();
-        if (tab.empty()) tab = "playlists";
-        emit library_view_->tab_changed(tab);
-    } else if (route == "settings") {
-        stack_->setCurrentIndex(4);
-    } else if (route == "trending") {
-        stack_->setCurrentIndex(5);
-    } else if (route == "downloads") {
-        stack_->setCurrentIndex(6);
-        on_downloads_requested();
-    } else if (route == "stats") {
-        stack_->setCurrentIndex(7);
-    } else if (route == "history") {
-        stack_->setCurrentIndex(8);
-        on_history_requested();
-    } else if (route == "album_detail") {
-        stack_->setCurrentIndex(9);
-    } else if (route == "artist_detail") {
-        stack_->setCurrentIndex(10);
-    } else if (route == "playlist_detail") {
-        stack_->setCurrentIndex(11);
-    } else if (route == "show_detail") {
-        stack_->setCurrentIndex(12);
-    } else if (route == "welcome") {
-        stack_->setCurrentIndex(13);
-    } else {
-        stack_->setCurrentIndex(1);
-    }
-    current_route_ = route;
-    restore_route_view_state(route);
-}
-
-void DoremiMainWindow::save_route_view_state() {
-    if (current_route_.empty()) {
-        return;
-    }
-    if (body_scroll_ && body_scroll_->verticalScrollBar()) {
-        route_scroll_positions_[current_route_] = body_scroll_->verticalScrollBar()->value();
-    }
-    if (auto *focused = QApplication::focusWidget()) {
-        if (focused == this || isAncestorOf(focused)) {
-            route_focus_widgets_[current_route_] = focused;
-        }
-    }
-}
-
-void DoremiMainWindow::restore_route_view_state(const std::string &route) {
-    const int scroll = route_scroll_positions_.count(route) ? route_scroll_positions_[route] : 0;
-    QPointer<QWidget> focus = route_focus_widgets_.count(route) ? route_focus_widgets_[route] : QPointer<QWidget>();
-    QTimer::singleShot(0, this, [this, route, scroll, focus]() {
-        if (route != current_route_) {
-            return;
-        }
-        if (body_scroll_ && body_scroll_->verticalScrollBar()) {
-            body_scroll_->verticalScrollBar()->setValue(scroll);
-        }
-        if (focus && focus->isVisible() && focus->isEnabled()) {
-            focus->setFocus(Qt::OtherFocusReason);
-        } else if (stack_) {
-            stack_->setFocus(Qt::OtherFocusReason);
-        }
-    });
-}
-
-void DoremiMainWindow::navigate_back() {
-    while (!back_routes_.empty() && back_routes_.back() == current_route_) {
-        back_routes_.pop_back();
-    }
-    if (back_routes_.empty()) {
-        return;
-    }
-    const std::string target = back_routes_.back();
-    back_routes_.pop_back();
-    forward_routes_.push_back(current_route_);
-    navigate_to_internal(target, false);
-    if (target == "search") {
-        on_search_history_requested();
-    }
-}
-
-void DoremiMainWindow::navigate_back_from_detail() {
-    navigate_to(detail_return_route_.empty() ? "home" : detail_return_route_);
-}
-
-void DoremiMainWindow::navigate_forward() {
-    while (!forward_routes_.empty() && forward_routes_.back() == current_route_) {
-        forward_routes_.pop_back();
-    }
-    if (forward_routes_.empty()) {
-        return;
-    }
-    const std::string target = forward_routes_.back();
-    forward_routes_.pop_back();
-    back_routes_.push_back(current_route_);
-    navigate_to_internal(target, false);
-    if (target == "search") {
-        on_search_history_requested();
     }
 }
 
@@ -853,8 +655,8 @@ void DoremiMainWindow::show_notif(const std::string &message, const std::string 
         ToastNotification::showToast(this, qMessage, toastType);
     }
 
-    if (tray_icon_ && tray_icon_->isVisible() && tray_icon_->supportsMessages()) {
-        tray_icon_->showMessage(
+    if (tray_controller_) {
+        tray_controller_->showMessage(
             kind == "error" ? "Doremi — Error" : "Doremi",
             qMessage,
             kind == "error" ? QSystemTrayIcon::Critical :
@@ -894,8 +696,8 @@ void DoremiMainWindow::set_playback_playing(bool playing) {
     if (now_playing_view_) {
         now_playing_view_->setPlaying(playing);
     }
-    if (play_action_) {
-        play_action_->setText(playing ? "⏸ Pausa" : "▶ Reproducir");
+    if (tray_controller_) {
+        tray_controller_->setPlaying(playing);
     }
 }
 
@@ -1003,48 +805,7 @@ void DoremiMainWindow::set_history_data(const rust::Vec<Track> &history, const r
 }
 
 
-void DoremiMainWindow::setup_tray() {
-    QPixmap px(16, 16);
-    px.fill(Qt::transparent);
-    QPainter pt(&px);
-    pt.setRenderHint(QPainter::Antialiasing);
-    pt.setBrush(QColor("#7C7CF0"));
-    pt.setPen(Qt::NoPen);
-    pt.drawEllipse(1, 1, 14, 14);
-    pt.end();
-    auto icon = QIcon(px);
 
-    tray_icon_ = new QSystemTrayIcon(icon, this);
-    tray_icon_->setToolTip("Doremi");
-
-    auto *menu = new QMenu(this);
-    play_action_ = menu->addAction("▶ Reproducir");
-    auto *next_action = menu->addAction("⏭ Siguiente");
-    auto *prev_action = menu->addAction("⏮ Anterior");
-    menu->addSeparator();
-    auto *show_action = menu->addAction("Mostrar ventana");
-    auto *quit_action = menu->addAction("Salir");
-
-    QObject::connect(play_action_, &QAction::triggered, this, [this]() { emit play_pause_triggered(); });
-    QObject::connect(next_action, &QAction::triggered, this, [this]() { emit next_triggered(); });
-    QObject::connect(prev_action, &QAction::triggered, this, [this]() { emit previous_triggered(); });
-    QObject::connect(show_action, &QAction::triggered, this, [this]() { show(); raise(); activateWindow(); });
-    QObject::connect(quit_action, &QAction::triggered, this, [this]() {
-        on_app_quit();
-        QApplication::quit();
-    });
-    QObject::connect(tray_icon_, &QSystemTrayIcon::activated, this,
-        [this](QSystemTrayIcon::ActivationReason reason) {
-            if (reason == QSystemTrayIcon::DoubleClick || reason == QSystemTrayIcon::Trigger) {
-                show();
-                raise();
-                activateWindow();
-            }
-        });
-
-    tray_icon_->setContextMenu(menu);
-    tray_icon_->show();
-}
 
 // ── Placeholder thumbnail generation ──────────────────────
 
@@ -1170,24 +931,8 @@ void apply_theme(rust::Str theme_mode, rust::Str accent_color) {
     std::string t_mode = Ffi::to_std_string(theme_mode);
     std::string a_color = Ffi::to_std_string(accent_color);
     mutate_main_window("apply_theme", [t_mode, a_color](DoremiMainWindow &window) {
-        QPointer<DoremiMainWindow> window_ptr(&window);
-        auto apply_fn = [window_ptr, t_mode, a_color]() {
-            if (!window_ptr) return;
-            bool dark = t_mode != "light";
-            DesignTokens::setTheme(dark ? DesignTokens::Theme::Dark : DesignTokens::Theme::Light);
-            if (!a_color.empty()) {
-                DesignTokens::setAccentColor(Ffi::to_qstring(a_color));
-            }
-            window_ptr->setStyleSheet(DesignTokens::getGlobalStyleSheet());
-            if (window_ptr->title_bar()) window_ptr->title_bar()->update_theme();
-            if (window_ptr->nav_sidebar()) window_ptr->nav_sidebar()->update_theme();
-            if (window_ptr->player_bar()) window_ptr->player_bar()->update_theme();
-            if (window_ptr->home_view()) window_ptr->home_view()->update_theme();
-        };
-        if (window.isVisible() && window.theme_transition()) {
-            window.theme_transition()->start_transition(apply_fn);
-        } else {
-            apply_fn();
+        if (window.theme_controller()) {
+            window.theme_controller()->apply_theme(t_mode, a_color);
         }
     });
 }
@@ -1784,5 +1529,40 @@ void update_youtube_auth_state(bool authenticated, rust::Str name, rust::Str ava
                 profile->clearHttpCache();
             }
         }
+    });
+}
+
+void DoremiMainWindow::setup_ui_test(const std::string &view, const std::string &screenshot_path) {
+    // 1. Set fixed size
+    resize(1300, 820);
+    setFixedSize(1300, 820);
+
+    // 2. Navigate to target view
+    if (view == "now-playing" || view == "now_playing") {
+        navigate_to("home");
+        if (now_playing_view_) {
+            now_playing_view_->showView();
+        }
+    } else {
+        navigate_to(view);
+    }
+
+    // 3. Set timer to take screenshot and exit
+    QTimer::singleShot(2500, this, [this, screenshot_path]() {
+        QPixmap pixmap = grab();
+        if (pixmap.save(QString::fromStdString(screenshot_path))) {
+            qDebug() << "UI Test screenshot successfully saved to:" << QString::fromStdString(screenshot_path);
+        } else {
+            qWarning() << "UI Test screenshot FAILED to save to:" << QString::fromStdString(screenshot_path);
+        }
+        QApplication::quit();
+    });
+}
+
+void setup_ui_test(rust::Str view, rust::Str screenshot_path) {
+    std::string v_str = Ffi::to_std_string(view);
+    std::string path_str = Ffi::to_std_string(screenshot_path);
+    mutate_main_window("setup_ui_test", [v_str, path_str](DoremiMainWindow &window) {
+        window.setup_ui_test(v_str, path_str);
     });
 }

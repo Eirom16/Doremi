@@ -61,17 +61,26 @@ fn session_has_sapisid(content: &str) -> bool {
 }
 
 fn extract_sapisid_from_cookie(cookie_val: &str) -> Option<String> {
+    let mut sapisid = None;
+    let mut secure_1 = None;
+    let mut secure_3 = None;
+
     for part in cookie_val.split(';') {
         let part = part.trim();
         if let Some(eq_idx) = part.find('=') {
             let name = part[..eq_idx].trim();
             let val = part[eq_idx + 1..].trim().replace('"', "");
-            if name == "__Secure-3PAPISID" || name == "__Secure-1PAPISID" || name == "SAPISID" {
-                return Some(val);
+            if name == "__Secure-3PAPISID" {
+                secure_3 = Some(val);
+            } else if name == "__Secure-1PAPISID" {
+                secure_1 = Some(val);
+            } else if name == "SAPISID" {
+                sapisid = Some(val);
             }
         }
     }
-    None
+
+    secure_3.or(secure_1).or(sapisid)
 }
 
 pub fn request_headers() -> HeaderMap {

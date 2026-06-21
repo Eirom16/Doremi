@@ -63,10 +63,12 @@ fn normalize_region(region: &str) -> String {
 
 fn context() -> Value {
     let current = current_client_context();
+    let now = chrono::Utc::now();
+    let client_version = format!("1.{}.01.00", now.format("%Y%m%d"));
     serde_json::json!({
         "context": {"client": {
             "clientName": "WEB_REMIX",
-            "clientVersion": "1.20250331.00.00",
+            "clientVersion": client_version,
             "hl": current.language,
             "gl": current.region
         }, "user": {"lockedSafetyMode": false}}
@@ -733,28 +735,8 @@ pub async fn library_songs(limit: Option<usize>) -> Result<Vec<super::models::Tr
     if let Some(songs) = cached(&key) {
         return Ok(songs);
     }
-    let mut body = context();
-    body["browseId"] = serde_json::json!("FEmusic_liked_videos");
-    let response = super::transport::post("browse", body).await?;
-    let mut page = super::parsers::parse_library_songs_page(&response)?;
-    let mut songs = page.items;
-    let mut seen_tokens = HashSet::new();
-    for _ in 0..MAX_CONTINUATION_PAGES {
-        if songs.len() >= limit_val {
-            break;
-        }
-        let Some(token) = page.continuation.take() else {
-            break;
-        };
-        if !seen_tokens.insert(token.clone()) {
-            break;
-        }
-        let mut continuation_body = context();
-        continuation_body["continuation"] = serde_json::json!(token);
-        let response = super::transport::post("browse", continuation_body).await?;
-        page = super::parsers::parse_library_songs_page(&response)?;
-        songs.append(&mut page.items);
-    }
+    let playlist = playlist_detail("LM").await?;
+    let mut songs = playlist.tracks;
     if limit.is_some() {
         songs.truncate(limit_val);
     }

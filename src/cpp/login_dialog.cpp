@@ -106,8 +106,7 @@ void WebLoginDialog::on_cookie_added(const QNetworkCookie &cookie) {
     QString bare = domain.startsWith('.') ? domain.mid(1) : domain;
     bare = bare.toLower();
 
-    bool trusted = bare == "youtube.com" || bare.endsWith(".youtube.com") ||
-                   bare == "google.com" || bare.endsWith(".google.com");
+    bool trusted = bare == "youtube.com" || bare.endsWith(".youtube.com");
     if (!trusted) {
         return;
     }
@@ -167,14 +166,18 @@ void WebLoginDialog::on_login_result(const QString &result_str) {
 
     if (avatar_url.isEmpty()) return;
 
-    bool has_session = cookies_.count("SAPISID") || 
-                       cookies_.count("__Secure-3PAPISID") || 
-                       cookies_.count("__Secure-1PAPISID");
+    bool has_session = (cookies_.count("SAPISID") || 
+                        cookies_.count("__Secure-3PAPISID") || 
+                        cookies_.count("__Secure-1PAPISID")) &&
+                       (cookies_.count("SID") || 
+                        cookies_.count("__Secure-3PSID"));
 
     if (has_session) {
         login_detected_ = true;
         poll_timer_->stop();
-        save_cookies_and_close(avatar_url, user_name);
+        QTimer::singleShot(1500, this, [this, avatar_url, user_name]() {
+            save_cookies_and_close(avatar_url, user_name);
+        });
     }
 }
 

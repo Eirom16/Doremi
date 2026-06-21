@@ -198,5 +198,20 @@
     "sync_offset": "Sincronización",
     "sync_delay_tooltip_minus": "Adelantar letras 0.5s",
     "sync_delay_tooltip_plus": "Atrasar letras 0.5s",
-    "sync_delay_tooltip_reset": "Restablecer sincronización"
+    "sync_delay_tooltip_reset": "Restablecer sincronización",
+    "library_empty_title": "Tu biblioteca está vacía",
+    "source_all": "Origen: Todos",
+    "source_cloud": "Origen: Nube",
+    "source_downloads": "Origen: Descargas",
+    "source_local": "Origen: Local",
+    "sort_name_asc": "Nombre A-Z",
+    "sort_name_desc": "Nombre Z-A",
+    "sort_recent": "Más reciente",
+    "sort_oldest": "Más antiguo",
+    "new_playlist": "+ Nueva playlist",
+    "no_playlists_message": "No tienes playlists creadas",
+    "login_yt_music": "Iniciar sesión en YouTube Music",
+    "library_not_auth_desc": "Tu biblioteca local está vacía.\nInicia sesión en YouTube Music para acceder a tu biblioteca en la nube.",
+    "library_not_auth_title": "Inicia sesión en YouTube Music para acceder a tu biblioteca",
+    "search_library_placeholder": "Buscar en biblioteca..."
 }

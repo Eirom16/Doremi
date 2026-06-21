@@ -5,7 +5,7 @@ use std::time::Duration;
 use tokio::sync::{Mutex, Semaphore};
 use tokio::time::Instant;
 
-const API_KEY: &str = "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8";
+const API_KEY: &str = "AIzaSyC9XL3ZjWddXya6X74dJoCTL-WEYFDNX30";
 const BASE_URL: &str = "https://music.youtube.com/youtubei/v1";
 const MAX_ATTEMPTS: usize = 4;
 const MAX_CONCURRENT_REQUESTS: usize = 4;
@@ -38,7 +38,8 @@ fn retryable(status: StatusCode) -> bool {
 /// A 401/403 on an authenticated request means the session was revoked or
 /// expired server-side; retrying with the same credentials cannot succeed.
 fn revokes_session(status: StatusCode) -> bool {
-    status == StatusCode::UNAUTHORIZED || status == StatusCode::FORBIDDEN
+    status == StatusCode::UNAUTHORIZED
+        || status == StatusCode::FORBIDDEN
 }
 
 fn retry_delay(attempt: usize, retry_after: Option<&str>) -> Duration {
@@ -60,9 +61,24 @@ pub async fn post(endpoint: &str, body: Value) -> Result<Value, String> {
 
     for attempt in 0..MAX_ATTEMPTS {
         wait_for_rate_limit().await;
+        let headers = super::auth::request_headers();
+        for (k, v) in headers.iter() {
+            let v_str = v.to_str().unwrap_or("[invalid]");
+            let v_len = v_str.len();
+            let redacted = if k == "cookie" || k == "authorization" {
+                if v_str.len() > 20 {
+                    format!("{}... (len={})", &v_str[..20], v_len)
+                } else {
+                    format!("(len={})", v_len)
+                }
+            } else {
+                v_str.to_string()
+            };
+            println!("[HEADERS_DEBUG] Request header: {} = {}", k, redacted);
+        }
         let response = CLIENT
             .post(&url)
-            .headers(super::auth::request_headers())
+            .headers(headers)
             .json(&body)
             .send()
             .await;

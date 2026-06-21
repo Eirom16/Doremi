@@ -90,6 +90,7 @@ LibraryView::LibraryView(QWidget *parent)
     search_row->setSpacing(8);
     setup_search_bar();
     search_row->addWidget(search_box_, 1);
+    search_row->addWidget(source_combo_);
     search_row->addWidget(sort_combo_);
     root->addLayout(search_row);
 
@@ -97,7 +98,7 @@ LibraryView::LibraryView(QWidget *parent)
     list_->setContentsMargins(24, 16, 24, 16);
     list_->setSpacing(6);
 
-    auto *placeholder = new QLabel("Tu biblioteca está vacía", this);
+    auto *placeholder = new QLabel(QString::fromStdString(std::string(doremi_tr("library_empty_title"))), this);
     placeholder->setFont(DesignTokens::getFont("body", 14));
     placeholder->setStyleSheet(QString("color: %1; padding: 24px;").arg(c.text_muted.name()));
     placeholder->setAlignment(Qt::AlignCenter);
@@ -191,7 +192,7 @@ void LibraryView::setup_search_bar() {
     const auto &c = DesignTokens::current();
 
     search_box_ = new QLineEdit(this);
-    search_box_->setPlaceholderText("Buscar en biblioteca...");
+    search_box_->setPlaceholderText(QString::fromStdString(std::string(doremi_tr("search_library_placeholder"))));
     search_box_->setClearButtonEnabled(true);
     search_box_->setFixedHeight(36);
     search_box_->setStyleSheet(QString(
@@ -199,11 +200,22 @@ void LibraryView::setup_search_bar() {
         "QLineEdit:focus { border-color: %4; }")
         .arg(c.bg_elevated.name()).arg(c.border.name()).arg(c.text_primary.name()).arg(c.accent.name()));
 
+    source_combo_ = new QComboBox(this);
+    source_combo_->addItem(QString::fromStdString(std::string(doremi_tr("source_all"))), 0);
+    source_combo_->addItem(QString::fromStdString(std::string(doremi_tr("source_cloud"))), 1);
+    source_combo_->addItem(QString::fromStdString(std::string(doremi_tr("source_downloads"))), 2);
+    source_combo_->addItem(QString::fromStdString(std::string(doremi_tr("source_local"))), 3);
+    source_combo_->setFixedHeight(32);
+    source_combo_->setStyleSheet(QString(
+        "QComboBox { background: %1; border: 1px solid %2; border-radius: 16px; padding: 0 12px; color: %3; font-size: 12px; }"
+        "QComboBox::drop-down { border: none; width: 20px; }")
+        .arg(c.bg_elevated.name()).arg(c.border.name()).arg(c.text_primary.name()));
+
     sort_combo_ = new QComboBox(this);
-    sort_combo_->addItem("Nombre A-Z", "name_asc");
-    sort_combo_->addItem("Nombre Z-A", "name_desc");
-    sort_combo_->addItem("Más reciente", "recent");
-    sort_combo_->addItem("Más antiguo", "oldest");
+    sort_combo_->addItem(QString::fromStdString(std::string(doremi_tr("sort_name_asc"))), "name_asc");
+    sort_combo_->addItem(QString::fromStdString(std::string(doremi_tr("sort_name_desc"))), "name_desc");
+    sort_combo_->addItem(QString::fromStdString(std::string(doremi_tr("sort_recent"))), "recent");
+    sort_combo_->addItem(QString::fromStdString(std::string(doremi_tr("sort_oldest"))), "oldest");
     sort_combo_->setFixedHeight(32);
     sort_combo_->setStyleSheet(QString(
         "QComboBox { background: %1; border: 1px solid %2; border-radius: 16px; padding: 0 12px; color: %3; font-size: 12px; }"
@@ -212,6 +224,11 @@ void LibraryView::setup_search_bar() {
 
     connect(search_box_, &QLineEdit::textChanged, this, [this](const QString &text) {
         emit search_requested(active_tab_, text.toStdString(), sort_combo_->currentData().toString().toStdString());
+    });
+    connect(source_combo_, &QComboBox::currentIndexChanged, this, [this](int) {
+        int source_val = source_combo_->currentData().toInt();
+        emit filter_source_changed(source_val);
+        emit search_requested(active_tab_, search_box_->text().toStdString(), sort_combo_->currentData().toString().toStdString());
     });
     connect(sort_combo_, &QComboBox::currentIndexChanged, this, [this](int) {
         emit search_requested(active_tab_, search_box_->text().toStdString(), sort_combo_->currentData().toString().toStdString());
@@ -232,7 +249,7 @@ void LibraryView::set_playlists(const std::vector<Playlist> &playlists) {
     active_tab_ = "playlists";
     clear_list();
     const auto &c = DesignTokens::current();
-    auto *create_btn = new QPushButton("+ Nueva playlist", this);
+    auto *create_btn = new QPushButton(QString::fromStdString(std::string(doremi_tr("new_playlist"))), this);
     create_btn->setCursor(Qt::PointingHandCursor);
     create_btn->setStyleSheet(QString(
         "QPushButton { background: %1; color: white; border: none; border-radius: 8px; padding: 10px 20px; font-size: 14px; font-weight: 600; }"
@@ -251,13 +268,14 @@ void LibraryView::set_playlists(const std::vector<Playlist> &playlists) {
     list_->addWidget(create_btn);
     list_->addSpacing(8);
     if (playlists.empty()) {
-        auto *lbl = new QLabel("No tienes playlists creadas", this);
+        auto *lbl = new QLabel(QString::fromStdString(std::string(doremi_tr("no_playlists_message"))), this);
         lbl->setFont(DesignTokens::getFont("body", 13));
         lbl->setStyleSheet(QString("color: %1; padding: 12px;").arg(c.text_muted.name()));
         list_->addWidget(lbl);
     } else {
         for (const auto &p : playlists) {
-            list_->addWidget(make_list_item(static_cast<std::string>(p.name), std::to_string(p.track_count) + " canciones", static_cast<std::string>(p.id)));
+            QString sub = QString("%1 %2").arg(p.track_count).arg(QString::fromStdString(std::string(doremi_tr("songs"))).toLower());
+            list_->addWidget(make_list_item(static_cast<std::string>(p.name), sub.toStdString(), static_cast<std::string>(p.id)));
         }
     }
     list_->addStretch(1);
@@ -379,7 +397,7 @@ void LibraryView::set_search_results(
         }
     } else if (tab == "playlists") {
         const auto &c = DesignTokens::current();
-        auto *create_btn = new QPushButton("+ Nueva playlist", this);
+        auto *create_btn = new QPushButton(QString::fromStdString(std::string(doremi_tr("new_playlist"))), this);
         create_btn->setCursor(Qt::PointingHandCursor);
         create_btn->setStyleSheet(QString(
             "QPushButton { background: %1; color: white; border: none; border-radius: 8px; padding: 10px 20px; font-size: 14px; font-weight: 600; }"
@@ -398,13 +416,14 @@ void LibraryView::set_search_results(
         list_->addWidget(create_btn);
         list_->addSpacing(8);
         if (playlists.empty()) {
-            auto *lbl = new QLabel("No tienes playlists creadas", this);
+            auto *lbl = new QLabel(QString::fromStdString(std::string(doremi_tr("no_playlists_message"))), this);
             lbl->setFont(DesignTokens::getFont("body", 13));
             lbl->setStyleSheet(QString("color: %1; padding: 12px;").arg(c.text_muted.name()));
             list_->addWidget(lbl);
         } else {
             for (const auto &p : playlists) {
-                list_->addWidget(make_list_item(static_cast<std::string>(p.name), std::to_string(p.track_count) + " canciones", static_cast<std::string>(p.id)));
+                QString sub = QString("%1 %2").arg(p.track_count).arg(QString::fromStdString(std::string(doremi_tr("songs"))).toLower());
+                list_->addWidget(make_list_item(static_cast<std::string>(p.name), sub.toStdString(), static_cast<std::string>(p.id)));
             }
         }
     }
@@ -427,7 +446,7 @@ void LibraryView::set_library_state(const std::string &state, const std::string 
     
     // Show action button if not authenticated
     if (state == "not_authenticated") {
-        auto *login_btn = new QPushButton("Iniciar sesión en YouTube Music", this);
+        auto *login_btn = new QPushButton(QString::fromStdString(std::string(doremi_tr("login_yt_music"))), this);
         login_btn->setCursor(Qt::PointingHandCursor);
         login_btn->setStyleSheet(QString(
             "QPushButton { background: %1; color: white; border: none; border-radius: 8px; padding: 10px 20px; font-size: 14px; font-weight: 600; }"
@@ -446,12 +465,12 @@ void LibraryView::set_authenticated(bool authenticated) {
 
 void LibraryView::show_empty_state() {
     if (authenticated_) {
-        set_library_state("empty", "Tu biblioteca está vacía");
+        set_library_state("empty", std::string(doremi_tr("library_empty_title")));
     } else {
-        set_library_state("not_authenticated", "Tu biblioteca local está vacía.\nInicia sesión en YouTube Music para acceder a tu biblioteca en la nube.");
+        set_library_state("not_authenticated", std::string(doremi_tr("library_not_auth_desc")));
     }
 }
 
 void LibraryView::show_not_authenticated_state() {
-    set_library_state("not_authenticated", "Inicia sesión en YouTube Music para acceder a tu biblioteca");
+    set_library_state("not_authenticated", std::string(doremi_tr("library_not_auth_title")));
 }

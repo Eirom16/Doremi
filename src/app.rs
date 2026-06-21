@@ -103,196 +103,209 @@ impl DoremiApp {
         set_window_title("Doremi");
         show_main_window();
 
-        // Check system dependencies (yt-dlp and ffmpeg)
-        let dep_status = crate::utils::dependencies::check_dependencies();
-        if !dep_status.ytdlp_ok {
-            log::warn!("yt-dlp not found! streaming and downloads will fail.");
-            bridge::bridge::show_notification(&crate::tr!("ytdlp_required"), "error");
+        let args: Vec<String> = std::env::args().collect();
+        let ui_test_idx = args.iter().position(|a| a == "--ui-test");
+        let screenshot_idx = args.iter().position(|a| a == "--screenshot");
+
+        if let Some(idx) = ui_test_idx {
+            let view = args.get(idx + 1).cloned().unwrap_or_default();
+            let screenshot = screenshot_idx.and_then(|i| args.get(i + 1).cloned()).unwrap_or_default();
+            log::info!("Running in UI Test mode. View: {}, Screenshot: {}", view, screenshot);
+            
+            crate::utils::mock_data::load_mock_data_for_view(&view);
+            bridge::bridge::setup_ui_test(&view, &screenshot);
         } else {
-            log::info!("yt-dlp version: {}", dep_status.ytdlp_version);
-        }
-
-        if !dep_status.ffmpeg_ok {
-            log::warn!("ffmpeg not found! audio downloads will not be converted to MP3.");
-            bridge::bridge::show_notification(&crate::tr!("ffmpeg_warning"), "warning");
-        } else {
-            log::info!("ffmpeg version: {}", dep_status.ffmpeg_version);
-        }
-
-        if restored_queue {
-            player.refresh_queue_ui();
-        }
-        if let Some(url) = startup_url {
-            player.clear_queue();
-            player.play_url(&url);
-        }
-
-        // Check auth on startup
-        if crate::bridge::is_youtube_authenticated() {
-            let config_dir = AppDirs::global().config_dir();
-            let profile_path = config_dir.join("user_profile.json");
-            let mut name = "YouTube Music".to_string();
-            let mut avatar = "".to_string();
-            if profile_path.exists() {
-                if let Ok(content) = std::fs::read_to_string(profile_path) {
-                    if let Ok(val) = serde_json::from_str::<serde_json::Value>(&content) {
-                        if let Some(n) = val.get("name").and_then(|v| v.as_str()) {
-                            name = n.to_string();
-                        }
-                        if let Some(a) = val.get("avatar_url").and_then(|v| v.as_str()) {
-                            avatar = a.to_string();
-                        }
-                    }
-                }
-            }
-            update_youtube_auth_state(true, &name, &avatar);
-            navigate_to("home");
-        } else {
-            update_youtube_auth_state(false, "", "");
-            navigate_to("welcome");
-        }
-
-        // Load settings into UI
-        crate::bridge::apply_settings_impl();
-
-        // Load home, library and history data in background task
-        tokio::spawn(async move {
-            let home = HomeService::new();
-            home.load_home().await;
-            TrendingService::new().load().await;
-
-            tokio::task::spawn_blocking(move || {
-                // Load recently played from DB → add "Seguir escuchando" section
-                if let Ok(recent) = crate::db::repo::PlayHistoryRepo::recent(12) {
-                    if !recent.is_empty() {
-                        let items = recent
-                            .iter()
-                            .map(|track| crate::bridge::bridge::HomeCard {
-                                id: track.track_id.clone(),
-                                title: track.title.clone(),
-                                subtitle: track.artist.clone(),
-                                thumbnail: track.thumbnail.clone(),
-                                item_type: "song".to_string(),
-                            })
-                            .collect::<Vec<_>>();
-                        add_home_section("Seguir escuchando", items);
-                    }
-                }
-
-                // Load library data from DB
-                // Songs (favorites)
-                if let Ok(tracks) = FavoritesRepo::all_tracks() {
-                    let songs: Vec<crate::bridge::bridge::Track> = tracks
-                        .iter()
-                        .map(|t| crate::bridge::bridge::Track {
-                            id: t.id.clone(),
-                            title: t.title.clone(),
-                            artist: t.artist.clone(),
-                            album: t.album.clone(),
-                            duration_ms: t.duration_ms,
-                            thumbnail: t.thumbnail.clone(),
-                        })
-                        .collect();
-                    set_library_songs(songs);
-                }
-                // Playlists
-                if let Ok(playlists) = PlaylistRepo::all() {
-                    let p_list: Vec<crate::bridge::bridge::Playlist> = playlists
-                        .iter()
-                        .map(|p| {
-                            let count = PlaylistRepo::tracks(&p.id)
-                                .ok()
-                                .map(|t| t.len() as i32)
-                                .unwrap_or(0);
-                            crate::bridge::bridge::Playlist {
-                                id: p.id.clone(),
-                                name: p.name.clone(),
-                                description: p.description.clone(),
-                                thumbnail: p.artwork.clone(),
-                                track_count: count,
-                                owner: String::new(),
-                                privacy: match p.privacy {
-                                    0 => "PUBLIC".to_string(),
-                                    1 => "PRIVATE".to_string(),
-                                    _ => "UNLISTED".to_string(),
-                                },
-                            }
-                        })
-                        .collect();
-                    crate::bridge::bridge::set_context_playlists(
-                        p_list
-                            .iter()
-                            .map(|p| crate::bridge::bridge::Playlist {
-                                id: p.id.clone(),
-                                name: p.name.clone(),
-                                description: p.description.clone(),
-                                thumbnail: p.thumbnail.clone(),
-                                track_count: p.track_count,
-                                owner: p.owner.clone(),
-                                privacy: p.privacy.clone(),
-                            })
-                            .collect(),
-                    );
-                    set_library_playlists(p_list);
-                }
-                // Albums
-                if let Ok(albums) = FavoritesRepo::all_albums() {
-                    let a_list: Vec<crate::bridge::bridge::Album> = albums
-                        .iter()
-                        .map(|a| crate::bridge::bridge::Album {
-                            id: a.id.clone(),
-                            title: a.title.clone(),
-                            artist: a.artist.clone(),
-                            year: a.year.map(|y| y.to_string()).unwrap_or_default(),
-                            thumbnail: a.thumbnail.clone(),
-                            track_count: 0,
-                            artist_id: String::new(),
-                        })
-                        .collect();
-                    set_library_albums(a_list);
-                }
-                // Artists
-                if let Ok(artists) = FavoritesRepo::all_artists() {
-                    let art_list: Vec<crate::bridge::bridge::Artist> = artists
-                        .iter()
-                        .map(|a| crate::bridge::bridge::Artist {
-                            id: a.id.clone(),
-                            name: a.name.clone(),
-                            thumbnail: a.thumbnail.clone(),
-                            description: String::new(),
-                            subscribers: String::new(),
-                        })
-                        .collect();
-                    set_library_artists(art_list);
-                }
-
-                // Load search history
-                if let Ok(history) = SearchHistoryRepo::recent(10) {
-                    let queries: Vec<String> = history.iter().map(|h| h.query.clone()).collect();
-                    set_search_history(queries);
-                }
-            })
-            .await
-            .ok();
-        });
-
-        // Load downloads data from database
-        let dl_manager = crate::services::download::DownloadManager::get_instance();
-        crate::services::download::DownloadManager::refresh_downloads_ui();
-        dl_manager.resume_unfinished_downloads();
-
-        // Start connectivity monitor
-        let _connectivity = crate::system::connectivity::ConnectivityMonitor::start();
-
-        // Trigger update check after a short delay (3 seconds)
-        tokio::spawn(async {
-            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-            if crate::bridge::should_run_online_startup_work() {
-                crate::bridge::on_check_for_updates_requested();
+            // Check system dependencies (yt-dlp and ffmpeg)
+            let dep_status = crate::utils::dependencies::check_dependencies();
+            if !dep_status.ytdlp_ok {
+                log::warn!("yt-dlp not found! streaming and downloads will fail.");
+                bridge::bridge::show_notification(&crate::tr!("ytdlp_required"), "error");
             } else {
-                log::info!("Skipping startup update check while offline");
+                log::info!("yt-dlp version: {}", dep_status.ytdlp_version);
             }
-        });
+
+            if !dep_status.ffmpeg_ok {
+                log::warn!("ffmpeg not found! audio downloads will not be converted to MP3.");
+                bridge::bridge::show_notification(&crate::tr!("ffmpeg_warning"), "warning");
+            } else {
+                log::info!("ffmpeg version: {}", dep_status.ffmpeg_version);
+            }
+
+            if restored_queue {
+                player.refresh_queue_ui();
+            }
+            if let Some(url) = startup_url {
+                player.clear_queue();
+                player.play_url(&url);
+            }
+
+            // Check auth on startup
+            if crate::bridge::is_youtube_authenticated() {
+                let config_dir = AppDirs::global().config_dir();
+                let profile_path = config_dir.join("user_profile.json");
+                let mut name = "YouTube Music".to_string();
+                let mut avatar = "".to_string();
+                if profile_path.exists() {
+                    if let Ok(content) = std::fs::read_to_string(profile_path) {
+                        if let Ok(val) = serde_json::from_str::<serde_json::Value>(&content) {
+                            if let Some(n) = val.get("name").and_then(|v| v.as_str()) {
+                                name = n.to_string();
+                            }
+                            if let Some(a) = val.get("avatar_url").and_then(|v| v.as_str()) {
+                                avatar = a.to_string();
+                            }
+                        }
+                    }
+                }
+                update_youtube_auth_state(true, &name, &avatar);
+                navigate_to("home");
+            } else {
+                update_youtube_auth_state(false, "", "");
+                navigate_to("welcome");
+            }
+
+            // Load settings into UI
+            crate::bridge::apply_settings_impl();
+
+            // Load home, library and history data in background task
+            tokio::spawn(async move {
+                let home = HomeService::new();
+                home.load_home().await;
+                TrendingService::new().load().await;
+
+                tokio::task::spawn_blocking(move || {
+                    // Load recently played from DB → add "Seguir escuchando" section
+                    if let Ok(recent) = crate::db::repo::PlayHistoryRepo::recent(12) {
+                        if !recent.is_empty() {
+                            let items = recent
+                                .iter()
+                                .map(|track| crate::bridge::bridge::HomeCard {
+                                    id: track.track_id.clone(),
+                                    title: track.title.clone(),
+                                    subtitle: track.artist.clone(),
+                                    thumbnail: track.thumbnail.clone(),
+                                    item_type: "song".to_string(),
+                                })
+                                .collect::<Vec<_>>();
+                            add_home_section("Seguir escuchando", items);
+                        }
+                    }
+
+                    // Load library data from DB
+                    // Songs (favorites)
+                    if let Ok(tracks) = FavoritesRepo::all_tracks() {
+                        let songs: Vec<crate::bridge::bridge::Track> = tracks
+                            .iter()
+                            .map(|t| crate::bridge::bridge::Track {
+                                id: t.id.clone(),
+                                title: t.title.clone(),
+                                artist: t.artist.clone(),
+                                album: t.album.clone(),
+                                duration_ms: t.duration_ms,
+                                thumbnail: t.thumbnail.clone(),
+                            })
+                            .collect();
+                        set_library_songs(songs);
+                    }
+                    // Playlists
+                    if let Ok(playlists) = PlaylistRepo::all() {
+                        let p_list: Vec<crate::bridge::bridge::Playlist> = playlists
+                            .iter()
+                            .map(|p| {
+                                let count = PlaylistRepo::tracks(&p.id)
+                                    .ok()
+                                    .map(|t| t.len() as i32)
+                                    .unwrap_or(0);
+                                crate::bridge::bridge::Playlist {
+                                    id: p.id.clone(),
+                                    name: p.name.clone(),
+                                    description: p.description.clone(),
+                                    thumbnail: p.artwork.clone(),
+                                    track_count: count,
+                                    owner: String::new(),
+                                    privacy: match p.privacy {
+                                        0 => "PUBLIC".to_string(),
+                                        1 => "PRIVATE".to_string(),
+                                        _ => "UNLISTED".to_string(),
+                                    },
+                                }
+                            })
+                            .collect();
+                        crate::bridge::bridge::set_context_playlists(
+                            p_list
+                                .iter()
+                                .map(|p| crate::bridge::bridge::Playlist {
+                                    id: p.id.clone(),
+                                    name: p.name.clone(),
+                                    description: p.description.clone(),
+                                    thumbnail: p.thumbnail.clone(),
+                                    track_count: p.track_count,
+                                    owner: p.owner.clone(),
+                                    privacy: p.privacy.clone(),
+                                })
+                                .collect(),
+                        );
+                        set_library_playlists(p_list);
+                    }
+                    // Albums
+                    if let Ok(albums) = FavoritesRepo::all_albums() {
+                        let a_list: Vec<crate::bridge::bridge::Album> = albums
+                            .iter()
+                            .map(|a| crate::bridge::bridge::Album {
+                                id: a.id.clone(),
+                                title: a.title.clone(),
+                                artist: a.artist.clone(),
+                                year: a.year.map(|y| y.to_string()).unwrap_or_default(),
+                                thumbnail: a.thumbnail.clone(),
+                                track_count: 0,
+                                artist_id: String::new(),
+                            })
+                            .collect();
+                        set_library_albums(a_list);
+                    }
+                    // Artists
+                    if let Ok(artists) = FavoritesRepo::all_artists() {
+                        let art_list: Vec<crate::bridge::bridge::Artist> = artists
+                            .iter()
+                            .map(|a| crate::bridge::bridge::Artist {
+                                id: a.id.clone(),
+                                name: a.name.clone(),
+                                thumbnail: a.thumbnail.clone(),
+                                description: String::new(),
+                                subscribers: String::new(),
+                            })
+                            .collect();
+                        set_library_artists(art_list);
+                    }
+
+                    // Load search history
+                    if let Ok(history) = SearchHistoryRepo::recent(10) {
+                        let queries: Vec<String> = history.iter().map(|h| h.query.clone()).collect();
+                        set_search_history(queries);
+                    }
+                })
+                .await
+                .ok();
+            });
+
+            // Load downloads data from database
+            let dl_manager = crate::services::download::DownloadManager::get_instance();
+            crate::services::download::DownloadManager::refresh_downloads_ui();
+            dl_manager.resume_unfinished_downloads();
+
+            // Start connectivity monitor
+            let _connectivity = crate::system::connectivity::ConnectivityMonitor::start();
+
+            // Trigger update check after a short delay (3 seconds)
+            tokio::spawn(async {
+                tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+                if crate::bridge::should_run_online_startup_work() {
+                    crate::bridge::on_check_for_updates_requested();
+                } else {
+                    log::info!("Skipping startup update check while offline");
+                }
+            });
+        }
 
         run_event_loop();
 

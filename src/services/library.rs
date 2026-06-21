@@ -1,18 +1,17 @@
 use crate::api::client::ApiClient;
-use crate::services::library_cache::{CacheData, LibraryCache, LibrarySource};
-use std::sync::Arc;
-use tokio::sync::RwLock;
+use crate::services::library_cache::{GLOBAL_LIBRARY_CACHE, CacheData, LibraryCache, LibrarySource};
 
 pub struct LibraryService {
     api: ApiClient,
-    cache: Arc<RwLock<LibraryCache>>,
 }
 
 impl LibraryService {
     pub fn new(authenticated: bool) -> Self {
+        if let Ok(mut cache) = GLOBAL_LIBRARY_CACHE.write() {
+            cache.authenticated = authenticated;
+        }
         Self {
             api: ApiClient::new(),
-            cache: Arc::new(RwLock::new(LibraryCache::new(authenticated))),
         }
     }
 
@@ -32,17 +31,18 @@ impl LibraryService {
             .collect();
 
         // Guardar en caché
-        let cache = self.cache.write().await;
-        cache.set(
-            "songs",
-            CacheData {
-                songs: songs.clone(),
-                albums: Vec::new(),
-                artists: Vec::new(),
-                playlists: Vec::new(),
-                source: LibrarySource::Remote,
-            },
-        );
+        if let Ok(cache) = GLOBAL_LIBRARY_CACHE.write() {
+            cache.set(
+                "songs",
+                CacheData {
+                    songs: songs.clone(),
+                    albums: Vec::new(),
+                    artists: Vec::new(),
+                    playlists: Vec::new(),
+                    source: LibrarySource::Remote,
+                },
+            );
+        }
 
         crate::bridge::bridge::set_library_songs(songs);
     }
@@ -64,17 +64,18 @@ impl LibraryService {
             .collect();
 
         // Guardar en caché
-        let cache = self.cache.write().await;
-        cache.set(
-            "playlists",
-            CacheData {
-                songs: Vec::new(),
-                albums: Vec::new(),
-                artists: Vec::new(),
-                playlists: playlists.clone(),
-                source: LibrarySource::Remote,
-            },
-        );
+        if let Ok(cache) = GLOBAL_LIBRARY_CACHE.write() {
+            cache.set(
+                "playlists",
+                CacheData {
+                    songs: Vec::new(),
+                    albums: Vec::new(),
+                    artists: Vec::new(),
+                    playlists: playlists.clone(),
+                    source: LibrarySource::Remote,
+                },
+            );
+        }
 
         crate::bridge::bridge::set_context_playlists(
             playlists
@@ -110,17 +111,18 @@ impl LibraryService {
             .collect();
 
         // Guardar en caché
-        let cache = self.cache.write().await;
-        cache.set(
-            "albums",
-            CacheData {
-                songs: Vec::new(),
-                albums: albums.clone(),
-                artists: Vec::new(),
-                playlists: Vec::new(),
-                source: LibrarySource::Remote,
-            },
-        );
+        if let Ok(cache) = GLOBAL_LIBRARY_CACHE.write() {
+            cache.set(
+                "albums",
+                CacheData {
+                    songs: Vec::new(),
+                    albums: albums.clone(),
+                    artists: Vec::new(),
+                    playlists: Vec::new(),
+                    source: LibrarySource::Remote,
+                },
+            );
+        }
 
         crate::bridge::bridge::set_library_albums(albums);
     }
@@ -140,81 +142,127 @@ impl LibraryService {
             .collect();
 
         // Guardar en caché
-        let cache = self.cache.write().await;
-        cache.set(
-            "artists",
-            CacheData {
-                songs: Vec::new(),
-                albums: Vec::new(),
-                artists: artists.clone(),
-                playlists: Vec::new(),
-                source: LibrarySource::Remote,
-            },
-        );
+        if let Ok(cache) = GLOBAL_LIBRARY_CACHE.write() {
+            cache.set(
+                "artists",
+                CacheData {
+                    songs: Vec::new(),
+                    albums: Vec::new(),
+                    artists: artists.clone(),
+                    playlists: Vec::new(),
+                    source: LibrarySource::Remote,
+                },
+            );
+        }
 
         crate::bridge::bridge::set_library_artists(artists);
     }
 
-    /// Buscar y filtrar canciones
-    pub async fn search_songs(&self, query: &str) -> Vec<crate::bridge::bridge::Track> {
-        let cache = self.cache.read().await;
-        if let Some(data) = cache.get("songs") {
-            LibraryCache::search_tracks(&data.songs, query)
-        } else {
-            Vec::new()
+    /// Buscar dentro de un tab
+    pub fn search_songs(&self, tab: &str, query: &str) -> Vec<crate::bridge::bridge::Track> {
+        if let Ok(cache) = GLOBAL_LIBRARY_CACHE.read() {
+            if let Some(data) = cache.get(tab) {
+                return LibraryCache::search_tracks(&data.songs, query);
+            }
         }
+        Vec::new()
     }
 
-    /// Buscar y filtrar álbumes
-    pub async fn search_albums(&self, query: &str) -> Vec<crate::bridge::bridge::Album> {
-        let cache = self.cache.read().await;
-        if let Some(data) = cache.get("albums") {
-            LibraryCache::search_albums(&data.albums, query)
-        } else {
-            Vec::new()
+    pub fn search_albums(&self, tab: &str, query: &str) -> Vec<crate::bridge::bridge::Album> {
+        if let Ok(cache) = GLOBAL_LIBRARY_CACHE.read() {
+            if let Some(data) = cache.get(tab) {
+                return LibraryCache::search_albums(&data.albums, query);
+            }
         }
+        Vec::new()
     }
 
-    /// Buscar y filtrar artistas
-    pub async fn search_artists(&self, query: &str) -> Vec<crate::bridge::bridge::Artist> {
-        let cache = self.cache.read().await;
-        if let Some(data) = cache.get("artists") {
-            LibraryCache::search_artists(&data.artists, query)
-        } else {
-            Vec::new()
+    pub fn search_artists(&self, tab: &str, query: &str) -> Vec<crate::bridge::bridge::Artist> {
+        if let Ok(cache) = GLOBAL_LIBRARY_CACHE.read() {
+            if let Some(data) = cache.get(tab) {
+                return LibraryCache::search_artists(&data.artists, query);
+            }
         }
+        Vec::new()
     }
 
-    /// Buscar y filtrar playlists
-    pub async fn search_playlists(&self, query: &str) -> Vec<crate::bridge::bridge::Playlist> {
-        let cache = self.cache.read().await;
-        if let Some(data) = cache.get("playlists") {
-            LibraryCache::search_playlists(&data.playlists, query)
-        } else {
-            Vec::new()
+    pub fn search_playlists(&self, tab: &str, query: &str) -> Vec<crate::bridge::bridge::Playlist> {
+        if let Ok(cache) = GLOBAL_LIBRARY_CACHE.read() {
+            if let Some(data) = cache.get(tab) {
+                return LibraryCache::search_playlists(&data.playlists, query);
+            }
         }
+        Vec::new()
     }
 
     /// Ordenar canciones
-    pub async fn sort_songs(&self, sort_by: &str) -> Vec<crate::bridge::bridge::Track> {
-        let cache = self.cache.read().await;
-        if let Some(data) = cache.get("songs") {
-            LibraryCache::sort_tracks(data.songs, sort_by)
-        } else {
-            Vec::new()
+    pub fn sort_songs(&self, _tab: &str, songs: Vec<crate::bridge::bridge::Track>, sort_by: &str) -> Vec<crate::bridge::bridge::Track> {
+        // If sort_by is empty, return as is
+        if sort_by.is_empty() {
+            return songs;
         }
+        // Normalize sort key
+        let key = match sort_by {
+            "name_asc" | "title" => "title",
+            "artist" => "artist",
+            "album" => "album",
+            "duration" => "duration",
+            _ => "title",
+        };
+        LibraryCache::sort_tracks(songs, key)
+    }
+
+    /// Ordenar álbumes
+    pub fn sort_albums(&self, _tab: &str, albums: Vec<crate::bridge::bridge::Album>, sort_by: &str) -> Vec<crate::bridge::bridge::Album> {
+        if sort_by.is_empty() {
+            return albums;
+        }
+        let key = match sort_by {
+            "name_asc" | "title" => "title",
+            "artist" => "artist",
+            "year" => "year",
+            _ => "title",
+        };
+        LibraryCache::sort_albums(albums, key)
+    }
+
+    /// Ordenar artistas
+    pub fn sort_artists(&self, _tab: &str, artists: Vec<crate::bridge::bridge::Artist>, sort_by: &str) -> Vec<crate::bridge::bridge::Artist> {
+        if sort_by.is_empty() {
+            return artists;
+        }
+        let key = match sort_by {
+            "name_asc" | "name" => "name",
+            _ => "name",
+        };
+        LibraryCache::sort_artists(artists, key)
+    }
+
+    /// Ordenar playlists
+    pub fn sort_playlists(&self, _tab: &str, playlists: Vec<crate::bridge::bridge::Playlist>, sort_by: &str) -> Vec<crate::bridge::bridge::Playlist> {
+        if sort_by.is_empty() {
+            return playlists;
+        }
+        let key = match sort_by {
+            "name_asc" | "name" => "name",
+            "tracks" => "tracks",
+            _ => "name",
+        };
+        LibraryCache::sort_playlists(playlists, key)
     }
 
     /// Invalidar caché de un tab
     pub async fn invalidate_cache(&self, tab: &str) {
-        let cache = self.cache.write().await;
-        cache.invalidate(tab);
+        if let Ok(cache) = GLOBAL_LIBRARY_CACHE.write() {
+            cache.invalidate(tab);
+        }
     }
 
     /// Invalidar todo el caché
     pub async fn invalidate_all_cache(&self) {
-        let cache = self.cache.write().await;
-        cache.invalidate_all();
+        if let Ok(cache) = GLOBAL_LIBRARY_CACHE.write() {
+            cache.invalidate_all();
+        }
     }
 }
 

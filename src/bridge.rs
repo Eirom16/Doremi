@@ -1,12 +1,13 @@
 use crate::player::PlayerService;
 use crate::services::search::SearchService;
 use once_cell::sync::OnceCell;
+use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 
 static PLAYER: OnceCell<Arc<PlayerService>> = OnceCell::new();
 static SEARCH: OnceCell<SearchService> = OnceCell::new();
 static IS_ONLINE: AtomicBool = AtomicBool::new(true);
+static FILTER_SOURCE: AtomicI32 = AtomicI32::new(0); // Default: 0 (All)
 
 pub const CONTRACT_MAJOR: u16 = 1;
 pub const CONTRACT_MINOR: u16 = 3;
@@ -57,7 +58,13 @@ where
     F: FnOnce(&PlayerService) -> R,
     R: Default,
 {
-    PLAYER.get().map(|p| f(p.as_ref())).unwrap_or_default()
+    match PLAYER.get() {
+        Some(p) => f(p.as_ref()),
+        None => {
+            log::error!("Player service is not initialized!");
+            R::default()
+        }
+    }
 }
 
 #[cxx::bridge]
@@ -345,7 +352,11 @@ pub mod bridge {
         fn set_related_tracks(tracks: Vec<Track>);
         fn set_stats_data(stats: StatsData);
 
-        fn set_history_data(history: Vec<Track>, played_at: Vec<String>, feedback_tokens: Vec<String>);
+        fn set_history_data(
+            history: Vec<Track>,
+            played_at: Vec<String>,
+            feedback_tokens: Vec<String>,
+        );
 
         fn set_album_detail(album: Album, tracks: Vec<Track>);
 
@@ -353,6 +364,7 @@ pub mod bridge {
 
         fn set_playlist_detail(playlist: Playlist, tracks: Vec<Track>);
         fn set_online_status(is_online: bool);
+        fn setup_ui_test(view: &str, screenshot_path: &str);
         fn update_youtube_auth_state(authenticated: bool, name: &str, avatar_url: &str);
         fn set_update_available(
             version: &str,
@@ -417,6 +429,8 @@ pub fn on_search_submitted(query: &str, filter: &str) {
         if let Some(search) = SEARCH.get() {
             let res = search.search(&query, &filter).await;
             search.push_to_ui(&res);
+        } else {
+            log::error!("Search service is not initialized during search submission!");
         }
     });
 }
@@ -426,7 +440,10 @@ pub fn on_search_suggestions_requested(query: &str) {
     tokio::spawn(async move {
         let suggestions = match SEARCH.get() {
             Some(search) => search.suggestions(&query).await,
-            None => Vec::new(),
+            None => {
+                log::warn!("Search service is not initialized during suggestions request!");
+                Vec::new()
+            }
         };
         crate::bridge::bridge::set_search_suggestions(&query, suggestions);
     });
@@ -592,6 +609,16 @@ impl LibraryTab {
             _ => None,
         }
     }
+
+    fn to_key(&self) -> &'static str {
+        match self {
+            Self::Songs => "songs",
+            Self::Albums => "albums",
+            Self::Artists => "artists",
+            Self::Playlists => "playlists",
+            Self::Shows => "shows",
+        }
+    }
 }
 
 fn is_online() -> bool {
@@ -622,6 +649,21 @@ fn load_local_library_tab(tab: LibraryTab) {
                         thumbnail: t.thumbnail.clone(),
                     })
                     .collect();
+
+                // Populate cache
+                if let Ok(cache) = crate::services::library_cache::GLOBAL_LIBRARY_CACHE.write() {
+                    cache.set(
+                        "songs",
+                        crate::services::library_cache::CacheData {
+                            songs: songs.clone(),
+                            albums: Vec::new(),
+                            artists: Vec::new(),
+                            playlists: Vec::new(),
+                            source: crate::services::library_cache::LibrarySource::Local,
+                        },
+                    );
+                }
+
                 crate::bridge::bridge::set_library_songs(songs);
             }
         }
@@ -639,6 +681,21 @@ fn load_local_library_tab(tab: LibraryTab) {
                         artist_id: String::new(),
                     })
                     .collect();
+
+                // Populate cache
+                if let Ok(cache) = crate::services::library_cache::GLOBAL_LIBRARY_CACHE.write() {
+                    cache.set(
+                        "albums",
+                        crate::services::library_cache::CacheData {
+                            songs: Vec::new(),
+                            albums: a_list.clone(),
+                            artists: Vec::new(),
+                            playlists: Vec::new(),
+                            source: crate::services::library_cache::LibrarySource::Local,
+                        },
+                    );
+                }
+
                 crate::bridge::bridge::set_library_albums(a_list);
             }
         }
@@ -654,6 +711,21 @@ fn load_local_library_tab(tab: LibraryTab) {
                         subscribers: String::new(),
                     })
                     .collect();
+
+                // Populate cache
+                if let Ok(cache) = crate::services::library_cache::GLOBAL_LIBRARY_CACHE.write() {
+                    cache.set(
+                        "artists",
+                        crate::services::library_cache::CacheData {
+                            songs: Vec::new(),
+                            albums: Vec::new(),
+                            artists: art_list.clone(),
+                            playlists: Vec::new(),
+                            source: crate::services::library_cache::LibrarySource::Local,
+                        },
+                    );
+                }
+
                 crate::bridge::bridge::set_library_artists(art_list);
             }
         }
@@ -677,6 +749,21 @@ fn load_local_library_tab(tab: LibraryTab) {
                         }
                     })
                     .collect();
+
+                // Populate cache
+                if let Ok(cache) = crate::services::library_cache::GLOBAL_LIBRARY_CACHE.write() {
+                    cache.set(
+                        "playlists",
+                        crate::services::library_cache::CacheData {
+                            songs: Vec::new(),
+                            albums: Vec::new(),
+                            artists: Vec::new(),
+                            playlists: p_list.clone(),
+                            source: crate::services::library_cache::LibrarySource::Local,
+                        },
+                    );
+                }
+
                 crate::bridge::bridge::set_library_playlists(p_list);
             }
         }
@@ -693,11 +780,18 @@ pub fn on_library_tab_changed(tab_key: &str) {
             return;
         };
 
-        if !is_online() {
+        let source_filter = FILTER_SOURCE.load(Ordering::SeqCst);
+
+        if source_filter == 2 {
+            // Load Downloaded completed tracks/playlists/etc.
+            load_downloaded_library_tab(tab);
+        } else if source_filter == 3 || !is_online() || !is_youtube_authenticated() {
+            // Load Local favorites
             tokio::task::spawn_blocking(move || load_local_library_tab(tab))
                 .await
                 .ok();
-        } else if is_youtube_authenticated() {
+        } else {
+            // Load Remote YTM Library
             let service = crate::services::library::LibraryService::new(true);
             match tab {
                 LibraryTab::Songs => service.load_songs().await,
@@ -706,10 +800,9 @@ pub fn on_library_tab_changed(tab_key: &str) {
                 LibraryTab::Playlists => service.load_playlists().await,
                 LibraryTab::Shows => refresh_library_shows_ui(),
             }
-        } else {
-            tokio::task::spawn_blocking(move || load_local_library_tab(tab))
-            .await
-            .ok();
+            if source_filter == 0 {
+                on_library_search(tab.to_key(), "", "");
+            }
         }
     });
 }
@@ -717,8 +810,8 @@ pub fn on_library_tab_changed(tab_key: &str) {
 #[cfg(test)]
 mod contract_tests {
     use super::{
-        is_contract_compatible, should_run_online_startup_work, versions_are_compatible, LibraryTab,
-        CONTRACT_MAJOR, CONTRACT_MINOR, IS_ONLINE,
+        is_contract_compatible, should_run_online_startup_work, versions_are_compatible,
+        LibraryTab, CONTRACT_MAJOR, CONTRACT_MINOR, IS_ONLINE,
     };
     use std::sync::atomic::Ordering;
 
@@ -849,6 +942,10 @@ pub fn on_remove_favorite_impl(track_id: &str) {
     log::info!("Remove favorite: {track_id}");
     if let Err(e) = crate::db::repo::FavoritesRepo::remove_track(track_id) {
         log::error!("Failed to remove favorite: {e}");
+    } else {
+        if let Ok(cache) = crate::services::library_cache::GLOBAL_LIBRARY_CACHE.write() {
+            cache.invalidate("songs");
+        }
     }
 }
 
@@ -891,6 +988,9 @@ pub fn on_add_favorite_impl(track: bridge::Track) {
         log::error!("Failed to add favorite: {e}");
     } else {
         log::info!("Added favorite: {} — {}", fav_track.title, fav_track.artist);
+        if let Ok(cache) = crate::services::library_cache::GLOBAL_LIBRARY_CACHE.write() {
+            cache.invalidate("songs");
+        }
     }
 }
 
@@ -923,12 +1023,19 @@ pub fn on_add_favorite_album(album: bridge::Album) {
         log::error!("Failed to add favorite album: {e}");
     } else {
         log::info!("Added favorite album: {}", fav.title);
+        if let Ok(cache) = crate::services::library_cache::GLOBAL_LIBRARY_CACHE.write() {
+            cache.invalidate("albums");
+        }
     }
 }
 
 pub fn on_remove_favorite_album(album_id: &str) {
     if let Err(e) = crate::db::repo::FavoritesRepo::remove_album(album_id) {
         log::error!("Failed to remove favorite album: {e}");
+    } else {
+        if let Ok(cache) = crate::services::library_cache::GLOBAL_LIBRARY_CACHE.write() {
+            cache.invalidate("albums");
+        }
     }
 }
 
@@ -943,12 +1050,19 @@ pub fn on_add_favorite_artist(artist: bridge::Artist) {
         log::error!("Failed to add favorite artist: {e}");
     } else {
         log::info!("Added favorite artist: {}", fav.name);
+        if let Ok(cache) = crate::services::library_cache::GLOBAL_LIBRARY_CACHE.write() {
+            cache.invalidate("artists");
+        }
     }
 }
 
 pub fn on_remove_favorite_artist(artist_id: &str) {
     if let Err(e) = crate::db::repo::FavoritesRepo::remove_artist(artist_id) {
         log::error!("Failed to remove favorite artist: {e}");
+    } else {
+        if let Ok(cache) = crate::services::library_cache::GLOBAL_LIBRARY_CACHE.write() {
+            cache.invalidate("artists");
+        }
     }
 }
 
@@ -1003,8 +1117,9 @@ fn refresh_library_shows_ui() {
 }
 
 pub fn on_download_requested(track: bridge::Track) {
+    let track = sanitize_track_dto(track);
     log::info!("Download requested: {} — {}", track.title, track.artist);
-    if !track.id.is_empty() {
+    if is_playable_video_id(&track.id) {
         crate::services::download::DownloadManager::get_instance().add_download(
             &track.id,
             &track.title,
@@ -1052,7 +1167,8 @@ pub fn on_delete_download(video_id: &str, delete_file: bool) {
     tokio::task::spawn_blocking(move || {
         let path_res = crate::db::with_db(|conn| {
             let mut stmt = conn.prepare("SELECT file_path FROM downloads WHERE video_id = ?1")?;
-            let path: Result<String, _> = stmt.query_row(rusqlite::params![video_id_owned], |r| r.get(0));
+            let path: Result<String, _> =
+                stmt.query_row(rusqlite::params![video_id_owned], |r| r.get(0));
             match path {
                 Ok(p) => Ok(Some(p)),
                 Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
@@ -1075,7 +1191,7 @@ pub fn on_delete_download(video_id: &str, delete_file: bool) {
                 }
             }
         }
-        
+
         crate::services::download::DownloadManager::refresh_downloads_ui();
     });
 }
@@ -1097,6 +1213,8 @@ pub fn on_add_to_playlist(track: bridge::Track, playlist_id: &str) {
     };
     if let Err(e) = crate::db::repo::PlaylistRepo::add_track(playlist_id, &pt) {
         log::error!("Failed to add track to playlist: {e}");
+    } else {
+        push_context_and_library_playlists();
     }
 }
 
@@ -1148,6 +1266,7 @@ pub fn on_remove_playlist_track(playlist_id: &str, track_id: &str) {
     if let Some(detail) = load_local_playlist_detail(&playlist_id) {
         crate::bridge::bridge::set_playlist_detail(detail.0, detail.1);
     }
+    push_context_and_library_playlists();
 }
 
 pub fn on_move_playlist_track(playlist_id: &str, from: i32, to: i32) {
@@ -1240,16 +1359,28 @@ fn push_context_and_library_playlists() {
                 .collect(),
         );
         crate::bridge::bridge::set_library_playlists(p_list);
+        if let Ok(cache) = crate::services::library_cache::GLOBAL_LIBRARY_CACHE.write() {
+            cache.invalidate("playlists");
+        }
     }
 }
 
 pub fn on_search_item_clicked(track: bridge::Track) {
+    let track = sanitize_track_dto(track);
     log::info!(
         "Search item clicked: {} — {} (id: {})",
         track.title,
         track.artist,
         track.id
     );
+    if !is_playable_video_id(&track.id) {
+        log::warn!(
+            "Ignoring non-video search item for playback: {} (id: {})",
+            track.title,
+            track.id
+        );
+        return;
+    }
     with_player(|p| p.play_track_dto(track));
 }
 
@@ -1262,6 +1393,7 @@ pub fn on_play_all(tracks: Vec<bridge::Track>, shuffle: bool) {
 }
 
 fn queue_track_from_dto(track: bridge::Track) -> crate::player::queue::TrackInfo {
+    let track = sanitize_track_dto(track);
     crate::player::queue::TrackInfo {
         id: track.id,
         title: track.title,
@@ -1273,14 +1405,79 @@ fn queue_track_from_dto(track: bridge::Track) -> crate::player::queue::TrackInfo
     }
 }
 
+fn sanitize_track_dto(mut track: bridge::Track) -> bridge::Track {
+    track.artist = clean_display_metadata(&track.artist);
+    track.album = clean_display_metadata(&track.album);
+    track
+}
+
+fn clean_display_metadata(value: &str) -> String {
+    value
+        .split('•')
+        .map(str::trim)
+        .find(|part| !is_display_metadata_noise(part))
+        .unwrap_or_default()
+        .to_string()
+}
+
+fn is_display_metadata_noise(value: &str) -> bool {
+    let value = value.trim().to_lowercase();
+    value.is_empty()
+        || matches!(
+            value.as_str(),
+            "canción"
+                | "cancion"
+                | "song"
+                | "video"
+                | "sencillo"
+                | "single"
+                | "artista"
+                | "artist"
+                | "álbum"
+                | "album"
+                | "playlist"
+                | "podcast"
+                | "show"
+        )
+        || value.contains("visualizaci")
+        || value.contains("views")
+        || value.contains("reproducciones")
+        || value.contains("subscribers")
+        || value.contains("suscriptores")
+}
+
 pub fn on_add_to_queue_next(track: bridge::Track) {
+    if !is_playable_video_id(&track.id) {
+        log::warn!(
+            "Ignoring non-video queue-next item: {} (id: {})",
+            track.title,
+            track.id
+        );
+        return;
+    }
     log::info!("Adding track {} next in queue", track.id);
     with_player(|player| player.enqueue_next(queue_track_from_dto(track)));
 }
 
 pub fn on_add_to_queue_end(track: bridge::Track) {
+    if !is_playable_video_id(&track.id) {
+        log::warn!(
+            "Ignoring non-video queue-end item: {} (id: {})",
+            track.title,
+            track.id
+        );
+        return;
+    }
     log::info!("Adding track {} to end of queue", track.id);
     with_player(|player| player.enqueue(queue_track_from_dto(track)));
+}
+
+fn is_playable_video_id(id: &str) -> bool {
+    id.len() == 11
+        && !id.starts_with("UC")
+        && id
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || ch == '_' || ch == '-')
 }
 
 pub fn on_timer_tick() {
@@ -1686,9 +1883,12 @@ pub fn on_stats_requested(days: i32) {
     tokio::spawn(async move {
         let stats_res = tokio::task::spawn_blocking(move || {
             let days_i64 = days as i64;
-            let total_time_ms = crate::db::repo::PlayHistoryRepo::total_play_time(days_i64).unwrap_or(0);
-            let total_plays = crate::db::repo::PlayHistoryRepo::total_plays(days_i64).unwrap_or(0) as i32;
-            let unique_artists = crate::db::repo::PlayHistoryRepo::unique_artists(days_i64).unwrap_or(0) as i32;
+            let total_time_ms =
+                crate::db::repo::PlayHistoryRepo::total_play_time(days_i64).unwrap_or(0);
+            let total_plays =
+                crate::db::repo::PlayHistoryRepo::total_plays(days_i64).unwrap_or(0) as i32;
+            let unique_artists =
+                crate::db::repo::PlayHistoryRepo::unique_artists(days_i64).unwrap_or(0) as i32;
 
             // Weekly activity: last 7 days daily counts
             let mut weekly_activity = vec![0; 7];
@@ -1858,14 +2058,16 @@ pub fn on_delete_history_item(track_id: &str, feedback_token: &str) {
     tokio::spawn(async move {
         let local_res = tokio::task::spawn_blocking(move || {
             crate::db::repo::PlayHistoryRepo::remove(&track_id_owned)
-        }).await;
+        })
+        .await;
 
         if let Ok(Err(e)) = local_res {
             log::error!("Failed to remove local history item: {e}");
         }
 
         if crate::api::auth::is_authenticated() && !token_owned.is_empty() {
-            if let Err(e) = crate::api::endpoints::remove_remote_history_items(&[token_owned]).await {
+            if let Err(e) = crate::api::endpoints::remove_remote_history_items(&[token_owned]).await
+            {
                 log::error!("Failed to remove remote history item: {e}");
             }
         }
@@ -2070,6 +2272,155 @@ pub fn import_backup(zip_path: &str) -> bool {
     crate::utils::backup::import_backup(path)
 }
 
+fn load_downloaded_library_tab(tab: LibraryTab) {
+    match tab {
+        LibraryTab::Songs => {
+            let tracks = if let Ok(dl_tracks) = crate::db::repo::DownloadsRepo::all() {
+                dl_tracks.into_iter()
+                    .filter(|d| d.status == "completed")
+                    .map(|d| crate::bridge::bridge::Track {
+                        id: d.video_id,
+                        title: d.title,
+                        artist: d.artist,
+                        album: d.album,
+                        duration_ms: d.duration_ms,
+                        thumbnail: d.thumbnail_url,
+                    })
+                    .collect::<Vec<_>>()
+            } else {
+                Vec::new()
+            };
+
+            if let Ok(cache) = crate::services::library_cache::GLOBAL_LIBRARY_CACHE.write() {
+                cache.set(
+                    "songs",
+                    crate::services::library_cache::CacheData {
+                        songs: tracks.clone(),
+                        albums: Vec::new(),
+                        artists: Vec::new(),
+                        playlists: Vec::new(),
+                        source: crate::services::library_cache::LibrarySource::Downloaded,
+                    },
+                );
+            }
+
+            crate::bridge::bridge::set_library_songs(tracks);
+        }
+        LibraryTab::Albums => {
+            let mut seen_albums = std::collections::HashSet::new();
+            let mut albums = Vec::new();
+            if let Ok(dl_tracks) = crate::db::repo::DownloadsRepo::all() {
+                for d in dl_tracks {
+                    if d.status == "completed" && !d.album.is_empty() {
+                        let album_id = d.parent_playlist_id.clone().unwrap_or_default();
+                        if seen_albums.insert(d.album.clone()) {
+                            albums.push(crate::bridge::bridge::Album {
+                                id: album_id,
+                                title: d.album,
+                                artist: d.artist,
+                                year: String::new(),
+                                thumbnail: d.parent_playlist_thumbnail_url.clone().unwrap_or_default(),
+                                track_count: 0,
+                                artist_id: String::new(),
+                            });
+                        }
+                    }
+                }
+            }
+
+            if let Ok(cache) = crate::services::library_cache::GLOBAL_LIBRARY_CACHE.write() {
+                cache.set(
+                    "albums",
+                    crate::services::library_cache::CacheData {
+                        songs: Vec::new(),
+                        albums: albums.clone(),
+                        artists: Vec::new(),
+                        playlists: Vec::new(),
+                        source: crate::services::library_cache::LibrarySource::Downloaded,
+                    },
+                );
+            }
+
+            crate::bridge::bridge::set_library_albums(albums);
+        }
+        LibraryTab::Artists => {
+            let mut seen_artists = std::collections::HashSet::new();
+            let mut artists = Vec::new();
+            if let Ok(dl_tracks) = crate::db::repo::DownloadsRepo::all() {
+                for d in dl_tracks {
+                    if d.status == "completed" && !d.artist.is_empty() {
+                        if seen_artists.insert(d.artist.clone()) {
+                            artists.push(crate::bridge::bridge::Artist {
+                                id: String::new(),
+                                name: d.artist,
+                                thumbnail: String::new(),
+                                description: String::new(),
+                                subscribers: String::new(),
+                            });
+                        }
+                    }
+                }
+            }
+
+            if let Ok(cache) = crate::services::library_cache::GLOBAL_LIBRARY_CACHE.write() {
+                cache.set(
+                    "artists",
+                    crate::services::library_cache::CacheData {
+                        songs: Vec::new(),
+                        albums: Vec::new(),
+                        artists: artists.clone(),
+                        playlists: Vec::new(),
+                        source: crate::services::library_cache::LibrarySource::Downloaded,
+                    },
+                );
+            }
+
+            crate::bridge::bridge::set_library_artists(artists);
+        }
+        LibraryTab::Playlists => {
+            let mut seen_playlists = std::collections::HashSet::new();
+            let mut playlists = Vec::new();
+            if let Ok(dl_tracks) = crate::db::repo::DownloadsRepo::all() {
+                for d in dl_tracks {
+                    if d.status == "completed" {
+                        if let Some(ref playlist_id) = d.parent_playlist_id {
+                            if !playlist_id.is_empty() && playlist_id.starts_with("VL") {
+                                if seen_playlists.insert(playlist_id.clone()) {
+                                    playlists.push(crate::bridge::bridge::Playlist {
+                                        id: playlist_id.clone(),
+                                        name: d.parent_playlist_title.clone().unwrap_or_default(),
+                                        description: String::new(),
+                                        thumbnail: d.parent_playlist_thumbnail_url.clone().unwrap_or_default(),
+                                        track_count: 0,
+                                        owner: String::new(),
+                                        privacy: String::new(),
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if let Ok(cache) = crate::services::library_cache::GLOBAL_LIBRARY_CACHE.write() {
+                cache.set(
+                    "playlists",
+                    crate::services::library_cache::CacheData {
+                        songs: Vec::new(),
+                        albums: Vec::new(),
+                        artists: Vec::new(),
+                        playlists: playlists.clone(),
+                        source: crate::services::library_cache::LibrarySource::Downloaded,
+                    },
+                );
+            }
+
+            crate::bridge::bridge::set_library_playlists(playlists);
+        }
+        LibraryTab::Shows => refresh_library_shows_ui(),
+    }
+}
+
 /// Buscar y filtrar en la biblioteca
 pub fn on_library_search(tab: &str, query: &str, sort_by: &str) {
     let tab = tab.to_string();
@@ -2083,8 +2434,258 @@ pub fn on_library_search(tab: &str, query: &str, sort_by: &str) {
             query,
             sort_by
         );
-        // TODO: Implementar búsqueda real en caché
-        // Por ahora solo hace logging
+
+        let source_filter = FILTER_SOURCE.load(Ordering::SeqCst);
+        let lib_service = crate::services::library::LibraryService::new(true);
+
+        match tab.as_str() {
+            "songs" => {
+                let mut songs = Vec::new();
+
+                // 1. Gather tracks based on source_filter
+                if source_filter == 0 || source_filter == 1 {
+                    // Include Remote cache if any
+                    if let Ok(cache) = crate::services::library_cache::GLOBAL_LIBRARY_CACHE.read() {
+                        if let Some(data) = cache.get("songs") {
+                            songs.extend(data.songs);
+                        }
+                    }
+                }
+
+                if source_filter == 0 || source_filter == 3 {
+                    // Include Local favorites
+                    if let Ok(local_tracks) = crate::db::repo::FavoritesRepo::all_tracks() {
+                        for t in local_tracks {
+                            if !songs.iter().any(|s| s.id == t.id) {
+                                songs.push(crate::bridge::bridge::Track {
+                                    id: t.id,
+                                    title: t.title,
+                                    artist: t.artist,
+                                    album: t.album,
+                                    duration_ms: t.duration_ms,
+                                    thumbnail: t.thumbnail,
+                                });
+                            }
+                        }
+                    }
+                }
+
+                if source_filter == 0 || source_filter == 2 {
+                    // Include Downloaded completed tracks
+                    if let Ok(dl_tracks) = crate::db::repo::DownloadsRepo::all() {
+                        for d in dl_tracks {
+                            if d.status == "completed" && !songs.iter().any(|s| s.id == d.video_id) {
+                                songs.push(crate::bridge::bridge::Track {
+                                    id: d.video_id,
+                                    title: d.title,
+                                    artist: d.artist,
+                                    album: d.album,
+                                    duration_ms: d.duration_ms,
+                                    thumbnail: d.thumbnail_url,
+                                });
+                            }
+                        }
+                    }
+                }
+
+                let filtered = crate::services::library_cache::LibraryCache::search_tracks(&songs, &query);
+                let sorted = lib_service.sort_songs("songs", filtered, &sort_by);
+                crate::bridge::bridge::set_library_songs(sorted);
+            }
+            "albums" => {
+                let mut albums = Vec::new();
+
+                if source_filter == 0 || source_filter == 1 {
+                    if let Ok(cache) = crate::services::library_cache::GLOBAL_LIBRARY_CACHE.read() {
+                        if let Some(data) = cache.get("albums") {
+                            albums.extend(data.albums);
+                        }
+                    }
+                }
+
+                if source_filter == 0 || source_filter == 3 {
+                    if let Ok(local_albums) = crate::db::repo::FavoritesRepo::all_albums() {
+                        for a in local_albums {
+                            if !albums.iter().any(|x| x.id == a.id) {
+                                albums.push(crate::bridge::bridge::Album {
+                                    id: a.id,
+                                    title: a.title,
+                                    artist: a.artist,
+                                    year: a.year.map(|y| y.to_string()).unwrap_or_default(),
+                                    thumbnail: a.thumbnail,
+                                    track_count: 0,
+                                    artist_id: String::new(),
+                                });
+                            }
+                        }
+                    }
+                }
+
+                if source_filter == 0 || source_filter == 2 {
+                    let mut seen_albums = std::collections::HashSet::new();
+                    if let Ok(dl_tracks) = crate::db::repo::DownloadsRepo::all() {
+                        for d in dl_tracks {
+                            if d.status == "completed" && !d.album.is_empty() {
+                                let album_id = d.parent_playlist_id.clone().unwrap_or_default();
+                                if seen_albums.insert(d.album.clone()) && !albums.iter().any(|x| x.title == d.album) {
+                                    albums.push(crate::bridge::bridge::Album {
+                                        id: album_id,
+                                        title: d.album,
+                                        artist: d.artist,
+                                        year: String::new(),
+                                        thumbnail: d.parent_playlist_thumbnail_url.clone().unwrap_or_default(),
+                                        track_count: 0,
+                                        artist_id: String::new(),
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+
+                let filtered = crate::services::library_cache::LibraryCache::search_albums(&albums, &query);
+                let sorted = lib_service.sort_albums("albums", filtered, &sort_by);
+                crate::bridge::bridge::set_library_albums(sorted);
+            }
+            "artists" => {
+                let mut artists = Vec::new();
+
+                if source_filter == 0 || source_filter == 1 {
+                    if let Ok(cache) = crate::services::library_cache::GLOBAL_LIBRARY_CACHE.read() {
+                        if let Some(data) = cache.get("artists") {
+                            artists.extend(data.artists);
+                        }
+                    }
+                }
+
+                if source_filter == 0 || source_filter == 3 {
+                    if let Ok(local_artists) = crate::db::repo::FavoritesRepo::all_artists() {
+                        for a in local_artists {
+                            if !artists.iter().any(|x| x.id == a.id) {
+                                artists.push(crate::bridge::bridge::Artist {
+                                    id: a.id,
+                                    name: a.name,
+                                    thumbnail: a.thumbnail,
+                                    description: String::new(),
+                                    subscribers: String::new(),
+                                });
+                            }
+                        }
+                    }
+                }
+
+                if source_filter == 0 || source_filter == 2 {
+                    let mut seen_artists = std::collections::HashSet::new();
+                    if let Ok(dl_tracks) = crate::db::repo::DownloadsRepo::all() {
+                        for d in dl_tracks {
+                            if d.status == "completed" && !d.artist.is_empty() {
+                                if seen_artists.insert(d.artist.clone()) && !artists.iter().any(|x| x.name == d.artist) {
+                                    artists.push(crate::bridge::bridge::Artist {
+                                        id: String::new(),
+                                        name: d.artist,
+                                        thumbnail: String::new(),
+                                        description: String::new(),
+                                        subscribers: String::new(),
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+
+                let filtered = crate::services::library_cache::LibraryCache::search_artists(&artists, &query);
+                let sorted = lib_service.sort_artists("artists", filtered, &sort_by);
+                crate::bridge::bridge::set_library_artists(sorted);
+            }
+            "playlists" => {
+                let mut playlists = Vec::new();
+
+                if source_filter == 0 || source_filter == 1 {
+                    if let Ok(cache) = crate::services::library_cache::GLOBAL_LIBRARY_CACHE.read() {
+                        if let Some(data) = cache.get("playlists") {
+                            playlists.extend(data.playlists);
+                        }
+                    }
+                }
+
+                if source_filter == 0 || source_filter == 3 {
+                    if let Ok(local_playlists) = crate::db::repo::PlaylistRepo::all() {
+                        for p in local_playlists {
+                            if !playlists.iter().any(|x| x.id == p.id) {
+                                let count = crate::db::repo::PlaylistRepo::tracks(&p.id)
+                                    .ok()
+                                    .map(|t| t.len() as i32)
+                                    .unwrap_or(0);
+                                playlists.push(crate::bridge::bridge::Playlist {
+                                    id: p.id,
+                                    name: p.name,
+                                    description: p.description,
+                                    thumbnail: p.artwork,
+                                    track_count: count,
+                                    owner: String::new(),
+                                    privacy: String::new(),
+                                });
+                            }
+                        }
+                    }
+                }
+
+                if source_filter == 0 || source_filter == 2 {
+                    let mut seen_playlists = std::collections::HashSet::new();
+                    if let Ok(dl_tracks) = crate::db::repo::DownloadsRepo::all() {
+                        for d in dl_tracks {
+                            if d.status == "completed" {
+                                if let Some(ref playlist_id) = d.parent_playlist_id {
+                                    if !playlist_id.is_empty() && playlist_id.starts_with("VL") {
+                                        if seen_playlists.insert(playlist_id.clone()) && !playlists.iter().any(|x| x.id == *playlist_id) {
+                                            playlists.push(crate::bridge::bridge::Playlist {
+                                                id: playlist_id.clone(),
+                                                name: d.parent_playlist_title.clone().unwrap_or_default(),
+                                                description: String::new(),
+                                                thumbnail: d.parent_playlist_thumbnail_url.clone().unwrap_or_default(),
+                                                track_count: 0,
+                                                owner: String::new(),
+                                                privacy: String::new(),
+                                            });
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                let filtered = crate::services::library_cache::LibraryCache::search_playlists(&playlists, &query);
+                let sorted = lib_service.sort_playlists("playlists", filtered, &sort_by);
+                crate::bridge::bridge::set_library_playlists(sorted);
+            }
+            "shows" => {
+                if let Ok(local_shows) = crate::db::repo::FavoritesRepo::all_shows() {
+                    let mut shows: Vec<crate::bridge::bridge::Show> = local_shows.iter().map(|s| crate::bridge::bridge::Show {
+                        id: s.id.clone(),
+                        title: s.title.clone(),
+                        author: s.author.clone(),
+                        thumbnail: s.thumbnail.clone(),
+                        episode_count: s.episode_count as i32,
+                        description: String::new(),
+                    }).collect();
+
+                    if !query.is_empty() {
+                        let query_lower = query.to_lowercase();
+                        shows.retain(|s| {
+                            s.title.to_lowercase().contains(&query_lower) || s.author.to_lowercase().contains(&query_lower)
+                        });
+                    }
+
+                    if sort_by == "title" || sort_by == "name_asc" {
+                        shows.sort_by(|a, b| a.title.cmp(&b.title));
+                    }
+
+                    crate::bridge::bridge::set_library_shows(shows);
+                }
+            }
+            _ => {}
+        }
     });
 }
 
@@ -2100,7 +2701,7 @@ pub fn on_library_invalidate_cache(tab: &str) {
 
 /// Filtrar biblioteca por origen (remota, local, descargas)
 pub fn on_library_set_filter_source(source: i32) {
-    // source: 0 = All, 1 = Remote, 2 = Downloaded, 3 = Local
+    FILTER_SOURCE.store(source, Ordering::SeqCst);
     log::info!("Filter library by source: {}", source);
 }
 

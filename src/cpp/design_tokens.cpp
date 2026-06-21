@@ -593,3 +593,80 @@ void DesignTokens::applyAccessible(QWidget *widget,
     widget->setToolTip(resolvedToolTip);
     widget->setStatusTip(resolvedToolTip);
 }
+
+QString DesignTokens::textStyle(const QString &level, const QString &customColor) {
+    const auto &c = current();
+    QString colorStr = customColor;
+    if (colorStr.isEmpty()) {
+        if (level == "secondary") {
+            colorStr = c.text_secondary.name();
+        } else if (level == "muted") {
+            colorStr = c.text_muted.name();
+        } else if (level == "accent") {
+            colorStr = c.accent.name();
+        } else {
+            colorStr = c.text_primary.name();
+        }
+    }
+
+    int size = 14;
+    QString weight = "normal";
+    if (level == "display") {
+        size = 32;
+        weight = "bold";
+    } else if (level == "heading_lg") {
+        size = 22;
+        weight = "600";
+    } else if (level == "heading_sm") {
+        size = 16;
+        weight = "600";
+    } else if (level == "body") {
+        size = 14;
+        weight = "normal";
+    } else if (level == "caption") {
+        size = 12;
+        weight = "normal";
+    } else if (level == "micro") {
+        size = 10;
+        weight = "500";
+    }
+
+    return QString(
+        "font-family: 'Inter', sans-serif;\n"
+        "font-size: %1px;\n"
+        "font-weight: %2;\n"
+        "color: %3;\n"
+    ).arg(size).arg(weight).arg(colorStr);
+}
+
+QString DesignTokens::panelStyle(const QString &type, int radiusValue) {
+    const auto &c = current();
+    const int r = radiusValue >= 0 ? radiusValue : radius().md;
+    QString bg;
+    if (type == "surface") {
+        bg = c.bg_surface.name();
+    } else if (type == "elevated") {
+        bg = c.bg_elevated.name();
+    } else if (type == "base") {
+        bg = c.bg_base.name();
+    } else if (type == "overlay") {
+        bg = rgba(c.bg_overlay);
+    } else {
+        bg = c.bg_surface.name();
+    }
+
+    return QString(
+        "background-color: %1;\n"
+        "border: 1px solid %2;\n"
+        "border-radius: %3px;\n"
+    ).arg(bg).arg(rgba(c.border)).arg(r);
+}
+
+QString DesignTokens::scrollAreaStyle() {
+    return QString(
+        "QScrollArea {\n"
+        "    background: transparent;\n"
+        "    border: none;\n"
+        "}\n"
+    );
+}

@@ -198,5 +198,20 @@
     "sync_offset": "Sync",
     "sync_delay_tooltip_minus": "Advance lyrics by 0.5s",
     "sync_delay_tooltip_plus": "Delay lyrics by 0.5s",
-    "sync_delay_tooltip_reset": "Reset sync"
+    "sync_delay_tooltip_reset": "Reset sync",
+    "library_empty_title": "Your library is empty",
+    "source_all": "Source: All",
+    "source_cloud": "Source: Cloud",
+    "source_downloads": "Source: Downloads",
+    "source_local": "Source: Local",
+    "sort_name_asc": "Name A-Z",
+    "sort_name_desc": "Name Z-A",
+    "sort_recent": "Most Recent",
+    "sort_oldest": "Oldest",
+    "new_playlist": "+ New playlist",
+    "no_playlists_message": "You haven't created any playlists",
+    "login_yt_music": "Sign in to YouTube Music",
+    "library_not_auth_desc": "Your local library is empty.\nSign in to YouTube Music to access your cloud library.",
+    "library_not_auth_title": "Sign in to YouTube Music to access your library",
+    "search_library_placeholder": "Search in library..."
 }

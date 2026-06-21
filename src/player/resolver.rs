@@ -59,6 +59,37 @@ impl StreamResolver {
     }
 
     async fn resolve_inner(video_id: &str) -> Result<String, DoremiError> {
+        // 0. Check if the file is downloaded locally
+        if !video_id.is_empty() {
+            if let Ok(Some(download)) = crate::db::repo::DownloadsRepo::get(video_id) {
+                if download.status == "completed" {
+                    let path = std::path::Path::new(&download.file_path);
+                    if path.exists() && path.is_file() {
+                        log::info!("Stream resolver resolved to local downloaded file: {}", download.file_path);
+                        return Ok(download.file_path);
+                    } else {
+                        log::warn!(
+                            "Track {} was marked completed downloaded but file is missing at {:?}. Marking as failed and falling back to streaming.",
+                            video_id,
+                            download.file_path
+                        );
+                        let _ = crate::db::repo::DownloadsRepo::update_status(
+                            video_id,
+                            "failed",
+                            0.0,
+                            "El archivo fue movido o eliminado externamente",
+                        );
+                        crate::services::download::DownloadManager::refresh_downloads_ui();
+                    }
+                }
+            }
+        }
+
+        // Check if we are online before trying network resolution
+        if !crate::bridge::is_connectivity_online() {
+            return Err(DoremiError::Network("Dispositivo sin conexión a Internet y pista no disponible localmente".to_string()));
+        }
+
         let cache_key = format!("stream_url:ytdlp:{video_id}");
         let legacy_cache_key = format!("stream_url:{video_id}");
         let _ = ResponseCache::invalidate(&legacy_cache_key);

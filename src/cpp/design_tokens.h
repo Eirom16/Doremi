@@ -82,6 +82,9 @@ public:
     static QString profileButtonStyle();
     static QString textInputStyle();
     static QString sliderStyle(bool prominent);
+    static QString textStyle(const QString &level, const QString &customColor = QString());
+    static QString panelStyle(const QString &type = "surface", int radiusValue = -1);
+    static QString scrollAreaStyle();
     static void applyAccessible(QWidget *widget,
                                 const QString &name,
                                 const QString &description = QString(),

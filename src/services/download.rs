@@ -415,6 +415,16 @@ impl DownloadManager {
             .arg("--no-playlist")
             .arg("--no-warnings")
             .arg("--newline")
+            .arg("--extractor-args")
+            .arg("youtube:player_client=android")
+            .arg("--socket-timeout")
+            .arg("15")
+            .arg("--extractor-retries")
+            .arg("1")
+            .arg("--retries")
+            .arg("2")
+            .arg("--fragment-retries")
+            .arg("2")
             .arg("-o")
             .arg(out_tmpl_str)
             .stdout(std::process::Stdio::piped())
@@ -454,7 +464,7 @@ impl DownloadManager {
             // auth is dropped after spawn, cleaning up temp file
         }
 
-        let url = format!("https://music.youtube.com/watch?v={}", task.video_id);
+        let url = format!("https://www.youtube.com/watch?v={}", task.video_id);
         child.arg(&url);
 
         let mut child = child
@@ -582,9 +592,7 @@ impl DownloadManager {
         if !final_path.exists() {
             return Err("Downloaded file does not exist at final path".to_string());
         }
-        let size = std::fs::metadata(&final_path)
-            .map(|m| m.len())
-            .unwrap_or(0);
+        let size = std::fs::metadata(&final_path).map(|m| m.len()).unwrap_or(0);
         if size == 0 {
             return Err("Downloaded file is empty (0 bytes)".to_string());
         }
@@ -705,6 +713,9 @@ mod tests {
         assert_eq!(sanitize_filename("Title? * : | \" < > ."), "Title");
         assert_eq!(sanitize_filename("   "), "Track");
         assert_eq!(sanitize_filename("..."), "Track");
-        assert_eq!(sanitize_filename("Title with dot.mp3"), "Title with dot.mp3");
+        assert_eq!(
+            sanitize_filename("Title with dot.mp3"),
+            "Title with dot.mp3"
+        );
     }
 }

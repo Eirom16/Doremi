@@ -1,3 +1,52 @@
+fn find_qt_binary(bin_name: &str) -> String {
+    // 1. Check environment variable (e.g. QT_MOC or QT_RCC)
+    let env_var_name = format!("QT_{}", bin_name.to_uppercase());
+    if let Ok(path) = std::env::var(&env_var_name) {
+        return path;
+    }
+
+    // 2. Prioritize standard Qt6 paths
+    let qt6_path = if bin_name == "moc" {
+        "/usr/lib/qt6/moc"
+    } else {
+        "/usr/bin/rcc"
+    };
+    if std::path::Path::new(qt6_path).exists() {
+        return qt6_path.to_string();
+    }
+
+    // 3. Query qtpaths or qtpaths6
+    for qtpaths_cmd in &["qtpaths6", "qtpaths"] {
+        if let Ok(output) = std::process::Command::new(qtpaths_cmd).arg("--binaries-dir").output() {
+            if output.status.success() {
+                let bin_dir = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                let path = std::path::Path::new(&bin_dir).join(bin_name);
+                if path.exists() {
+                    return path.to_string_lossy().to_string();
+                }
+            }
+        }
+    }
+
+    // 4. Check if in PATH
+    if let Ok(output) = std::process::Command::new("which").arg(bin_name).output() {
+        if output.status.success() {
+            let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if !path.is_empty() {
+                return path;
+            }
+        }
+    }
+
+    // 5. Default fallback paths
+    let fallback = if bin_name == "moc" {
+        "/usr/lib/qt6/moc"
+    } else {
+        "/usr/bin/rcc"
+    };
+    fallback.to_string()
+}
+
 fn qt_cflags() -> Vec<String> {
     std::process::Command::new("pkg-config")
         .args([
@@ -41,7 +90,7 @@ fn qt_link_libs() {
 }
 
 fn qt_moc_headers(build: &mut cc::Build, header: &str, out_dir: &std::path::Path) {
-    let moc_path = "/usr/lib/qt6/moc";
+    let moc_path = find_qt_binary("moc");
     let header_path = std::path::Path::new("src/cpp").join(header);
     let stem = std::path::Path::new(header)
         .file_stem()
@@ -56,7 +105,7 @@ fn qt_moc_headers(build: &mut cc::Build, header: &str, out_dir: &std::path::Path
         std::fs::create_dir_all(parent).unwrap_or_default();
     }
 
-    let status = std::process::Command::new(moc_path)
+    let status = std::process::Command::new(&moc_path)
         .arg(&header_path)
         .arg("-o")
         .arg(&moc_out)
@@ -65,25 +114,41 @@ fn qt_moc_headers(build: &mut cc::Build, header: &str, out_dir: &std::path::Path
         .arg("-I")
         .arg(&cxx_include)
         .status()
-        .unwrap_or_else(|e| panic!("moc failed for {}: {}", header, e));
+        .unwrap_or_else(|e| panic!("moc failed ({}) for {}: {}", moc_path, header, e));
     assert!(status.success(), "moc returned non-zero for {}", header);
     build.file(moc_out);
 }
 
 fn qt_resources(build: &mut cc::Build, qrc: &str, out_dir: &std::path::Path) {
-    let rcc_path = "/usr/bin/rcc";
+    let rcc_path = find_qt_binary("rcc");
     let qrc_path = std::path::Path::new(qrc);
     let stem = qrc_path.file_stem().unwrap().to_str().unwrap();
     let rcc_out = out_dir.join(format!("qrc_{stem}.cpp"));
 
-    let status = std::process::Command::new(rcc_path)
+    let status = std::process::Command::new(&rcc_path)
         .arg(qrc_path)
         .arg("-o")
         .arg(&rcc_out)
         .status()
-        .unwrap_or_else(|e| panic!("rcc failed for {}: {}", qrc, e));
+        .unwrap_or_else(|e| panic!("rcc failed ({}) for {}: {}", rcc_path, qrc, e));
     assert!(status.success(), "rcc returned non-zero for {}", qrc);
     build.file(rcc_out);
+}
+
+fn rerun_if_changed_dir(dir: &std::path::Path) {
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                rerun_if_changed_dir(&path);
+            } else {
+                let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("");
+                if ext == "cpp" || ext == "h" {
+                    println!("cargo:rerun-if-changed={}", path.to_string_lossy());
+                }
+            }
+        }
+    }
 }
 
 fn main() {
@@ -92,61 +157,76 @@ fn main() {
     let out_dir = std::path::PathBuf::from(std::env::var("OUT_DIR").expect("OUT_DIR"));
 
     let mut build = cxx_build::bridge("src/bridge.rs");
+    
+    let cpp_sources = [
+        "main_window.cpp",
+        "title_bar.cpp",
+        "nav_sidebar.cpp",
+        "player_bar.cpp",
+        "home_view.cpp",
+        "search_view.cpp",
+        "library_view.cpp",
+        "settings_view.cpp",
+        "trending_view.cpp",
+        "downloads_view.cpp",
+        "widgets.cpp",
+        "design_tokens.cpp",
+        "icon_provider.cpp",
+        "animator.cpp",
+        "components/ripple_button.cpp",
+        "components/glass_panel.cpp",
+        "components/animated_progress.cpp",
+        "components/skeleton_loader.cpp",
+        "components/scrolling_label.cpp",
+        "components/animated_toggle.cpp",
+        "components/toast_notification.cpp",
+        "components/offline_banner.cpp",
+        "components/icon_button.cpp",
+        "components/fade_stack.cpp",
+        "components/song_card.cpp",
+        "components/artwork_loader.cpp",
+        "components/artwork_backdrop.cpp",
+        "components/album_card.cpp",
+        "components/artist_card.cpp",
+        "components/horizontal_carousel.cpp",
+        "components/waveform_bars.cpp",
+        "now_playing_view.cpp",
+        "components/nebula_bg.cpp",
+        "components/lyrics_widget.cpp",
+        "components/vinyl_disc.cpp",
+        "components/queue_panel.cpp",
+        "components/related_tracks_widget.cpp",
+        "components/create_playlist_dialog.cpp",
+        "stats_view.cpp",
+        "components/stat_card.cpp",
+        "components/bar_chart.cpp",
+        "components/theme_transition.cpp",
+        "history_view.cpp",
+        "album_detail_view.cpp",
+        "artist_detail_view.cpp",
+        "playlist_detail_view.cpp",
+        "show_detail_view.cpp",
+        "welcome_view.cpp",
+        "login_dialog.cpp",
+        "sudo_dialog.cpp",
+        "update_dialog.cpp",
+        // Controllers extracted from DoremiMainWindow
+        "shortcut_manager.cpp",
+        "tray_controller.cpp",
+        "navigation_controller.cpp",
+        "session_cookie_manager.cpp",
+        "theme_controller.cpp",
+    ];
+
+    for src in &cpp_sources {
+        build.file(format!("src/cpp/{src}"));
+    }
+
     build
-        .file("src/cpp/main_window.cpp")
-        .file("src/cpp/title_bar.cpp")
-        .file("src/cpp/nav_sidebar.cpp")
-        .file("src/cpp/player_bar.cpp")
-        .file("src/cpp/home_view.cpp")
-        .file("src/cpp/search_view.cpp")
-        .file("src/cpp/library_view.cpp")
-        .file("src/cpp/settings_view.cpp")
-        .file("src/cpp/trending_view.cpp")
-        .file("src/cpp/downloads_view.cpp")
-        .file("src/cpp/widgets.cpp")
-        .file("src/cpp/design_tokens.cpp")
-        .file("src/cpp/icon_provider.cpp")
-        .file("src/cpp/animator.cpp")
-        .file("src/cpp/components/ripple_button.cpp")
-        .file("src/cpp/components/glass_panel.cpp")
-        .file("src/cpp/components/animated_progress.cpp")
-        .file("src/cpp/components/skeleton_loader.cpp")
-        .file("src/cpp/components/scrolling_label.cpp")
-        .file("src/cpp/components/animated_toggle.cpp")
-        .file("src/cpp/components/toast_notification.cpp")
-        .file("src/cpp/components/offline_banner.cpp")
-        .file("src/cpp/components/icon_button.cpp")
-        .file("src/cpp/components/fade_stack.cpp")
-        .file("src/cpp/components/song_card.cpp")
-        .file("src/cpp/components/artwork_loader.cpp")
-        .file("src/cpp/components/artwork_backdrop.cpp")
-        .file("src/cpp/components/album_card.cpp")
-        .file("src/cpp/components/artist_card.cpp")
-        .file("src/cpp/components/horizontal_carousel.cpp")
-        .file("src/cpp/components/waveform_bars.cpp")
-        .file("src/cpp/now_playing_view.cpp")
-        .file("src/cpp/components/nebula_bg.cpp")
-        .file("src/cpp/components/lyrics_widget.cpp")
-        .file("src/cpp/components/vinyl_disc.cpp")
-        .file("src/cpp/components/queue_panel.cpp")
-        .file("src/cpp/components/related_tracks_widget.cpp")
-        .file("src/cpp/components/create_playlist_dialog.cpp")
-        .file("src/cpp/stats_view.cpp")
-        .file("src/cpp/components/stat_card.cpp")
-        .file("src/cpp/components/bar_chart.cpp")
-        .file("src/cpp/components/theme_transition.cpp")
-        .file("src/cpp/history_view.cpp")
-        .file("src/cpp/album_detail_view.cpp")
-        .file("src/cpp/artist_detail_view.cpp")
-        .file("src/cpp/playlist_detail_view.cpp")
-        .file("src/cpp/show_detail_view.cpp")
-        .file("src/cpp/welcome_view.cpp")
-        .file("src/cpp/login_dialog.cpp")
-        .file("src/cpp/sudo_dialog.cpp")
-        .file("src/cpp/update_dialog.cpp")
         .flag_if_supported("-std=c++17")
         .flag_if_supported("-fPIC")
         .include("src/cpp");
+        
     for flag in &qt_flags {
         build.flag(flag);
     }
@@ -200,10 +280,18 @@ fn main() {
         "login_dialog.h",
         "sudo_dialog.h",
         "update_dialog.h",
+        // Controllers extracted from DoremiMainWindow
+        "shortcut_manager.h",
+        "tray_controller.h",
+        "navigation_controller.h",
+        "session_cookie_manager.h",
+        "theme_controller.h",
     ];
+    
     for hdr in &moc_headers {
         qt_moc_headers(&mut build, hdr, &out_dir);
     }
+    
     qt_resources(&mut build, "assets/resources.qrc", &out_dir);
 
     build.compile("doremi-qt");
@@ -211,105 +299,7 @@ fn main() {
     println!("cargo:rerun-if-changed=assets/resources.qrc");
     println!("cargo:rerun-if-changed=assets/fonts/MaterialSymbolsRounded.ttf");
     println!("cargo:rerun-if-changed=src/bridge.rs");
-    println!("cargo:rerun-if-changed=src/cpp/main_window.cpp");
-    println!("cargo:rerun-if-changed=src/cpp/main_window.h");
-    println!("cargo:rerun-if-changed=src/cpp/ffi_utils.h");
-    println!("cargo:rerun-if-changed=src/cpp/title_bar.cpp");
-    println!("cargo:rerun-if-changed=src/cpp/title_bar.h");
-    println!("cargo:rerun-if-changed=src/cpp/nav_sidebar.cpp");
-    println!("cargo:rerun-if-changed=src/cpp/nav_sidebar.h");
-    println!("cargo:rerun-if-changed=src/cpp/player_bar.cpp");
-    println!("cargo:rerun-if-changed=src/cpp/player_bar.h");
-    println!("cargo:rerun-if-changed=src/cpp/home_view.cpp");
-    println!("cargo:rerun-if-changed=src/cpp/home_view.h");
-    println!("cargo:rerun-if-changed=src/cpp/search_view.cpp");
-    println!("cargo:rerun-if-changed=src/cpp/search_view.h");
-    println!("cargo:rerun-if-changed=src/cpp/library_view.cpp");
-    println!("cargo:rerun-if-changed=src/cpp/library_view.h");
-    println!("cargo:rerun-if-changed=src/cpp/settings_view.cpp");
-    println!("cargo:rerun-if-changed=src/cpp/settings_view.h");
-    println!("cargo:rerun-if-changed=src/cpp/trending_view.cpp");
-    println!("cargo:rerun-if-changed=src/cpp/trending_view.h");
-    println!("cargo:rerun-if-changed=src/cpp/downloads_view.cpp");
-    println!("cargo:rerun-if-changed=src/cpp/downloads_view.h");
-    println!("cargo:rerun-if-changed=src/cpp/widgets.cpp");
-    println!("cargo:rerun-if-changed=src/cpp/widgets.h");
-    println!("cargo:rerun-if-changed=src/cpp/design_tokens.cpp");
-    println!("cargo:rerun-if-changed=src/cpp/design_tokens.h");
-    println!("cargo:rerun-if-changed=src/cpp/icon_provider.cpp");
-    println!("cargo:rerun-if-changed=src/cpp/icon_provider.h");
-    println!("cargo:rerun-if-changed=src/cpp/animator.cpp");
-    println!("cargo:rerun-if-changed=src/cpp/animator.h");
-    println!("cargo:rerun-if-changed=src/cpp/components/ripple_button.cpp");
-    println!("cargo:rerun-if-changed=src/cpp/components/ripple_button.h");
-    println!("cargo:rerun-if-changed=src/cpp/components/glass_panel.cpp");
-    println!("cargo:rerun-if-changed=src/cpp/components/glass_panel.h");
-    println!("cargo:rerun-if-changed=src/cpp/components/animated_progress.cpp");
-    println!("cargo:rerun-if-changed=src/cpp/components/animated_progress.h");
-    println!("cargo:rerun-if-changed=src/cpp/components/skeleton_loader.cpp");
-    println!("cargo:rerun-if-changed=src/cpp/components/skeleton_loader.h");
-    println!("cargo:rerun-if-changed=src/cpp/components/scrolling_label.cpp");
-    println!("cargo:rerun-if-changed=src/cpp/components/scrolling_label.h");
-    println!("cargo:rerun-if-changed=src/cpp/components/animated_toggle.cpp");
-    println!("cargo:rerun-if-changed=src/cpp/components/animated_toggle.h");
-    println!("cargo:rerun-if-changed=src/cpp/components/toast_notification.cpp");
-    println!("cargo:rerun-if-changed=src/cpp/components/toast_notification.h");
-    println!("cargo:rerun-if-changed=src/cpp/components/icon_button.cpp");
-    println!("cargo:rerun-if-changed=src/cpp/components/icon_button.h");
-    println!("cargo:rerun-if-changed=src/cpp/components/fade_stack.cpp");
-    println!("cargo:rerun-if-changed=src/cpp/components/fade_stack.h");
-    println!("cargo:rerun-if-changed=src/cpp/components/song_card.cpp");
-    println!("cargo:rerun-if-changed=src/cpp/components/song_card.h");
-    println!("cargo:rerun-if-changed=src/cpp/components/artwork_loader.cpp");
-    println!("cargo:rerun-if-changed=src/cpp/components/artwork_loader.h");
-    println!("cargo:rerun-if-changed=src/cpp/components/artwork_backdrop.cpp");
-    println!("cargo:rerun-if-changed=src/cpp/components/artwork_backdrop.h");
-    println!("cargo:rerun-if-changed=src/cpp/components/album_card.cpp");
-    println!("cargo:rerun-if-changed=src/cpp/components/album_card.h");
-    println!("cargo:rerun-if-changed=src/cpp/components/artist_card.cpp");
-    println!("cargo:rerun-if-changed=src/cpp/components/artist_card.h");
-    println!("cargo:rerun-if-changed=src/cpp/components/horizontal_carousel.cpp");
-    println!("cargo:rerun-if-changed=src/cpp/components/horizontal_carousel.h");
-    println!("cargo:rerun-if-changed=src/cpp/components/waveform_bars.cpp");
-    println!("cargo:rerun-if-changed=src/cpp/components/waveform_bars.h");
-    println!("cargo:rerun-if-changed=src/cpp/now_playing_view.cpp");
-    println!("cargo:rerun-if-changed=src/cpp/now_playing_view.h");
-    println!("cargo:rerun-if-changed=src/cpp/components/nebula_bg.cpp");
-    println!("cargo:rerun-if-changed=src/cpp/components/nebula_bg.h");
-    println!("cargo:rerun-if-changed=src/cpp/components/lyrics_widget.cpp");
-    println!("cargo:rerun-if-changed=src/cpp/components/lyrics_widget.h");
-    println!("cargo:rerun-if-changed=src/cpp/components/vinyl_disc.cpp");
-    println!("cargo:rerun-if-changed=src/cpp/components/vinyl_disc.h");
-    println!("cargo:rerun-if-changed=src/cpp/components/queue_panel.cpp");
-    println!("cargo:rerun-if-changed=src/cpp/components/queue_panel.h");
-    println!("cargo:rerun-if-changed=src/cpp/components/related_tracks_widget.cpp");
-    println!("cargo:rerun-if-changed=src/cpp/components/related_tracks_widget.h");
-    println!("cargo:rerun-if-changed=src/cpp/components/create_playlist_dialog.cpp");
-    println!("cargo:rerun-if-changed=src/cpp/components/create_playlist_dialog.h");
-    println!("cargo:rerun-if-changed=src/cpp/stats_view.cpp");
-    println!("cargo:rerun-if-changed=src/cpp/stats_view.h");
-    println!("cargo:rerun-if-changed=src/cpp/components/stat_card.cpp");
-    println!("cargo:rerun-if-changed=src/cpp/components/stat_card.h");
-    println!("cargo:rerun-if-changed=src/cpp/components/bar_chart.cpp");
-    println!("cargo:rerun-if-changed=src/cpp/components/bar_chart.h");
-    println!("cargo:rerun-if-changed=src/cpp/components/theme_transition.cpp");
-    println!("cargo:rerun-if-changed=src/cpp/components/theme_transition.h");
-    println!("cargo:rerun-if-changed=src/cpp/history_view.cpp");
-    println!("cargo:rerun-if-changed=src/cpp/history_view.h");
-    println!("cargo:rerun-if-changed=src/cpp/album_detail_view.cpp");
-    println!("cargo:rerun-if-changed=src/cpp/album_detail_view.h");
-    println!("cargo:rerun-if-changed=src/cpp/artist_detail_view.cpp");
-    println!("cargo:rerun-if-changed=src/cpp/artist_detail_view.h");
-    println!("cargo:rerun-if-changed=src/cpp/playlist_detail_view.cpp");
-    println!("cargo:rerun-if-changed=src/cpp/playlist_detail_view.h");
-    println!("cargo:rerun-if-changed=src/cpp/show_detail_view.cpp");
-    println!("cargo:rerun-if-changed=src/cpp/show_detail_view.h");
-    println!("cargo:rerun-if-changed=src/cpp/welcome_view.cpp");
-    println!("cargo:rerun-if-changed=src/cpp/welcome_view.h");
-    println!("cargo:rerun-if-changed=src/cpp/login_dialog.cpp");
-    println!("cargo:rerun-if-changed=src/cpp/login_dialog.h");
-    println!("cargo:rerun-if-changed=src/cpp/sudo_dialog.cpp");
-    println!("cargo:rerun-if-changed=src/cpp/sudo_dialog.h");
-    println!("cargo:rerun-if-changed=src/cpp/update_dialog.cpp");
-    println!("cargo:rerun-if-changed=src/cpp/update_dialog.h");
+    
+    // Automatically watch all source files in src/cpp
+    rerun_if_changed_dir(std::path::Path::new("src/cpp"));
 }

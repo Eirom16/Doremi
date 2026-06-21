@@ -42,7 +42,11 @@ fn clear_legacy(account: &str) -> bool {
 }
 
 pub fn run_migration() -> Result<Option<MigrationSummary>, String> {
-    let home = std::env::var("HOME").unwrap_or_else(|_| "/home/eirom".to_string());
+    let home = std::env::var("HOME").unwrap_or_else(|_| {
+        directories::BaseDirs::new()
+            .map(|d| d.home_dir().to_string_lossy().to_string())
+            .unwrap_or_else(|| "/tmp".to_string())
+    });
 
     let xdg_config = std::env::var("XDG_CONFIG_HOME")
         .map(PathBuf::from)

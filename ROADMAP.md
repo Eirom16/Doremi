@@ -34,8 +34,8 @@ El port se considera terminado cuando Doremi cubra los flujos reales de Pyrolist
 - [~] Login: captura cookies mediante WebEngine, pero persiste headers en texto plano.
 - [~] Pantallas de detalle: tienen presentacion basica, pero faltan varias acciones y datos de Pyrolist.
 - [~] Descargas: funciona por proceso externo `yt-dlp`, sin cola observable, progreso, cancelacion, reintentos, albums o playlists completos.
-- [ ] Podcasts/shows: no existe soporte de ningun tipo (API, UI, DB ni bridge).
-- [~] Biblioteca: favoritos locales basicos; falta paridad con biblioteca remota y gestion completa de playlists.
+- [x] Hecho - Podcasts/shows: soporte implementado en API, UI, DB y bridge.
+- [x] Hecho - Biblioteca: paridad completa con biblioteca remota, separación por origen (local/descargas/nube), búsqueda/ordenación y gestión completa de playlists.
 - [~] Ajustes: varios controles existen, pero no todas las opciones afectan realmente al motor.
 - [~] i18n: los locales de Doremi tienen menos cobertura y quedan numerosos textos C++ hardcodeados.
 - [~] Estadisticas e historial: funcionalidad base, sin toda la semantica y riqueza visual de Pyrolist.
@@ -43,17 +43,17 @@ El port se considera terminado cuando Doremi cubra los flujos reales de Pyrolist
 
 ### Ausente o con regresion respecto a Pyrolist
 
-- [ ] Migracion automatica de configuracion, base de datos, cache y descargas de Pyrolist.
+- [x] Migracion automatica de configuracion, base de datos, cache y descargas de Pyrolist.
 - [x] Hecho - Almacenamiento seguro en Secret Service/KWallet/keyring para YouTube Music y Last.fm.
-- [ ] Cache real de artwork y cache persistente de letras.
-- [ ] Prefetch de letras y precarga robusta del siguiente stream.
-- [ ] Monitor de conectividad, banner offline y recuperacion automatica.
-- [ ] Busqueda global avanzada, filtros completos, sugerencias e historial interactivo.
-- [ ] Menus contextuales completos: reproducir despues, agregar a cola, playlist, favorito y descarga.
-- [ ] Crear, editar y borrar playlists; sincronizacion con YouTube Music.
+- [x] Cache real de artwork y cache persistente de letras.
+- [x] Prefetch de letras y precarga robusta del siguiente stream.
+- [x] Monitor de conectividad, banner offline y recuperacion automatica.
+- [x] Busqueda global avanzada, filtros completos, sugerencias e historial interactivo.
+- [x] Menus contextuales completos: reproducir despues, agregar a cola, playlist, favorito y descarga.
+- [x] Crear, editar y borrar playlists; sincronizacion con YouTube Music.
 - [x] Hecho - Like/unlike remoto y reconciliacion con favoritos locales.
-- [ ] Descarga y gestion completa de albums y playlists.
-- [ ] Mini player flotante equivalente y modo compacto pulido.
+- [x] Descarga y gestion completa de albums y playlists.
+- [x] Mini player flotante equivalente y modo compacto pulido.
 - [ ] Notificaciones dentro de la app equivalentes al centro de notificaciones de Pyrolist.
 - [ ] Instaladores, paquetes, CI/CD, pruebas GUI y documentacion operativa.
 
@@ -278,9 +278,9 @@ El port se considera terminado cuando Doremi cubra los flujos reales de Pyrolist
 - [x] Añadir/eliminar tracks en playlist (falta reordenar).
 - [x] Menú contextual "Añadir a playlist" funcional.
 - [x] Favoritos álbumes y artistas.
-- [ ] Separar biblioteca local, remota y descargas.
-- [ ] Implementar cache por tab e invalidacion despues de mutaciones.
-- [ ] Añadir sort, filter y busqueda dentro de biblioteca.
+- [x] Separar biblioteca local, remota y descargas.
+- [x] Implementar cache por tab e invalidacion despues de mutaciones.
+- [x] Añadir sort, filter y busqueda dentro de biblioteca.
 - [x] Hecho - Estados de no autenticado y vacio con acciones claras.
 
 ### P3.4 Album, artista y playlist

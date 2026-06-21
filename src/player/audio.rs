@@ -185,7 +185,11 @@ impl AudioEngine {
                 Some(i) => i,
                 None => return,
             };
-            Media::new_location(instance, &playback_url)
+            if playback_url.starts_with("http://") || playback_url.starts_with("https://") {
+                Media::new_location(instance, &playback_url)
+            } else {
+                Media::new_path(instance, &playback_url)
+            }
         };
 
         let media = match media {
@@ -226,7 +230,11 @@ impl AudioEngine {
                 Some(i) => i,
                 None => return,
             };
-            Media::new_location(instance, &playback_url)
+            if playback_url.starts_with("http://") || playback_url.starts_with("https://") {
+                Media::new_location(instance, &playback_url)
+            } else {
+                Media::new_path(instance, &playback_url)
+            }
         };
 
         let media = match media {

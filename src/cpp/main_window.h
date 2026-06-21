@@ -50,8 +50,19 @@ class QNetworkCookie;
 class OfflineBannerWidget;
 
 
+class ShortcutManager;
+class TrayController;
+class NavigationController;
+class SessionCookieManager;
+class ThemeController;
+
 class DoremiMainWindow : public QMainWindow {
     Q_OBJECT
+    friend class ShortcutManager;
+    friend class TrayController;
+    friend class NavigationController;
+    friend class SessionCookieManager;
+    friend class ThemeController;
 public:
     explicit DoremiMainWindow(QWidget *parent = nullptr);
     ~DoremiMainWindow() override;
@@ -71,6 +82,7 @@ public:
     void set_history_data(const rust::Vec<Track> &history, const rust::Vec<rust::String> &played_at, const rust::Vec<rust::String> &feedback_tokens);
     void set_stats_data(const StatsData &stats);
     void set_online_status(bool is_online);
+    void setup_ui_test(const std::string &view, const std::string &screenshot_path);
 
 
     TitleBar* title_bar() const { return title_bar_; }
@@ -91,10 +103,18 @@ public:
     ShowDetailView* show_detail_view() const { return show_detail_view_; }
     WelcomeView* welcome_view() const { return welcome_view_; }
     ThemeTransitionOverlay* theme_transition() const { return theme_transition_; }
-    std::string current_route() const { return current_route_; }
+    ShortcutManager* shortcut_manager() const { return shortcut_manager_; }
+    TrayController* tray_controller() const { return tray_controller_; }
+    NavigationController* navigation_controller() const { return navigation_controller_; }
+    SessionCookieManager* session_cookie_manager() const { return session_cookie_manager_; }
+    ThemeController* theme_controller() const { return theme_controller_; }
+    std::string current_route() const;
 
     void set_stop_on_close(bool stop) { stop_on_close_ = stop; }
-    void setup_tray();
+
+    void navigate_back();
+    void navigate_back_from_detail();
+    void navigate_forward();
 
 signals:
     void play_pause_triggered();
@@ -110,18 +130,8 @@ protected:
     void closeEvent(QCloseEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
 private:
-    void setup_shortcuts();
     void connect_signals();
-    void setup_session_cookie_refresh();
-    void update_session_cookie(const QNetworkCookie &cookie, bool removed);
-    void persist_session_cookies();
-    void navigate_to_internal(const std::string &route, bool record_history);
-    void save_route_view_state();
-    void restore_route_view_state(const std::string &route);
     void update_responsive_layout();
-    void navigate_back();
-    void navigate_back_from_detail();
-    void navigate_forward();
     bool ensure_online_action(const QString &action_description);
     TitleBar *title_bar_;
     NavSidebar *nav_sidebar_;
@@ -146,21 +156,17 @@ private:
     WelcomeView *welcome_view_;
     OfflineBannerWidget *offline_banner_ = nullptr;
 
-    QSystemTrayIcon *tray_icon_;
-    QAction *play_action_ = nullptr;
-    bool playback_playing_ = false;
+    ShortcutManager *shortcut_manager_ = nullptr;
+    TrayController *tray_controller_ = nullptr;
+    NavigationController *navigation_controller_ = nullptr;
+    SessionCookieManager *session_cookie_manager_ = nullptr;
+    ThemeController *theme_controller_ = nullptr;
+
     bool is_online_ = true;
+    bool playback_playing_ = false;
     bool stop_on_close_ = false;
-    std::string current_route_ = "home";
-    std::string detail_return_route_ = "home";
-    std::vector<std::string> back_routes_;
-    std::vector<std::string> forward_routes_;
-    std::map<std::string, int> route_scroll_positions_;
-    std::map<std::string, QPointer<QWidget>> route_focus_widgets_;
 
     QTimer *player_timer_;
-    QTimer *session_cookie_timer_ = nullptr;
-    std::map<std::string, std::string> session_cookies_;
     ThemeTransitionOverlay *theme_transition_;
 };
 
@@ -256,6 +262,7 @@ void set_artist_detail(Artist artist, rust::Vec<Track> tracks, rust::Vec<Album> 
 
 void set_playlist_detail(Playlist playlist, rust::Vec<Track> tracks);
 void set_online_status(bool is_online);
+void setup_ui_test(rust::Str view, rust::Str screenshot_path);
 void set_show_detail(Show show, rust::Vec<Episode> episodes);
 
 void update_youtube_auth_state(bool authenticated, rust::Str name, rust::Str avatar_url);

@@ -472,7 +472,7 @@ mod tests {
                 |r| r.get(0),
             )
             .unwrap();
-        assert_eq!(version, 10);
+        assert_eq!(version, 11);
     }
 
     #[test]
@@ -504,6 +504,12 @@ mod tests {
                 parent_playlist_id TEXT,
                 parent_playlist_title TEXT,
                 parent_playlist_thumbnail_url TEXT
+             );
+             CREATE TABLE search_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                query TEXT NOT NULL,
+                filter TEXT NOT NULL DEFAULT 'all',
+                searched_at TEXT NOT NULL DEFAULT (datetime('now'))
              );
              INSERT INTO recently_played
                 (track_id, title, artist, play_count)
@@ -544,7 +550,7 @@ mod tests {
                 |r| r.get(0),
             )
             .unwrap();
-        assert_eq!(version, 10);
+        assert_eq!(version, 11);
     }
 
     #[test]
@@ -575,7 +581,7 @@ mod tests {
              ) VALUES (
                 'test-id', 'Test Title', 'Test Artist', '/path/to/file.mp3', 180000, 'completed', 100.0, 1780621169
              );
-             DELETE FROM schema_version WHERE version = 10;"
+              DELETE FROM schema_version WHERE version >= 10;"
         ).unwrap();
 
         // Run migrations again - it will run version 10 migration!
