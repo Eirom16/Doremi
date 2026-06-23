@@ -60,13 +60,7 @@ fn push_sections(sections: &[crate::api::models::HomeSection]) {
             .items
             .iter()
             .map(|item| crate::bridge::bridge::HomeCard {
-                id: item
-                    .video_id
-                    .as_ref()
-                    .or(item.browse_id.as_ref())
-                    .or(item.playlist_id.as_ref())
-                    .cloned()
-                    .unwrap_or_default(),
+                id: home_card_id(item),
                 title: item.title.clone(),
                 subtitle: item.subtitle.clone(),
                 thumbnail: item.thumbnail.clone(),
@@ -74,6 +68,26 @@ fn push_sections(sections: &[crate::api::models::HomeSection]) {
             })
             .collect::<Vec<_>>();
         crate::bridge::bridge::add_home_section(&section.title, items);
+    }
+}
+
+fn home_card_id(item: &crate::api::models::HomeItem) -> String {
+    match item.item_type.as_str() {
+        "song" | "episode" => item.video_id.clone().unwrap_or_default(),
+        "playlist" | "mix" => item
+            .playlist_id
+            .as_ref()
+            .or(item.browse_id.as_ref())
+            .cloned()
+            .unwrap_or_default(),
+        "album" | "artist" | "show" => item.browse_id.clone().unwrap_or_default(),
+        _ => item
+            .video_id
+            .as_ref()
+            .or(item.playlist_id.as_ref())
+            .or(item.browse_id.as_ref())
+            .cloned()
+            .unwrap_or_default(),
     }
 }
 

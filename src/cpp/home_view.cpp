@@ -67,18 +67,26 @@ QWidget *HomeView::add_section_widget(const std::string &title,
         const QString itemTitle = QString::fromStdString(titleValue);
         const QString subtitle = QString::fromStdString(subtitleValue);
         const QString thumbnail = QString::fromStdString(thumbnailValue);
+        auto playTrack = [this, id, titleValue, subtitleValue, thumbnailValue]() {
+            Track track;
+            track.id = id;
+            track.title = titleValue;
+            track.artist = subtitleValue;
+            track.thumbnail = thumbnailValue;
+            emit play_requested(track);
+        };
+        auto openTypedItem = [this, id, itemType]() {
+            if (id.empty()) return;
+            if (itemType == "album") emit album_requested(id);
+            else if (itemType == "artist") emit artist_requested(id);
+            else if (itemType == "show") emit show_requested(id);
+            else emit playlist_requested(id);
+        };
+
         if (itemType == "song") {
             auto *card = new SongCard(itemTitle, subtitle, thumbnail, carousel);
             card->setItemId(id);
-            connect(card, &SongCard::playRequested, this,
-                    [this, id, titleValue, subtitleValue, thumbnailValue](const std::string &) {
-                Track track;
-                track.id = id;
-                track.title = titleValue;
-                track.artist = subtitleValue;
-                track.thumbnail = thumbnailValue;
-                emit play_requested(track);
-            });
+            connect(card, &SongCard::playRequested, this, [playTrack](const std::string &) { playTrack(); });
             connect(card, &SongCard::clicked, card, [card]() {
                 emit card->playRequested(card->itemId());
             });
@@ -93,11 +101,14 @@ QWidget *HomeView::add_section_widget(const std::string &title,
         } else {
             auto *card = new AlbumCard(itemTitle, subtitle, thumbnail, carousel);
             card->setItemId(id);
-            connect(card, &AlbumCard::clicked, this, [this, id, itemType]() {
-                if (itemType == "album") emit album_requested(id);
-                else if (itemType == "show") emit show_requested(id);
-                else emit playlist_requested(id);
-            });
+            card->setContentType(QString::fromStdString(itemType));
+            if (itemType == "episode") {
+                connect(card, &AlbumCard::clicked, this, [playTrack]() { playTrack(); });
+                connect(card, &AlbumCard::playRequested, this, [playTrack](const std::string &) { playTrack(); });
+            } else {
+                connect(card, &AlbumCard::clicked, this, [openTypedItem]() { openTypedItem(); });
+                connect(card, &AlbumCard::playRequested, this, [openTypedItem](const std::string &) { openTypedItem(); });
+            }
             carousel->addWidget(card);
         }
     }

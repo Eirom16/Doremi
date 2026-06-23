@@ -16,6 +16,7 @@ public:
     
     void setItemId(const std::string &id) { m_itemId = id; }
     std::string itemId() const { return m_itemId; }
+    void setContentType(const QString &type) { m_contentType = type; update(); }
     
     qreal hoverProgress() const { return m_hoverProgress; }
     void setHoverProgress(qreal p) { m_hoverProgress = p; update(); }
@@ -34,6 +35,7 @@ private:
     QString m_title;
     QString m_artist;
     QString m_thumbnail;
+    QString m_contentType = "album";
     std::string m_itemId;
     qreal m_hoverProgress = 0.0;
     QVariantAnimation *m_hoverAnim = nullptr;

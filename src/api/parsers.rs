@@ -165,6 +165,66 @@ fn clean_metadata_parts(subtitle: &str) -> Vec<&str> {
         .collect()
 }
 
+fn contains_home_token(value: &str, tokens: &[&str]) -> bool {
+    let value = value.to_lowercase();
+    tokens.iter().any(|token| value.contains(token))
+}
+
+fn normalize_playlist_id(value: &str) -> String {
+    value
+        .trim()
+        .strip_prefix("VL")
+        .unwrap_or(value.trim())
+        .to_string()
+}
+
+fn home_item_type(
+    title: &str,
+    subtitle: &str,
+    browse_id: Option<&str>,
+    playlist_id: Option<&str>,
+    video_id: Option<&str>,
+) -> &'static str {
+    if contains_home_token(subtitle, &["episodio", "episode"]) {
+        return "episode";
+    }
+    if video_id.is_some() {
+        return "song";
+    }
+    if contains_home_token(&format!("{title} {subtitle}"), &["podcast", "show"]) {
+        return "show";
+    }
+
+    if let Some(id) = browse_id {
+        if id.starts_with("MPRE") {
+            return "album";
+        }
+        if id.starts_with("UC") {
+            return "artist";
+        }
+        if id.starts_with("MPSP") {
+            return "show";
+        }
+        if id.starts_with("VL") {
+            if contains_home_token(&format!("{title} {subtitle}"), &["mix", "radio"]) {
+                return "mix";
+            }
+            return "playlist";
+        }
+    }
+
+    if let Some(id) = playlist_id {
+        if id.starts_with("RD")
+            || contains_home_token(&format!("{title} {subtitle}"), &["mix", "radio"])
+        {
+            return "mix";
+        }
+        return "playlist";
+    }
+
+    "playlist"
+}
+
 fn is_probable_video_id(id: &str) -> bool {
     !id.is_empty()
         && !id.starts_with("UC")
@@ -1553,34 +1613,39 @@ pub(crate) fn parse_home_page(json: &Value) -> Result<ParsedPage<Vec<HomeSection
                 .unwrap_or_else(|| runs(&renderer["subtitle"]));
             let browse_id = renderer
                 .pointer("/navigationEndpoint/browseEndpoint/browseId")
+                .or_else(|| {
+                    renderer.pointer("/title/runs/0/navigationEndpoint/browseEndpoint/browseId")
+                })
                 .and_then(Value::as_str)
                 .map(str::to_string);
             let playlist_id = renderer
                 .pointer("/navigationEndpoint/watchPlaylistEndpoint/playlistId")
+                .or_else(|| renderer.pointer("/navigationEndpoint/watchEndpoint/playlistId"))
+                .or_else(|| {
+                    renderer.pointer(
+                        "/title/runs/0/navigationEndpoint/watchPlaylistEndpoint/playlistId",
+                    )
+                })
                 .and_then(Value::as_str)
-                .map(str::to_string);
+                .map(str::to_string)
+                .or_else(|| {
+                    browse_id
+                        .as_deref()
+                        .filter(|id| id.starts_with("VL"))
+                        .map(normalize_playlist_id)
+                });
             let item_video_id = renderer
                 .pointer("/playlistItemData/videoId")
                 .or_else(|| renderer.pointer("/navigationEndpoint/watchEndpoint/videoId"))
                 .and_then(Value::as_str)
                 .map(str::to_string);
-            let item_type = if item_video_id.is_some() {
-                "song"
-            } else if browse_id
-                .as_deref()
-                .map(|id| id.starts_with("MPRE"))
-                .unwrap_or(false)
-            {
-                "album"
-            } else if browse_id
-                .as_deref()
-                .map(|id| id.starts_with("UC"))
-                .unwrap_or(false)
-            {
-                "artist"
-            } else {
-                "playlist"
-            };
+            let item_type = home_item_type(
+                &item_title,
+                &subtitle,
+                browse_id.as_deref(),
+                playlist_id.as_deref(),
+                item_video_id.as_deref(),
+            );
             items.push(HomeItem {
                 title: item_title,
                 subtitle,
@@ -1853,6 +1918,56 @@ mod tests {
         assert_eq!(sections[0].items[1].item_type, "album");
         assert_eq!(sections[0].items[2].item_type, "artist");
         assert_eq!(sections[0].items[2].browse_id.as_deref(), Some("UCartist"));
+    }
+
+    #[test]
+    fn home_items_normalize_playlist_mix_show_and_episode_ids() {
+        let json = serde_json::json!({
+            "contents": {"singleColumnBrowseResultsRenderer": {"tabs": [{"tabRenderer": {
+                "content": {"sectionListRenderer": {"contents": [{"musicCarouselShelfRenderer": {
+                    "header": {"musicCarouselShelfBasicHeaderRenderer": {"title": {"runs": [{"text": "Mixed"}]}}},
+                    "contents": [
+                        {"musicTwoRowItemRenderer": {
+                            "title": {"runs": [{"text": "Playlist by endpoint"}]},
+                            "subtitle": {"runs": [{"text": "Playlist"}]},
+                            "navigationEndpoint": {"watchPlaylistEndpoint": {"playlistId": "PLendpoint"}}
+                        }},
+                        {"musicTwoRowItemRenderer": {
+                            "title": {"runs": [{"text": "Playlist by browse"}]},
+                            "subtitle": {"runs": [{"text": "12 canciones"}]},
+                            "navigationEndpoint": {"browseEndpoint": {"browseId": "VLPLbrowse"}}
+                        }},
+                        {"musicTwoRowItemRenderer": {
+                            "title": {"runs": [{"text": "Daily Mix 1"}]},
+                            "subtitle": {"runs": [{"text": "Mix"}]},
+                            "navigationEndpoint": {"watchEndpoint": {"playlistId": "RDCLAKmix"}}
+                        }},
+                        {"musicTwoRowItemRenderer": {
+                            "title": {"runs": [{"text": "Smart Talks"}]},
+                            "subtitle": {"runs": [{"text": "Podcast"}]},
+                            "navigationEndpoint": {"browseEndpoint": {"browseId": "MPSPshow"}}
+                        }},
+                        {"musicTwoRowItemRenderer": {
+                            "title": {"runs": [{"text": "Episode one"}]},
+                            "subtitle": {"runs": [{"text": "Episode"}]},
+                            "navigationEndpoint": {"watchEndpoint": {"videoId": "episode-video"}}
+                        }}
+                    ]
+                }}]}}
+            }}]}}
+        });
+        let sections = parse_home(&json).unwrap();
+        let items = &sections[0].items;
+        assert_eq!(items[0].item_type, "playlist");
+        assert_eq!(items[0].playlist_id.as_deref(), Some("PLendpoint"));
+        assert_eq!(items[1].item_type, "playlist");
+        assert_eq!(items[1].playlist_id.as_deref(), Some("PLbrowse"));
+        assert_eq!(items[2].item_type, "mix");
+        assert_eq!(items[2].playlist_id.as_deref(), Some("RDCLAKmix"));
+        assert_eq!(items[3].item_type, "show");
+        assert_eq!(items[3].browse_id.as_deref(), Some("MPSPshow"));
+        assert_eq!(items[4].item_type, "episode");
+        assert_eq!(items[4].video_id.as_deref(), Some("episode-video"));
     }
 
     #[test]

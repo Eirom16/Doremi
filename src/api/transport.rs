@@ -40,9 +40,7 @@ fn retryable(status: StatusCode) -> bool {
 /// A 401/403 on an authenticated request means the session was revoked or
 /// expired server-side; retrying with the same credentials cannot succeed.
 fn revokes_session(status: StatusCode) -> bool {
-    status == StatusCode::UNAUTHORIZED
-        || status == StatusCode::FORBIDDEN
-        || status == StatusCode::BAD_REQUEST
+    status == StatusCode::UNAUTHORIZED || status == StatusCode::FORBIDDEN
 }
 
 fn retry_delay(attempt: usize, retry_after: Option<&str>) -> Duration {
@@ -127,6 +125,15 @@ mod tests {
         assert!(retryable(StatusCode::SERVICE_UNAVAILABLE));
         assert!(!retryable(StatusCode::BAD_REQUEST));
         assert!(!retryable(StatusCode::UNAUTHORIZED));
+    }
+
+    #[test]
+    fn revokes_only_on_authorization_failures() {
+        assert!(revokes_session(StatusCode::UNAUTHORIZED));
+        assert!(revokes_session(StatusCode::FORBIDDEN));
+        assert!(!revokes_session(StatusCode::BAD_REQUEST));
+        assert!(!revokes_session(StatusCode::NOT_FOUND));
+        assert!(!revokes_session(StatusCode::INTERNAL_SERVER_ERROR));
     }
 
     #[test]

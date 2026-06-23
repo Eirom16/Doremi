@@ -1,5 +1,17 @@
 use super::models::*;
 
+fn library_error_kind(error: &str) -> &'static str {
+    if error.contains("401 Unauthorized") || error.contains("403 Forbidden") {
+        "not_authenticated"
+    } else if error.contains("400 Bad Request") || error.contains("INVALID_ARGUMENT") {
+        "invalid_request"
+    } else if error.contains("schema changed") {
+        "schema_changed"
+    } else {
+        "request_failed"
+    }
+}
+
 #[derive(Clone)]
 pub struct ApiClient;
 
@@ -84,7 +96,10 @@ impl ApiClient {
         match super::innertube::library_playlists().await {
             Ok(playlists) => playlists,
             Err(e) => {
-                log::error!("Library playlists API failed: {e}");
+                log::error!(
+                    "Library playlists API failed ({}): {e}",
+                    library_error_kind(&e)
+                );
                 crate::bridge::bridge::show_notification(
                     &format!("Error al cargar playlists de biblioteca: {e}"),
                     "error",
@@ -98,7 +113,7 @@ impl ApiClient {
         match super::innertube::library_songs(None).await {
             Ok(songs) => songs,
             Err(e) => {
-                log::error!("Library songs API failed: {e}");
+                log::error!("Library songs API failed ({}): {e}", library_error_kind(&e));
                 crate::bridge::bridge::show_notification(
                     &format!("Error al cargar canciones de biblioteca: {e}"),
                     "error",
@@ -112,7 +127,10 @@ impl ApiClient {
         match super::innertube::library_albums().await {
             Ok(albums) => albums,
             Err(e) => {
-                log::error!("Library albums API failed: {e}");
+                log::error!(
+                    "Library albums API failed ({}): {e}",
+                    library_error_kind(&e)
+                );
                 crate::bridge::bridge::show_notification(
                     &format!("Error al cargar álbumes de biblioteca: {e}"),
                     "error",
@@ -126,7 +144,10 @@ impl ApiClient {
         match super::innertube::library_artists().await {
             Ok(artists) => artists,
             Err(e) => {
-                log::error!("Library artists API failed: {e}");
+                log::error!(
+                    "Library artists API failed ({}): {e}",
+                    library_error_kind(&e)
+                );
                 crate::bridge::bridge::show_notification(
                     &format!("Error al cargar artistas de biblioteca: {e}"),
                     "error",

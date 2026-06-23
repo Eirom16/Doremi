@@ -7,6 +7,7 @@
 #include <QMouseEvent>
 #include <QFile>
 #include <QPointer>
+#include <algorithm>
 
 static QPixmap getRoundedPixmap(const QPixmap &src, int radius) {
     if (src.isNull()) return src;
@@ -77,6 +78,27 @@ void AlbumCard::paintEvent(QPaintEvent *) {
     painter.setRenderHint(QPainter::SmoothPixmapTransform);
     
     const auto &c = DesignTokens::current();
+    const QString type = m_contentType.toLower();
+    QString badgeText = "Álbum";
+    QString iconName = "album";
+    QColor badgeColor = c.accent;
+    if (type == "playlist") {
+        badgeText = "Playlist";
+        iconName = "queue_music";
+        badgeColor = QColor("#00A8A8");
+    } else if (type == "mix") {
+        badgeText = "Mix";
+        iconName = "auto_awesome";
+        badgeColor = QColor("#FFB000");
+    } else if (type == "show") {
+        badgeText = "Podcast";
+        iconName = "podcasts";
+        badgeColor = QColor("#E85D75");
+    } else if (type == "episode") {
+        badgeText = "Episodio";
+        iconName = "graphic_eq";
+        badgeColor = QColor("#E85D75");
+    }
     
     // 1. Draw card background (fade in on hover)
     if (m_hoverProgress > 0.0) {
@@ -99,13 +121,25 @@ void AlbumCard::paintEvent(QPaintEvent *) {
         }
         
         if (!m_artLoaded) {
-            QPixmap defaultArt = IconProvider::getIcon("album", c.text_secondary, 48).pixmap(146, 146);
+            QPixmap defaultArt = IconProvider::getIcon(iconName, c.text_secondary, 48).pixmap(146, 146);
             m_artPixmap = getRoundedPixmap(defaultArt, 8);
             m_artLoaded = true;
         }
     }
     
     painter.drawPixmap(artRect.topLeft(), m_artPixmap);
+
+    QRect badgeRect(20, 22, std::min(112, 50 + painter.fontMetrics().horizontalAdvance(badgeText)), 24);
+    QColor badgeBg = badgeColor;
+    badgeBg.setAlpha(220);
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(badgeBg);
+    painter.drawRoundedRect(badgeRect, 12, 12);
+    QIcon badgeIcon = IconProvider::getIcon(iconName, Qt::white, 14);
+    painter.drawPixmap(badgeRect.left() + 8, badgeRect.top() + 5, badgeIcon.pixmap(14, 14));
+    painter.setFont(DesignTokens::getFont("caption", 9));
+    painter.setPen(Qt::white);
+    painter.drawText(badgeRect.adjusted(26, 0, -8, 0), Qt::AlignVCenter | Qt::AlignLeft, badgeText);
     
     // 3. Draw play overlay on hover
     if (m_hoverProgress > 0.0) {
@@ -123,12 +157,13 @@ void AlbumCard::paintEvent(QPaintEvent *) {
         qreal circleRadius = 22.0 * m_hoverProgress;
         
         if (circleRadius > 0.0) {
-            QColor circleColor = c.accent;
+            QColor circleColor = badgeColor;
             circleColor.setAlphaF(m_hoverProgress);
             painter.setBrush(circleColor);
             painter.drawEllipse(center, circleRadius, circleRadius);
             
-            QIcon playIcon = IconProvider::getIcon("play_arrow", QColor(255, 255, 255, static_cast<int>(255 * m_hoverProgress)), 22);
+            const QString actionIcon = (type == "album") ? "play_arrow" : "open_in_new";
+            QIcon playIcon = IconProvider::getIcon(actionIcon, QColor(255, 255, 255, static_cast<int>(255 * m_hoverProgress)), 22);
             QPixmap playPm = playIcon.pixmap(22, 22);
             painter.drawPixmap(center.x() - 11, center.y() - 11, playPm);
         }
