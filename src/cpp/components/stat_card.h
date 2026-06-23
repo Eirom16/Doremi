@@ -12,6 +12,7 @@ public:
     explicit StatCard(const QString &title, const QString &icon_name, QWidget *parent = nullptr);
     void setValue(int target_value, const QString &prefix = "", const QString &suffix = "");
     void setValueText(const QString &text); // for non-numeric stats (e.g. "12h 34m")
+    void update_theme();
 
     int displayValue() const { return display_value_; }
     void setDisplayValue(int val);

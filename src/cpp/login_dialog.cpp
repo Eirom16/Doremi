@@ -10,7 +10,7 @@
 WebLoginDialog::WebLoginDialog(QWidget *parent)
     : QDialog(parent)
 {
-    setWindowTitle(QString::fromStdString(std::string(doremi_tr("login_title"))));
+    setWindowTitle(tr_q("login_title"));
     resize(1000, 700);
 
     const auto &c = DesignTokens::current();
@@ -30,7 +30,7 @@ WebLoginDialog::WebLoginDialog(QWidget *parent)
     auto *header_layout = new QHBoxLayout(header);
     header_layout->setContentsMargins(12, 0, 8, 0);
 
-    auto *hint = new QLabel(QString::fromStdString(std::string(doremi_tr("login_hint"))), header);
+    auto *hint = new QLabel(tr_q("login_hint"), header);
     hint->setFont(DesignTokens::getFont("body", 11));
     hint->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_muted.name()));
     hint_ = hint;
@@ -133,7 +133,7 @@ void WebLoginDialog::poll_login() {
     elapsed_secs_ += 2;
     if (elapsed_secs_ >= 300) {
         poll_timer_->stop();
-        set_status(QString::fromStdString(std::string(doremi_tr("login_status_expired"))));
+        set_status(tr_q("login_status_expired"));
         return;
     }
 
@@ -228,7 +228,7 @@ void WebLoginDialog::on_url_changed(const QUrl &url) {
                          path.contains("/challenge/") || path.contains("consent"));
     if (is_challenge && !challenge_seen_) {
         challenge_seen_ = true;
-        set_status(QString::fromStdString(std::string(doremi_tr("login_status_challenge"))));
+        set_status(tr_q("login_status_challenge"));
     }
 }
 

@@ -16,6 +16,7 @@ public:
                const std::string &feedback_token,
                QWidget *parent = nullptr);
 
+    void update_theme();
 signals:
     void play_requested(Track track);
     void delete_requested(const std::string &track_id, const std::string &feedback_token);
@@ -42,6 +43,7 @@ public:
                      const std::vector<std::string> &played_at,
                      const std::vector<std::string> &feedback_tokens);
     void clear_history();
+    void update_theme();
 
 signals:
     void play_requested(Track track);

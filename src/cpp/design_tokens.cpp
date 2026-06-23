@@ -1,4 +1,5 @@
 #include "design_tokens.h"
+#include "doremi/src/bridge.rs.h"
 #include <QCoreApplication>
 #include <QDebug>
 #include <QDir>
@@ -669,4 +670,9 @@ QString DesignTokens::scrollAreaStyle() {
         "    border: none;\n"
         "}\n"
     );
+}
+
+QString tr_q(const char *key) {
+    rust::String res = doremi_tr(key);
+    return QString::fromUtf8(res.data(), static_cast<qsizetype>(res.size()));
 }

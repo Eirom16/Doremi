@@ -3,6 +3,8 @@
 //! deprecation) and returns a fresh `authorization` SAPISIDHASH header.
 
 use std::io::Write;
+#[cfg(unix)]
+use std::os::unix::fs::OpenOptionsExt;
 
 /// Result of preparing yt-dlp auth arguments.
 pub struct YtDlpAuth {
@@ -79,11 +81,35 @@ pub fn prepare_ytdlp_auth() -> Option<YtDlpAuth> {
 }
 
 /// Write a semicolon-joined cookie string to a temp file in Netscape format.
+/// BF0.3: uses 0o600 permissions and a random unpredictable name (not pid-based).
 fn write_netscape_cookies(cookie_str: &str) -> Option<std::path::PathBuf> {
+    use rand::RngExt;
     let dir = std::env::temp_dir();
-    let path = dir.join(format!("doremi_cookies_{}.txt", std::process::id()));
+    // Generate a random 16-char hex suffix to prevent symlink attacks.
+    let suffix: String = {
+        let mut rng = rand::rng();
+        (0..16).map(|_| format!("{:x}", rng.random::<u8>())).collect()
+    };
+    let filename = format!("doremi_cookies_{}.txt", suffix);
+    let path = dir.join(filename);
 
-    let mut file = std::fs::File::create(&path)
+    // BF0.3: open with mode 0o600 so other users cannot read the session cookies.
+    #[cfg(unix)]
+    let file_result = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(0o600)
+        .open(&path);
+
+    #[cfg(not(unix))]
+    let file_result = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(&path);
+
+    let mut file = file_result
         .map_err(|e| log::warn!("Failed to create temp cookie file: {e}"))
         .ok()?;
 

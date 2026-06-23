@@ -1,6 +1,7 @@
 #include "stats_view.h"
 #include "design_tokens.h"
 #include "icon_provider.h"
+#include "components/artwork_loader.h"
 #include <QHBoxLayout>
 #include <QGridLayout>
 #include <QEvent>
@@ -13,6 +14,7 @@
 #include <QFileDialog>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QPointer>
 #include <QJsonObject>
 #include <QMessageBox>
 #include <QTextStream>
@@ -56,17 +58,20 @@ TopTrackRow::TopTrackRow(int rank, const Track &track,
     thumb_lbl->setStyleSheet(QString("background-color: %1; border-radius: 4px;")
         .arg(c.bg_elevated.name()));
 
-    QPixmap pm;
-    if (!track.thumbnail.empty() && pm.load(QString::fromStdString(static_cast<std::string>(track.thumbnail)))) {
-        QPixmap dest(pm.size());
-        dest.fill(Qt::transparent);
-        QPainter painter(&dest);
-        painter.setRenderHint(QPainter::Antialiasing);
-        QPainterPath path;
-        path.addRoundedRect(pm.rect(), 4, 4);
-        painter.setClipPath(path);
-        painter.drawPixmap(0, 0, pm);
-        thumb_lbl->setPixmap(dest.scaled(40, 40, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation));
+    if (!track.thumbnail.empty()) {
+        QPointer<QLabel> label_ptr(thumb_lbl);
+        ArtworkLoader::load(QString::fromStdString(static_cast<std::string>(track.thumbnail)), QSize(40, 40), [label_ptr](const QPixmap &pixmap) {
+            if (!label_ptr) return;
+            QPixmap dest(pixmap.size());
+            dest.fill(Qt::transparent);
+            QPainter painter(&dest);
+            painter.setRenderHint(QPainter::Antialiasing);
+            QPainterPath path;
+            path.addRoundedRect(pixmap.rect(), 4, 4);
+            painter.setClipPath(path);
+            painter.drawPixmap(0, 0, pixmap);
+            label_ptr->setPixmap(dest.scaled(40, 40, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation));
+        });
     } else {
         QPixmap default_art = IconProvider::getIcon("music_note", c.text_secondary, 20).pixmap(40, 40);
         thumb_lbl->setPixmap(default_art);
@@ -165,7 +170,8 @@ void StatsView::setupLayout() {
     auto *header_layout = new QHBoxLayout();
     header_layout->setSpacing(12);
 
-    auto *title = new QLabel("Estadísticas de Escucha", this);
+    auto *title = new QLabel(tr_q("listening_stats"), this);
+    title->setObjectName("statsTitle");
     title->setFont(DesignTokens::getFont("display", 22));
     title->setStyleSheet(QString("color: %1; font-weight: bold;").arg(c.text_primary.name()));
     header_layout->addWidget(title);
@@ -184,15 +190,17 @@ void StatsView::setupLayout() {
         .arg(c.text_muted.name());
 
     auto *export_json = new QPushButton("JSON", this);
+    export_json->setObjectName("statsExportBtn");
     export_json->setCursor(Qt::PointingHandCursor);
-    export_json->setToolTip("Exportar estadísticas a JSON");
+    export_json->setToolTip(tr_q("export_stats_json"));
     export_json->setStyleSheet(button_style);
     connect(export_json, &QPushButton::clicked, this, &StatsView::exportStatsAsJson);
     header_layout->addWidget(export_json);
 
     auto *export_csv = new QPushButton("CSV", this);
+    export_csv->setObjectName("statsExportBtn");
     export_csv->setCursor(Qt::PointingHandCursor);
-    export_csv->setToolTip("Exportar estadísticas a CSV");
+    export_csv->setToolTip(tr_q("export_stats_csv"));
     export_csv->setStyleSheet(button_style);
     connect(export_csv, &QPushButton::clicked, this, &StatsView::exportStatsAsCsv);
     header_layout->addWidget(export_csv);
@@ -204,9 +212,15 @@ void StatsView::setupLayout() {
     range_layout->setSpacing(8);
     auto *range_group = new QButtonGroup(this);
     struct RangeOption { QString label; int days; };
-    RangeOption ranges[] = {{"7 días", 7}, {"30 días", 30}, {"1 año", 365}, {"Todo", -1}};
+    RangeOption ranges[] = {
+        {tr_q("days_7"), 7},
+        {tr_q("days_30"), 30},
+        {tr_q("year_1"), 365},
+        {tr_q("all_time"), -1}
+    };
     for (auto &opt : ranges) {
         auto *btn = new QPushButton(opt.label, this);
+        btn->setObjectName("statsRangeBtn");
         btn->setCheckable(true);
         btn->setFixedHeight(30);
         btn->setCursor(Qt::PointingHandCursor);
@@ -230,24 +244,23 @@ void StatsView::setupLayout() {
     auto *cards_layout = new QHBoxLayout();
     cards_layout->setSpacing(16);
 
-    card_time_ = new StatCard("Tiempo Escuchado", "schedule", this);
-    card_plays_ = new StatCard("Reproducciones Totales", "play_arrow", this);
-    card_artists_ = new StatCard("Artistas Escuchados", "person", this);
-
+    card_time_ = new StatCard(tr_q("stat_time_played"), "schedule", this);
+    card_plays_ = new StatCard(tr_q("stat_total_plays"), "play_arrow", this);
+    card_artists_ = new StatCard(tr_q("stat_unique_artists"), "person", this);
     cards_layout->addWidget(card_time_);
     cards_layout->addWidget(card_plays_);
     cards_layout->addWidget(card_artists_);
     main_layout_->addLayout(cards_layout);
 
-    auto *chart_header = new QLabel("Actividad Semanal", this);
+    auto *chart_header = new QLabel(tr_q("stat_weekly_activity"), this);
+    chart_header->setObjectName("statsChartHeader");
     chart_header->setFont(DesignTokens::getFont("heading_sm", 14));
     chart_header->setStyleSheet(QString("color: %1; font-weight: bold; margin-top: 8px;").arg(c.text_secondary.name()));
     main_layout_->addWidget(chart_header);
 
     auto *chart_panel = new QWidget(this);
-    chart_panel->setStyleSheet(QString("background-color: %1; border: 1px solid %2; border-radius: 12px;")
-        .arg(c.bg_surface.name())
-        .arg(c.border.name()));
+    chart_panel->setObjectName("chart_panel");
+    chart_panel->setStyleSheet(DesignTokens::panelStyle("surface", 12));
     auto *chart_p_layout = new QVBoxLayout(chart_panel);
     chart_p_layout->setContentsMargins(16, 16, 16, 16);
 
@@ -255,15 +268,15 @@ void StatsView::setupLayout() {
     chart_p_layout->addWidget(bar_chart_);
     main_layout_->addWidget(chart_panel);
 
-    auto *top_header = new QLabel("Tus Canciones Más Escuchadas", this);
+    auto *top_header = new QLabel(tr_q("stat_top_tracks"), this);
+    top_header->setObjectName("statsTopHeader");
     top_header->setFont(DesignTokens::getFont("heading_sm", 14));
     top_header->setStyleSheet(QString("color: %1; font-weight: bold; margin-top: 8px;").arg(c.text_secondary.name()));
     main_layout_->addWidget(top_header);
 
     top_tracks_widget_ = new QWidget(this);
-    top_tracks_widget_->setStyleSheet(QString("background-color: %1; border: 1px solid %2; border-radius: 12px;")
-        .arg(c.bg_surface.name())
-        .arg(c.border.name()));
+    top_tracks_widget_->setObjectName("top_tracks_widget");
+    top_tracks_widget_->setStyleSheet(DesignTokens::panelStyle("surface", 12));
 
     top_tracks_layout_ = new QVBoxLayout(top_tracks_widget_);
     top_tracks_layout_->setContentsMargins(8, 8, 8, 8);
@@ -308,7 +321,8 @@ void StatsView::buildTopTracks(const std::vector<Track> &tracks, const std::vect
 
     if (tracks.empty()) {
         const auto &c = DesignTokens::current();
-        auto *empty = new QLabel("No hay suficientes datos de reproducción para generar el top.", top_tracks_widget_);
+        auto *empty = new QLabel(tr_q("stat_not_enough_data"), top_tracks_widget_);
+        empty->setObjectName("statsEmptyLabel");
         empty->setAlignment(Qt::AlignCenter);
         empty->setFont(DesignTokens::getFont("caption", 12));
         empty->setStyleSheet(QString("color: %1; padding: 20px;").arg(c.text_muted.name()));
@@ -328,43 +342,55 @@ void StatsView::buildTopTracks(const std::vector<Track> &tracks, const std::vect
 
 void StatsView::exportStatsAsJson() {
     if (!has_stats_) {
-        QMessageBox::information(this, "Sin datos", "Todavía no hay estadísticas cargadas para exportar.");
+        QMessageBox::information(this,
+            tr_q("no_data"),
+            tr_q("no_stats_to_export"));
         return;
     }
 
     QString path = QFileDialog::getSaveFileName(
         this,
-        "Exportar estadísticas",
+        tr_q("export_stats"),
         "doremi-stats.json",
         "JSON (*.json)");
     if (path.isEmpty()) return;
     if (!path.endsWith(".json", Qt::CaseInsensitive)) path += ".json";
 
     if (writeStatsJson(path)) {
-        QMessageBox::information(this, "Exportación completada", "Las estadísticas se exportaron correctamente.");
+        QMessageBox::information(this,
+            tr_q("export_completed"),
+            tr_q("export_success_msg"));
     } else {
-        QMessageBox::warning(this, "Error de exportación", "No se pudo escribir el archivo seleccionado.");
+        QMessageBox::warning(this,
+            tr_q("export_error"),
+            tr_q("export_failed_msg"));
     }
 }
 
 void StatsView::exportStatsAsCsv() {
     if (!has_stats_) {
-        QMessageBox::information(this, "Sin datos", "Todavía no hay estadísticas cargadas para exportar.");
+        QMessageBox::information(this,
+            tr_q("no_data"),
+            tr_q("no_stats_to_export"));
         return;
     }
 
     QString path = QFileDialog::getSaveFileName(
         this,
-        "Exportar estadísticas",
+        tr_q("export_stats"),
         "doremi-stats.csv",
         "CSV (*.csv)");
     if (path.isEmpty()) return;
     if (!path.endsWith(".csv", Qt::CaseInsensitive)) path += ".csv";
 
     if (writeStatsCsv(path)) {
-        QMessageBox::information(this, "Exportación completada", "Las estadísticas se exportaron correctamente.");
+        QMessageBox::information(this,
+            tr_q("export_completed"),
+            tr_q("export_success_msg"));
     } else {
-        QMessageBox::warning(this, "Error de exportación", "No se pudo escribir el archivo seleccionado.");
+        QMessageBox::warning(this,
+            tr_q("export_error"),
+            tr_q("export_failed_msg"));
     }
 }
 
@@ -442,4 +468,54 @@ bool StatsView::writeStatsCsv(const QString &path) const {
 
     out.flush();
     return file.error() == QFileDevice::NoError;
+}
+
+void StatsView::update_theme() {
+    const auto &c = DesignTokens::current();
+    if (auto *title = findChild<QLabel*>("statsTitle")) {
+        title->setStyleSheet(QString("color: %1; font-weight: bold;").arg(c.text_primary.name()));
+    }
+    if (auto *ch = findChild<QLabel*>("statsChartHeader")) {
+        ch->setStyleSheet(QString("color: %1; font-weight: bold; margin-top: 8px;").arg(c.text_secondary.name()));
+    }
+    if (auto *th = findChild<QLabel*>("statsTopHeader")) {
+        th->setStyleSheet(QString("color: %1; font-weight: bold; margin-top: 8px;").arg(c.text_secondary.name()));
+    }
+    if (auto *el = findChild<QLabel*>("statsEmptyLabel")) {
+        el->setStyleSheet(QString("color: %1; padding: 20px;").arg(c.text_muted.name()));
+    }
+    // Update export buttons
+    auto button_style = QString(
+        "QPushButton { background: %1; border: 1px solid %2; border-radius: 6px; padding: 7px 12px; color: %3; font-size: 12px; }"
+        "QPushButton:hover { background: rgba(%4, %5, %6, 0.08); }"
+        "QPushButton:disabled { color: %7; border-color: %2; }")
+        .arg(c.bg_surface.name())
+        .arg(c.border.name())
+        .arg(c.text_primary.name())
+        .arg(c.text_primary.red())
+        .arg(c.text_primary.green())
+        .arg(c.text_primary.blue())
+        .arg(c.text_muted.name());
+    for (auto *btn : findChildren<QPushButton*>("statsExportBtn")) {
+        btn->setStyleSheet(button_style);
+    }
+    // Update range buttons
+    for (auto *btn : findChildren<QPushButton*>("statsRangeBtn")) {
+        btn->setStyleSheet(QString(
+            "QPushButton { background: transparent; border: 1px solid %1; border-radius: 15px; padding: 0 16px; color: %2; font-size: 12px; }"
+            "QPushButton:hover { background: rgba(%3, %4, %5, 0.08); }"
+            "QPushButton:checked { background: %1; color: %6; }")
+            .arg(c.border.name()).arg(c.text_secondary.name())
+            .arg(c.text_primary.red()).arg(c.text_primary.green()).arg(c.text_primary.blue())
+            .arg(c.bg_surface.name()));
+    }
+    if (auto *cp = findChild<QWidget*>("chart_panel")) {
+        cp->setStyleSheet(DesignTokens::panelStyle("surface", 12));
+    }
+    if (top_tracks_widget_) {
+        top_tracks_widget_->setStyleSheet(DesignTokens::panelStyle("surface", 12));
+    }
+    if (card_time_) card_time_->update_theme();
+    if (card_plays_) card_plays_->update_theme();
+    if (card_artists_) card_artists_->update_theme();
 }

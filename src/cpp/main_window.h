@@ -27,6 +27,7 @@ struct Episode;
 struct StatsData;
 struct HomeCard;
 struct TopResult;
+struct DownloadItem;
 
 class TitleBar;
 class NavSidebar;
@@ -56,6 +57,23 @@ class NavigationController;
 class SessionCookieManager;
 class ThemeController;
 
+enum class ViewIndex {
+    Placeholder = 0,
+    Home = 1,
+    Search = 2,
+    Library = 3,
+    Settings = 4,
+    Trending = 5,
+    Downloads = 6,
+    Stats = 7,
+    History = 8,
+    AlbumDetail = 9,
+    ArtistDetail = 10,
+    PlaylistDetail = 11,
+    ShowDetail = 12,
+    Welcome = 13
+};
+
 class DoremiMainWindow : public QMainWindow {
     Q_OBJECT
     friend class ShortcutManager;
@@ -75,11 +93,12 @@ public:
     void set_playback_playing(bool playing);
     void set_dominant_colors(const std::vector<std::string> &colors);
     void set_track_lyrics(const std::string &plain, const std::string &synced);
-    void set_playback_queue(const rust::Vec<Track> &queue, int32_t current_index);
-    void set_related_tracks(const rust::Vec<Track> &tracks);
+    void set_playback_queue(const std::vector<Track> &queue, int32_t current_index);
+    void set_related_tracks(const std::vector<Track> &tracks);
     void set_current_track(const Track &track);
-    void set_context_playlists(const rust::Vec<Playlist> &playlists);
-    void set_history_data(const rust::Vec<Track> &history, const rust::Vec<rust::String> &played_at, const rust::Vec<rust::String> &feedback_tokens);
+    void set_context_playlists(const std::vector<Playlist> &playlists);
+    const std::vector<Playlist> &context_playlists() const { return context_playlists_; }
+    void set_history_data(const std::vector<Track> &history, const std::vector<std::string> &played_at, const std::vector<std::string> &feedback_tokens);
     void set_stats_data(const StatsData &stats);
     void set_online_status(bool is_online);
     void setup_ui_test(const std::string &view, const std::string &screenshot_path);
@@ -168,6 +187,10 @@ private:
 
     QTimer *player_timer_;
     ThemeTransitionOverlay *theme_transition_;
+
+    std::string last_track_title_;
+    std::string last_track_artist_;
+    std::vector<Playlist> context_playlists_;
 };
 
 extern DoremiMainWindow *g_main_window;
@@ -237,12 +260,7 @@ void set_player_repeat(int32_t mode);
 
 void set_trending_items(rust::Vec<HomeCard> items);
 void set_trending_state(rust::Str state, rust::Str message);
-void set_downloads_list(rust::Vec<rust::String> titles,
-                        rust::Vec<rust::String> artists,
-                        rust::Vec<rust::String> thumbnails,
-                        rust::Vec<rust::String> video_ids,
-                        rust::Vec<rust::String> statuses,
-                        rust::Vec<double> progresses);
+void set_downloads_list(rust::Vec<DownloadItem> items);
 void set_download_progress(rust::Str video_id, double percent, rust::Str status);
 void set_batch_download_progress(rust::Str parent_id, int32_t total, int32_t completed, double percent);
 
@@ -258,7 +276,7 @@ void set_history_data(rust::Vec<Track> history, rust::Vec<rust::String> played_a
 
 void set_album_detail(Album album, rust::Vec<Track> tracks);
 
-void set_artist_detail(Artist artist, rust::Vec<Track> tracks, rust::Vec<Album> albums);
+void set_artist_detail(Artist artist, rust::Vec<Track> tracks, rust::Vec<Album> albums, rust::Vec<Album> singles);
 
 void set_playlist_detail(Playlist playlist, rust::Vec<Track> tracks);
 void set_online_status(bool is_online);

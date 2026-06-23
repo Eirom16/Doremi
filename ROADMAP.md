@@ -18,7 +18,7 @@ El port se considera terminado cuando Doremi cubra los flujos reales de Pyrolist
 ### Base disponible
 
 - [x] El proyecto compila con `cargo check --all-targets`.
-- [x] Las 15 pruebas actuales pasan con `cargo test --all-targets`.
+- [x] Las ~101 pruebas actuales pasan con `cargo test --all-targets`.
 - [x] Qt 6 Widgets y WebEngine integrados mediante `build.rs` y `cxx`.
 - [x] Reproductor VLC, cola, shuffle, repeat, seek y volumen.
 - [x] MPRIS, atajos multimedia y bandeja del sistema.
@@ -423,8 +423,8 @@ Soporte para podcasts y shows de YouTube Music (y potencialmente RSS). YouTube M
 
 ### P5.4 Accesibilidad e i18n
 
-- [ ] Sustituir todos los textos C++ hardcodeados por claves de locale.
-- [ ] Alcanzar paridad de claves ES/EN y testear claves faltantes.
+- [x] Sustituir todos los textos C++ hardcodeados por claves de locale.
+- [x] Alcanzar paridad de claves ES/EN y testear claves faltantes.
 - [ ] Soportar pluralizacion y parametros sin concatenar frases.
 - [ ] Preparar layout para traducciones mas largas y RTL futuro.
 - [x] Definir accessible names/descriptions para botones de icono.
@@ -444,17 +444,17 @@ Soporte para podcasts y shows de YouTube Music (y potencialmente RSS). YouTube M
 - [ ] Añadir estado de aplicacion central con eventos tipados.
 - [ ] Definir politica de cache y fuente de verdad por entidad.
 - [ ] Mantener C++ enfocado en presentacion; reglas de negocio en Rust.
-- [ ] Añadir ADRs para decisiones importantes.
+- [x] Añadir ADRs para decisiones importantes.
 
 ### P6.2 Pruebas
 
-- [ ] Unit tests de cola: shuffle, repeat, remove, move y limites.
+- [x] Unit tests de cola: shuffle, repeat, remove, move y limites.
 - [ ] Unit tests de state machine del player.
-- [ ] Unit tests de parsing Innertube usando fixtures.
+- [x] Unit tests de parsing Innertube usando fixtures.
 - [ ] Unit tests de LRC, limpieza de metadata y seleccion de letras.
 - [ ] Unit tests de settings, secretos y migraciones.
 - [ ] Unit tests de sanitizacion y estado de descargas.
-- [ ] Integration tests de SQLite con migraciones desde cada version.
+- [x] Integration tests de SQLite con migraciones desde cada version.
 - [ ] Integration tests del bridge usando un adapter/mock de UI.
 - [ ] Integration tests HTTP con servidor local mock.
 - [ ] Tests de procesos para `yt-dlp`/`ffmpeg` simulados.
@@ -467,7 +467,7 @@ Soporte para podcasts y shows de YouTube Music (y potencialmente RSS). YouTube M
 
 ### P6.3 Calidad estatica
 
-- [ ] `cargo fmt --check` obligatorio.
+- [x] `cargo fmt --check` obligatorio.
 - [ ] `cargo clippy --all-targets -- -D warnings` obligatorio y estable.
 - [ ] Formateador y linter C++ (`clang-format`, `clang-tidy`).
 - [ ] Detectar dependencias vulnerables y licencias incompatibles.

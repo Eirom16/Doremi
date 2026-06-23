@@ -38,12 +38,14 @@ TrendingView::TrendingView(QWidget *parent)
     list_->setContentsMargins(24, 24, 24, 24);
     list_->setSpacing(8);
 
-    auto *header = new QLabel("Tendencias", this);
+    auto *header = new QLabel(tr_q("trending"), this);
+    header->setObjectName("trendingHeader");
     header->setFont(DesignTokens::getFont("display", 24));
     header->setStyleSheet(QString("color: %1; font-weight: bold; background: transparent;").arg(c.text_primary.name()));
     list_->addWidget(header);
 
-    auto *sub = new QLabel("Lo más popular del momento", this);
+    auto *sub = new QLabel(tr_q("trending_subtitle"), this);
+    sub->setObjectName("trendingSub");
     sub->setFont(DesignTokens::getFont("body", 13));
     sub->setStyleSheet(QString("color: %1; background: transparent; margin-bottom: 8px;").arg(c.text_secondary.name()));
     list_->addWidget(sub);
@@ -62,15 +64,16 @@ QWidget *TrendingView::make_trending_card(const HomeCard &item) {
     const std::string itemType = static_cast<std::string>(item.item_type);
 
     auto *card = new QWidget(this);
+    card->setObjectName("trendingCard");
     card->setFixedHeight(72);
     
     // Modern hover style with QSS matching our design system tokens
     QString cardStyle = QString(
-        "QWidget {\n"
+        "QWidget#trendingCard {\n"
         "    background-color: transparent;\n"
         "    border-radius: 8px;\n"
         "}\n"
-        "QWidget:hover {\n"
+        "QWidget#trendingCard:hover {\n"
         "    background-color: %1;\n"
         "}\n"
     )
@@ -82,6 +85,7 @@ QWidget *TrendingView::make_trending_card(const HomeCard &item) {
     lay->setSpacing(12);
 
     auto *thumb = new QLabel(card);
+    thumb->setObjectName("trendingThumb");
     thumb->setFixedSize(56, 56);
     thumb->setAlignment(Qt::AlignCenter);
     thumb->setStyleSheet(QString("background: %1; border-radius: 6px;").arg(c.bg_elevated.name()));
@@ -115,11 +119,13 @@ QWidget *TrendingView::make_trending_card(const HomeCard &item) {
     vl->setContentsMargins(0, 0, 0, 0);
     
     auto *t = new QLabel(QString::fromStdString(title), card);
+    t->setObjectName("trendingTitle");
     t->setFont(DesignTokens::getFont("body", 13));
     t->setStyleSheet(QString("color: %1; font-weight: bold; background: transparent;").arg(c.text_primary.name()));
     vl->addWidget(t);
     
     auto *s = new QLabel(QString::fromStdString(subtitle), card);
+    s->setObjectName("trendingSubtitle");
     s->setFont(DesignTokens::getFont("caption", 11));
     s->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
     vl->addWidget(s);
@@ -127,21 +133,22 @@ QWidget *TrendingView::make_trending_card(const HomeCard &item) {
     lay->addLayout(vl, 1);
 
     auto *play_btn = new QPushButton(card);
+    play_btn->setObjectName("trendingPlayBtn");
     play_btn->setFixedSize(36, 36);
     play_btn->setCursor(Qt::PointingHandCursor);
     play_btn->setIcon(IconProvider::getIcon("play_arrow", QColor("#FFFFFF"), 18));
     play_btn->setIconSize(QSize(18, 18));
     
     QString playStyle = QString(
-        "QPushButton {\n"
+        "QPushButton#trendingPlayBtn {\n"
         "    background-color: %1;\n"
         "    border: none;\n"
         "    border-radius: 18px;\n"
         "}\n"
-        "QPushButton:hover {\n"
+        "QPushButton#trendingPlayBtn:hover {\n"
         "    background-color: %2;\n"
         "}\n"
-        "QPushButton:pressed {\n"
+        "QPushButton#trendingPlayBtn:pressed {\n"
         "    background-color: %3;\n"
         "}\n"
     )
@@ -214,13 +221,15 @@ void TrendingView::set_state(const std::string &state, const std::string &messag
         }
     } else {
         auto *label = new QLabel(QString::fromStdString(message), state_widget_);
+        label->setObjectName("trendingStateLabel");
         label->setAlignment(Qt::AlignCenter);
         label->setWordWrap(true);
         label->setFont(DesignTokens::getFont("body", 13));
         label->setStyleSheet(QString("color: %1; padding: 36px;").arg(c.text_muted.name()));
         layout->addWidget(label);
         if (state == "error") {
-            auto *retry = new QPushButton("Reintentar", state_widget_);
+            auto *retry = new QPushButton(tr_q("retry"), state_widget_);
+            retry->setObjectName("trendingRetryBtn");
             retry->setCursor(Qt::PointingHandCursor);
             retry->setFixedWidth(140);
             retry->setStyleSheet(QString(
@@ -232,4 +241,64 @@ void TrendingView::set_state(const std::string &state, const std::string &messag
         }
     }
     list_->insertWidget(2, state_widget_);
+}
+
+void TrendingView::update_theme() {
+    const auto &c = DesignTokens::current();
+    if (auto *header = findChild<QLabel*>("trendingHeader")) {
+        header->setStyleSheet(QString("color: %1; font-weight: bold; background: transparent;").arg(c.text_primary.name()));
+    }
+    if (auto *sub = findChild<QLabel*>("trendingSub")) {
+        sub->setStyleSheet(QString("color: %1; background: transparent; margin-bottom: 8px;").arg(c.text_secondary.name()));
+    }
+    if (auto *label = findChild<QLabel*>("trendingStateLabel")) {
+        label->setStyleSheet(QString("color: %1; padding: 36px;").arg(c.text_muted.name()));
+    }
+    if (auto *retry = findChild<QPushButton*>("trendingRetryBtn")) {
+        retry->setStyleSheet(QString(
+            "QPushButton { background: %1; color: white; border: none; border-radius: 8px; padding: 10px; }"
+            "QPushButton:hover { background: %2; }")
+            .arg(c.accent.name(), c.accent_bright.name()));
+    }
+    for (auto *card : findChildren<QWidget*>("trendingCard")) {
+        QString cardStyle = QString(
+            "QWidget#trendingCard {\n"
+            "    background-color: transparent;\n"
+            "    border-radius: 8px;\n"
+            "}\n"
+            "QWidget#trendingCard:hover {\n"
+            "    background-color: %1;\n"
+            "}\n"
+        )
+        .arg(QString("rgba(%1, %2, %3, %4)").arg(c.accent_dim.red()).arg(c.accent_dim.green()).arg(c.accent_dim.blue()).arg(c.accent_dim.alpha() / 255.0));
+        card->setStyleSheet(cardStyle);
+    }
+    for (auto *play_btn : findChildren<QPushButton*>("trendingPlayBtn")) {
+        QString playStyle = QString(
+            "QPushButton#trendingPlayBtn {\n"
+            "    background-color: %1;\n"
+            "    border: none;\n"
+            "    border-radius: 18px;\n"
+            "}\n"
+            "QPushButton#trendingPlayBtn:hover {\n"
+            "    background-color: %2;\n"
+            "}\n"
+            "QPushButton#trendingPlayBtn:pressed {\n"
+            "    background-color: %3;\n"
+            "}\n"
+        )
+        .arg(c.accent.name())
+        .arg(c.accent_bright.name())
+        .arg(c.accent.darker(115).name());
+        play_btn->setStyleSheet(playStyle);
+    }
+    for (auto *t : findChildren<QLabel*>("trendingTitle")) {
+        t->setStyleSheet(QString("color: %1; font-weight: bold; background: transparent;").arg(c.text_primary.name()));
+    }
+    for (auto *s : findChildren<QLabel*>("trendingSubtitle")) {
+        s->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
+    }
+    for (auto *thumb : findChildren<QLabel*>("trendingThumb")) {
+        thumb->setStyleSheet(QString("background: %1; border-radius: 6px;").arg(c.bg_elevated.name()));
+    }
 }

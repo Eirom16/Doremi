@@ -41,9 +41,7 @@ StatCard::StatCard(const QString &title, const QString &icon_name, QWidget *pare
 
     // Setup border and background in stylesheet
     setObjectName("StatCard");
-    setStyleSheet(QString("QWidget#StatCard { background-color: %1; border: 1px solid %2; border-radius: 12px; }")
-        .arg(c.bg_surface.name())
-        .arg(c.border.name()));
+    setStyleSheet(QString("QWidget#StatCard { %1 }").arg(DesignTokens::panelStyle("surface", 12)));
 }
 
 void StatCard::setValue(int target_value, const QString &prefix, const QString &suffix) {
@@ -113,18 +111,30 @@ void StatCard::enterEvent(QEnterEvent *event) {
     QWidget::enterEvent(event);
     is_hovered_ = true;
     const auto &c = DesignTokens::current();
-    setStyleSheet(QString("QWidget#StatCard { background-color: %1; border: 1px solid %2; border-radius: 12px; }")
-        .arg(c.bg_elevated.name())
-        .arg(c.border_accent.name()));
+    setStyleSheet(QString("QWidget#StatCard { %1 border-color: %2; }")
+        .arg(DesignTokens::panelStyle("elevated", 12))
+        .arg(DesignTokens::rgba(c.border_accent)));
     update();
 }
 
 void StatCard::leaveEvent(QEvent *event) {
     QWidget::leaveEvent(event);
     is_hovered_ = false;
+    setStyleSheet(QString("QWidget#StatCard { %1 }").arg(DesignTokens::panelStyle("surface", 12)));
+    update();
+}
+
+void StatCard::update_theme() {
     const auto &c = DesignTokens::current();
-    setStyleSheet(QString("QWidget#StatCard { background-color: %1; border: 1px solid %2; border-radius: 12px; }")
-        .arg(c.bg_surface.name())
-        .arg(c.border.name()));
+    title_lbl_->setStyleSheet(QString("color: %1; font-weight: bold;").arg(c.text_secondary.name()));
+    value_lbl_->setStyleSheet(QString("color: %1; font-weight: bold;").arg(c.text_primary.name()));
+    IconProvider::setupIconLabel(icon_lbl_, icon_name_, 20, c.accent, true);
+    if (is_hovered_) {
+        setStyleSheet(QString("QWidget#StatCard { %1 border-color: %2; }")
+            .arg(DesignTokens::panelStyle("elevated", 12))
+            .arg(DesignTokens::rgba(c.border_accent)));
+    } else {
+        setStyleSheet(QString("QWidget#StatCard { %1 }").arg(DesignTokens::panelStyle("surface", 12)));
+    }
     update();
 }

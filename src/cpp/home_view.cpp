@@ -26,7 +26,10 @@ HomeView::HomeView(QWidget *parent)
         .arg(c.text_primary.name()));
     content_->addWidget(welcome_label_);
 
-    // Sections are added dynamically via add_section() from Rust
+    // Sections are added dynamically via add_section() from Rust.
+    // Start with a loading skeleton so the view is never blank on first load.
+    set_state("loading", "");
+
     content_->addStretch(1);
 }
 
@@ -126,7 +129,7 @@ void HomeView::clear_sections() {
 }
 
 void HomeView::set_state(const std::string &state, const std::string &message) {
-    if (state == "content") {
+    if (state == "content" || state == "success") {
         if (state_widget_) state_widget_->deleteLater();
         state_widget_ = nullptr;
         return;

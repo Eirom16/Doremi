@@ -35,6 +35,7 @@ void NowPlayingView::setupLayout() {
     header_layout->setContentsMargins(0, 0, 0, 0);
 
     auto *close_btn = new QPushButton(this);
+    close_btn->setObjectName("closeBtn");
     close_btn->setFixedSize(40, 40);
     close_btn->setCursor(Qt::PointingHandCursor);
     close_btn->setIcon(IconProvider::getIcon("expand_more", c.text_primary, 24));
@@ -65,12 +66,12 @@ void NowPlayingView::setupLayout() {
     meta_layout->setSpacing(4);
     meta_layout->setAlignment(Qt::AlignCenter);
 
-    title_label_ = new QLabel("Sin reproducción", this);
+    title_label_ = new QLabel(tr_q("no_playback"), this);
     title_label_->setFont(DesignTokens::getFont("heading_lg", 18));
     title_label_->setStyleSheet(QString("color: %1; font-weight: bold;").arg(c.text_primary.name()));
     title_label_->setAlignment(Qt::AlignCenter);
 
-    artist_label_ = new QLabel("Ningún track", this);
+    artist_label_ = new QLabel(tr_q("no_track"), this);
     artist_label_->setFont(DesignTokens::getFont("body", 13));
     artist_label_->setStyleSheet(QString("color: %1;").arg(c.text_secondary.name()));
     artist_label_->setAlignment(Qt::AlignCenter);
@@ -88,7 +89,7 @@ void NowPlayingView::setupLayout() {
     like_btn_->setFixedSize(32, 32);
     like_btn_->setCursor(Qt::PointingHandCursor);
     like_btn_->setIcon(IconProvider::getIcon("favorite_border", c.text_secondary, 18));
-    like_btn_->setToolTip("Agregar a favoritos");
+    like_btn_->setToolTip(tr_q("add_favorite"));
     like_btn_->setStyleSheet("QPushButton { background: transparent; border: none; border-radius: 16px; }"
                              "QPushButton:hover { background: rgba(255,255,255,0.08); }");
     connect(like_btn_, &QPushButton::clicked, this, [this]() {
@@ -108,7 +109,7 @@ void NowPlayingView::setupLayout() {
     download_btn_->setFixedSize(32, 32);
     download_btn_->setCursor(Qt::PointingHandCursor);
     download_btn_->setIcon(IconProvider::getIcon("download", c.text_secondary, 18));
-    download_btn_->setToolTip("Descargar");
+    download_btn_->setToolTip(tr_q("download"));
     download_btn_->setStyleSheet("QPushButton { background: transparent; border: none; border-radius: 16px; }"
                                  "QPushButton:hover { background: rgba(255,255,255,0.08); }");
     connect(download_btn_, &QPushButton::clicked, this, [this]() {
@@ -208,18 +209,18 @@ void NowPlayingView::setupLayout() {
     tabs_bar->setSpacing(8);
     tabs_bar->setAlignment(Qt::AlignLeft);
 
-    lyrics_tab_btn_ = new QPushButton("Letras", this);
+    lyrics_tab_btn_ = new QPushButton(tr_q("lyrics"), this);
     lyrics_tab_btn_->setFont(DesignTokens::getFont("heading_sm", 13));
     lyrics_tab_btn_->setCursor(Qt::PointingHandCursor);
     lyrics_tab_btn_->setCheckable(true);
     lyrics_tab_btn_->setChecked(true);
     
-    queue_tab_btn_ = new QPushButton("Cola de reproducción", this);
+    queue_tab_btn_ = new QPushButton(tr_q("queue"), this);
     queue_tab_btn_->setFont(DesignTokens::getFont("heading_sm", 13));
     queue_tab_btn_->setCursor(Qt::PointingHandCursor);
     queue_tab_btn_->setCheckable(true);
 
-    related_tab_btn_ = new QPushButton("Relacionados", this);
+    related_tab_btn_ = new QPushButton(tr_q("related"), this);
     related_tab_btn_->setFont(DesignTokens::getFont("heading_sm", 13));
     related_tab_btn_->setCursor(Qt::PointingHandCursor);
     related_tab_btn_->setCheckable(true);
@@ -346,13 +347,13 @@ void NowPlayingView::updateButtonsStyle() {
     // Setup Repeat style
     if (repeat_mode_ == 0) {
         repeat_btn_->setIcon(IconProvider::getIcon("repeat", c.text_secondary, 20));
-        repeat_btn_->setToolTip("Repetir: Desactivado");
+        repeat_btn_->setToolTip(tr_q("repeat_disabled_tooltip"));
     } else if (repeat_mode_ == 1) {
         repeat_btn_->setIcon(IconProvider::getIcon("repeat", c.accent, 20));
-        repeat_btn_->setToolTip("Repetir: Todas");
+        repeat_btn_->setToolTip(tr_q("repeat_all_tooltip"));
     } else {
         repeat_btn_->setIcon(IconProvider::getIcon("repeat_one", c.accent, 20));
-        repeat_btn_->setToolTip("Repetir: Una");
+        repeat_btn_->setToolTip(tr_q("repeat_one_tooltip"));
     }
 }
 
@@ -436,10 +437,10 @@ void NowPlayingView::updateLikeButtonState(bool is_favorite) {
     const auto &c = DesignTokens::current();
     if (is_favorite) {
         like_btn_->setIcon(IconProvider::getIcon("favorite", c.accent, 18));
-        like_btn_->setToolTip("Quitar de favoritos");
+        like_btn_->setToolTip(tr_q("remove_favorite"));
     } else {
         like_btn_->setIcon(IconProvider::getIcon("favorite_border", c.text_secondary, 18));
-        like_btn_->setToolTip("Agregar a favoritos");
+        like_btn_->setToolTip(tr_q("add_favorite"));
     }
 }
 
@@ -532,4 +533,38 @@ void NowPlayingView::setSubtitleGlowEffect(bool enabled) {
     if (lyrics_widget_) {
         lyrics_widget_->setSubtitleGlowEffect(enabled);
     }
+}
+
+void NowPlayingView::update_theme() {
+    const auto &c = DesignTokens::current();
+    title_label_->setStyleSheet(QString("color: %1; font-weight: bold;").arg(c.text_primary.name()));
+    artist_label_->setStyleSheet(QString("color: %1;").arg(c.text_secondary.name()));
+    time_label_->setStyleSheet(QString("color: %1;").arg(c.text_muted.name()));
+
+    if (auto *close_btn = findChild<QPushButton*>("closeBtn")) {
+        close_btn->setStyleSheet(
+            "QPushButton { background: rgba(255,255,255,0.06); border: none; border-radius: 20px; }"
+            "QPushButton:hover { background: rgba(255,255,255,0.12); }"
+        );
+        close_btn->setIcon(IconProvider::getIcon("expand_more", c.text_primary, 24));
+    }
+
+    prev_btn_->setIcon(IconProvider::getIcon("skip_previous", c.text_primary, 24));
+    next_btn_->setIcon(IconProvider::getIcon("skip_next", c.text_primary, 24));
+
+    QString play_style = QString(
+        "QPushButton {\n"
+        "    background-color: %1;\n"
+        "    border: none;\n"
+        "    border-radius: 28px;\n"
+        "}\n"
+        "QPushButton:hover {\n"
+        "    background-color: %2;\n"
+        "}\n"
+    )
+    .arg(c.accent.name())
+    .arg(c.accent_bright.name());
+    play_btn_->setStyleSheet(play_style);
+
+    updateButtonsStyle();
 }

@@ -47,7 +47,7 @@ LibraryView::LibraryView(QWidget *parent)
     for (const auto &tab : kLibraryTabs) {
         const std::string key(tab.key);
         auto *btn = new QPushButton(
-            QString::fromStdString(std::string(doremi_tr(tab.translation_key))),
+            tr_q(tab.translation_key),
             tab_bar);
         btn->setProperty("tabKey", QString::fromStdString(key));
         btn->setCheckable(true);
@@ -98,7 +98,7 @@ LibraryView::LibraryView(QWidget *parent)
     list_->setContentsMargins(24, 16, 24, 16);
     list_->setSpacing(6);
 
-    auto *placeholder = new QLabel(QString::fromStdString(std::string(doremi_tr("library_empty_title"))), this);
+    auto *placeholder = new QLabel(tr_q("library_empty_title"), this);
     placeholder->setFont(DesignTokens::getFont("body", 14));
     placeholder->setStyleSheet(QString("color: %1; padding: 24px;").arg(c.text_muted.name()));
     placeholder->setAlignment(Qt::AlignCenter);
@@ -109,32 +109,24 @@ LibraryView::LibraryView(QWidget *parent)
     setStyleSheet("background: transparent;");
 }
 
-QWidget *LibraryView::make_list_item(const std::string &text, const std::string &sub, const std::string &id) {
+QWidget *LibraryView::make_list_item(const std::string &text, const std::string &sub, const std::string &id, const std::string &thumbnail) {
     auto *ci = new ClickableItem(text, sub, this);
     ci->set_item_id(id);
     ci->set_item_type(active_tab_ == "albums" ? "album" :
                       active_tab_ == "artists" ? "artist" :
                       active_tab_ == "playlists" ? "playlist" :
                       active_tab_ == "shows" ? "show" : "song");
-    
-    // Find icon label and set special icon based on active tab
-    auto labels = ci->findChildren<QLabel*>();
-    for (auto *label : labels) {
-        if (label->font().family() == "Material Symbols Rounded") {
-            const auto &c = DesignTokens::current();
-            QString iconName = "music_note";
-            if (active_tab_ == "playlists") iconName = "queue_music";
-            else if (active_tab_ == "albums") iconName = "album";
-            else if (active_tab_ == "artists") iconName = "person";
-            else if (active_tab_ == "shows") iconName = "podcasts";
-            
-            label->setPixmap(IconProvider::getIcon(iconName, c.text_secondary, 18).pixmap(36, 36));
-        }
-    }
+    ci->set_thumbnail(thumbnail);
     
     connect(ci, &ClickableItem::clicked, this, [this, text, sub, id]() {
         if (active_tab_ == "shows") {
             emit show_requested(id);
+        } else if (active_tab_ == "playlists") {
+            emit playlist_requested(id);
+        } else if (active_tab_ == "albums") {
+            emit album_requested(id);
+        } else if (active_tab_ == "artists") {
+            emit artist_requested(id);
         } else {
             Track track;
             track.id = id;
@@ -162,14 +154,8 @@ QWidget *LibraryView::make_list_item(const std::string &text, const std::string 
 QWidget *LibraryView::make_song_item(const Track &track) {
     auto *ci = new ClickableItem(static_cast<std::string>(track.title), static_cast<std::string>(track.artist), this);
     ci->set_item_id(static_cast<std::string>(track.id));
-    
-    auto labels = ci->findChildren<QLabel*>();
-    for (auto *label : labels) {
-        if (label->font().family() == "Material Symbols Rounded") {
-            const auto &c = DesignTokens::current();
-            label->setPixmap(IconProvider::getIcon("music_note", c.text_secondary, 18).pixmap(36, 36));
-        }
-    }
+    ci->set_item_type("song");
+    ci->set_thumbnail(static_cast<std::string>(track.thumbnail));
     
     connect(ci, &ClickableItem::clicked, this, [this, track]() {
         emit play_requested(track);
@@ -192,7 +178,7 @@ void LibraryView::setup_search_bar() {
     const auto &c = DesignTokens::current();
 
     search_box_ = new QLineEdit(this);
-    search_box_->setPlaceholderText(QString::fromStdString(std::string(doremi_tr("search_library_placeholder"))));
+    search_box_->setPlaceholderText(tr_q("search_library_placeholder"));
     search_box_->setClearButtonEnabled(true);
     search_box_->setFixedHeight(36);
     search_box_->setStyleSheet(QString(
@@ -201,10 +187,10 @@ void LibraryView::setup_search_bar() {
         .arg(c.bg_elevated.name()).arg(c.border.name()).arg(c.text_primary.name()).arg(c.accent.name()));
 
     source_combo_ = new QComboBox(this);
-    source_combo_->addItem(QString::fromStdString(std::string(doremi_tr("source_all"))), 0);
-    source_combo_->addItem(QString::fromStdString(std::string(doremi_tr("source_cloud"))), 1);
-    source_combo_->addItem(QString::fromStdString(std::string(doremi_tr("source_downloads"))), 2);
-    source_combo_->addItem(QString::fromStdString(std::string(doremi_tr("source_local"))), 3);
+    source_combo_->addItem(tr_q("source_all"), 0);
+    source_combo_->addItem(tr_q("source_cloud"), 1);
+    source_combo_->addItem(tr_q("source_downloads"), 2);
+    source_combo_->addItem(tr_q("source_local"), 3);
     source_combo_->setFixedHeight(32);
     source_combo_->setStyleSheet(QString(
         "QComboBox { background: %1; border: 1px solid %2; border-radius: 16px; padding: 0 12px; color: %3; font-size: 12px; }"
@@ -212,10 +198,10 @@ void LibraryView::setup_search_bar() {
         .arg(c.bg_elevated.name()).arg(c.border.name()).arg(c.text_primary.name()));
 
     sort_combo_ = new QComboBox(this);
-    sort_combo_->addItem(QString::fromStdString(std::string(doremi_tr("sort_name_asc"))), "name_asc");
-    sort_combo_->addItem(QString::fromStdString(std::string(doremi_tr("sort_name_desc"))), "name_desc");
-    sort_combo_->addItem(QString::fromStdString(std::string(doremi_tr("sort_recent"))), "recent");
-    sort_combo_->addItem(QString::fromStdString(std::string(doremi_tr("sort_oldest"))), "oldest");
+    sort_combo_->addItem(tr_q("sort_name_asc"), "name_asc");
+    sort_combo_->addItem(tr_q("sort_name_desc"), "name_desc");
+    sort_combo_->addItem(tr_q("sort_recent"), "recent");
+    sort_combo_->addItem(tr_q("sort_oldest"), "oldest");
     sort_combo_->setFixedHeight(32);
     sort_combo_->setStyleSheet(QString(
         "QComboBox { background: %1; border: 1px solid %2; border-radius: 16px; padding: 0 12px; color: %3; font-size: 12px; }"
@@ -249,7 +235,7 @@ void LibraryView::set_playlists(const std::vector<Playlist> &playlists) {
     active_tab_ = "playlists";
     clear_list();
     const auto &c = DesignTokens::current();
-    auto *create_btn = new QPushButton(QString::fromStdString(std::string(doremi_tr("new_playlist"))), this);
+    auto *create_btn = new QPushButton(tr_q("new_playlist"), this);
     create_btn->setCursor(Qt::PointingHandCursor);
     create_btn->setStyleSheet(QString(
         "QPushButton { background: %1; color: white; border: none; border-radius: 8px; padding: 10px 20px; font-size: 14px; font-weight: 600; }"
@@ -268,14 +254,14 @@ void LibraryView::set_playlists(const std::vector<Playlist> &playlists) {
     list_->addWidget(create_btn);
     list_->addSpacing(8);
     if (playlists.empty()) {
-        auto *lbl = new QLabel(QString::fromStdString(std::string(doremi_tr("no_playlists_message"))), this);
+        auto *lbl = new QLabel(tr_q("no_playlists_message"), this);
         lbl->setFont(DesignTokens::getFont("body", 13));
         lbl->setStyleSheet(QString("color: %1; padding: 12px;").arg(c.text_muted.name()));
         list_->addWidget(lbl);
     } else {
         for (const auto &p : playlists) {
-            QString sub = QString("%1 %2").arg(p.track_count).arg(QString::fromStdString(std::string(doremi_tr("songs"))).toLower());
-            list_->addWidget(make_list_item(static_cast<std::string>(p.name), sub.toStdString(), static_cast<std::string>(p.id)));
+            QString sub = QString("%1 %2").arg(p.track_count).arg(tr_q("songs").toLower());
+            list_->addWidget(make_list_item(static_cast<std::string>(p.name), sub.toStdString(), static_cast<std::string>(p.id), static_cast<std::string>(p.thumbnail)));
         }
     }
     list_->addStretch(1);
@@ -306,7 +292,7 @@ void LibraryView::set_albums(const std::vector<Album> &albums) {
         return;
     }
     for (const auto &a : albums) {
-        list_->addWidget(make_list_item(static_cast<std::string>(a.title), static_cast<std::string>(a.artist), static_cast<std::string>(a.id)));
+        list_->addWidget(make_list_item(static_cast<std::string>(a.title), static_cast<std::string>(a.artist), static_cast<std::string>(a.id), static_cast<std::string>(a.thumbnail)));
     }
     list_->addStretch(1);
     set_active_tab(active_tab_);
@@ -321,7 +307,7 @@ void LibraryView::set_artists(const std::vector<Artist> &artists) {
         return;
     }
     for (const auto &a : artists) {
-        list_->addWidget(make_list_item(static_cast<std::string>(a.name), "", static_cast<std::string>(a.id)));
+        list_->addWidget(make_list_item(static_cast<std::string>(a.name), "", static_cast<std::string>(a.id), static_cast<std::string>(a.thumbnail)));
     }
     list_->addStretch(1);
     set_active_tab(active_tab_);
@@ -339,7 +325,8 @@ void LibraryView::set_shows(const std::vector<Show> &shows) {
         auto *ci = make_list_item(
             static_cast<std::string>(s.title),
             static_cast<std::string>(s.author),
-            static_cast<std::string>(s.id));
+            static_cast<std::string>(s.id),
+            static_cast<std::string>(s.thumbnail));
         list_->addWidget(ci);
     }
     list_->addStretch(1);
@@ -384,7 +371,7 @@ void LibraryView::set_search_results(
             return;
         }
         for (const auto &a : albums) {
-            list_->addWidget(make_list_item(static_cast<std::string>(a.title), static_cast<std::string>(a.artist), static_cast<std::string>(a.id)));
+            list_->addWidget(make_list_item(static_cast<std::string>(a.title), static_cast<std::string>(a.artist), static_cast<std::string>(a.id), static_cast<std::string>(a.thumbnail)));
         }
     } else if (tab == "artists") {
         if (artists.empty()) {
@@ -393,11 +380,11 @@ void LibraryView::set_search_results(
             return;
         }
         for (const auto &a : artists) {
-            list_->addWidget(make_list_item(static_cast<std::string>(a.name), "", static_cast<std::string>(a.id)));
+            list_->addWidget(make_list_item(static_cast<std::string>(a.name), "", static_cast<std::string>(a.id), static_cast<std::string>(a.thumbnail)));
         }
     } else if (tab == "playlists") {
         const auto &c = DesignTokens::current();
-        auto *create_btn = new QPushButton(QString::fromStdString(std::string(doremi_tr("new_playlist"))), this);
+        auto *create_btn = new QPushButton(tr_q("new_playlist"), this);
         create_btn->setCursor(Qt::PointingHandCursor);
         create_btn->setStyleSheet(QString(
             "QPushButton { background: %1; color: white; border: none; border-radius: 8px; padding: 10px 20px; font-size: 14px; font-weight: 600; }"
@@ -416,14 +403,14 @@ void LibraryView::set_search_results(
         list_->addWidget(create_btn);
         list_->addSpacing(8);
         if (playlists.empty()) {
-            auto *lbl = new QLabel(QString::fromStdString(std::string(doremi_tr("no_playlists_message"))), this);
+            auto *lbl = new QLabel(tr_q("no_playlists_message"), this);
             lbl->setFont(DesignTokens::getFont("body", 13));
             lbl->setStyleSheet(QString("color: %1; padding: 12px;").arg(c.text_muted.name()));
             list_->addWidget(lbl);
         } else {
             for (const auto &p : playlists) {
-                QString sub = QString("%1 %2").arg(p.track_count).arg(QString::fromStdString(std::string(doremi_tr("songs"))).toLower());
-                list_->addWidget(make_list_item(static_cast<std::string>(p.name), sub.toStdString(), static_cast<std::string>(p.id)));
+                QString sub = QString("%1 %2").arg(p.track_count).arg(tr_q("songs").toLower());
+                list_->addWidget(make_list_item(static_cast<std::string>(p.name), sub.toStdString(), static_cast<std::string>(p.id), static_cast<std::string>(p.thumbnail)));
             }
         }
     }
@@ -446,7 +433,7 @@ void LibraryView::set_library_state(const std::string &state, const std::string 
     
     // Show action button if not authenticated
     if (state == "not_authenticated") {
-        auto *login_btn = new QPushButton(QString::fromStdString(std::string(doremi_tr("login_yt_music"))), this);
+        auto *login_btn = new QPushButton(tr_q("login_yt_music"), this);
         login_btn->setCursor(Qt::PointingHandCursor);
         login_btn->setStyleSheet(QString(
             "QPushButton { background: %1; color: white; border: none; border-radius: 8px; padding: 10px 20px; font-size: 14px; font-weight: 600; }"
@@ -473,4 +460,35 @@ void LibraryView::show_empty_state() {
 
 void LibraryView::show_not_authenticated_state() {
     set_library_state("not_authenticated", std::string(doremi_tr("library_not_auth_title")));
+}
+
+void LibraryView::update_theme() {
+    const auto &c = DesignTokens::current();
+    if (search_box_) search_box_->setStyleSheet(DesignTokens::textInputStyle());
+    if (source_combo_) source_combo_->setStyleSheet(DesignTokens::textInputStyle());
+    if (sort_combo_) sort_combo_->setStyleSheet(DesignTokens::textInputStyle());
+    for (auto *btn : tab_btns_) {
+        if (!btn) continue;
+        QString btnStyle = QString(
+            "QPushButton {\n"
+            "    background: transparent;\n"
+            "    border: none;\n"
+            "    border-bottom: 2px solid transparent;\n"
+            "    color: %1;\n"
+            "    padding: 0 12px;\n"
+            "}\n"
+            "QPushButton:hover {\n"
+            "    color: %2;\n"
+            "}\n"
+            "QPushButton:checked {\n"
+            "    color: %3;\n"
+            "    border-bottom: 2px solid %3;\n"
+            "    font-weight: 500;\n"
+            "}\n"
+        )
+        .arg(c.text_secondary.name())
+        .arg(c.text_primary.name())
+        .arg(c.accent.name());
+        btn->setStyleSheet(btnStyle);
+    }
 }

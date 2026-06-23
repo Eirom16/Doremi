@@ -1,10 +1,13 @@
 #include "player_bar.h"
 #include "design_tokens.h"
 #include "icon_provider.h"
+#include "components/artwork_loader.h"
+#include "doremi/src/bridge.rs.h"
 #include <QPainter>
 #include <QPainterPath>
 #include <QDebug>
 #include <QMouseEvent>
+#include <QPointer>
 
 
 static QPixmap getRoundedPixmap(const QPixmap &src, int radius) {
@@ -43,14 +46,14 @@ PlayerBar::PlayerBar(QWidget *parent)
     
     QPixmap default_art = IconProvider::getIcon("music_note", c.text_secondary, 22).pixmap(44, 44);
     artwork_label_->setPixmap(getRoundedPixmap(default_art, 6));
-    artwork_label_->setAccessibleName("Artwork del track actual");
+    artwork_label_->setAccessibleName(tr_q("artwork_accessible_name"));
 
     track_label_ = new QLabel(left_container_);
     track_label_->setFont(DesignTokens::getFont("body", 13));
-    track_label_->setText("<b>Sin reproducción</b><br><font color=\"" + c.text_muted.name() + "\">Ningún track seleccionado</font>");
+    track_label_->setText("<b>" + tr_q("no_playback") + "</b><br><font color=\"" + c.text_muted.name() + "\">" + tr_q("no_track_selected") + "</font>");
     track_label_->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     track_label_->setStyleSheet("background: transparent;");
-    track_label_->setAccessibleName("Track actual");
+    track_label_->setAccessibleName(tr_q("current_track"));
 
     artwork_label_->setAttribute(Qt::WA_TransparentForMouseEvents);
     track_label_->setAttribute(Qt::WA_TransparentForMouseEvents);
@@ -87,9 +90,9 @@ PlayerBar::PlayerBar(QWidget *parent)
     shuffle_btn_->setIcon(IconProvider::getIcon("shuffle", c.text_secondary, 20));
     DesignTokens::applyAccessible(
         shuffle_btn_,
-        "Aleatorio",
-        "Activa o desactiva la reproduccion aleatoria.",
-        "Aleatorio");
+        tr_q("shuffle"),
+        tr_q("shuffle_accessible_desc"),
+        tr_q("shuffle"));
     shuffle_btn_->setStyleSheet(DesignTokens::iconButtonStyle());
 
     // Previous Button
@@ -100,9 +103,9 @@ PlayerBar::PlayerBar(QWidget *parent)
     prev_btn_->setIcon(IconProvider::getIcon("skip_previous", c.text_primary, 22));
     DesignTokens::applyAccessible(
         prev_btn_,
-        "Track anterior",
-        "Reproduce el track anterior.",
-        "Anterior (tecla multimedia)");
+        tr_q("previous_track"),
+        tr_q("previous_track_desc"),
+        tr_q("previous_accessible_name"));
     prev_btn_->setStyleSheet(DesignTokens::iconButtonStyle());
 
     // Play/Pause Button (Solid Rounded Circle)
@@ -113,9 +116,9 @@ PlayerBar::PlayerBar(QWidget *parent)
     play_btn_->setIcon(IconProvider::getIcon("play_arrow", QColor("#FFFFFF"), 24));
     DesignTokens::applyAccessible(
         play_btn_,
-        "Reproducir",
-        "Inicia o pausa la reproduccion.",
-        "Reproducir / pausar (Espacio)");
+        tr_q("play"),
+        tr_q("play_accessible_desc"),
+        tr_q("play_accessible_name"));
     play_btn_->setStyleSheet(DesignTokens::primaryButtonStyle(20));
 
     // Next Button
@@ -126,9 +129,9 @@ PlayerBar::PlayerBar(QWidget *parent)
     next_btn_->setIcon(IconProvider::getIcon("skip_next", c.text_primary, 22));
     DesignTokens::applyAccessible(
         next_btn_,
-        "Track siguiente",
-        "Reproduce el siguiente track.",
-        "Siguiente (tecla multimedia)");
+        tr_q("next_track"),
+        tr_q("next_track_desc"),
+        tr_q("next_accessible_name"));
     next_btn_->setStyleSheet(DesignTokens::iconButtonStyle());
 
     // Repeat Button
@@ -139,9 +142,9 @@ PlayerBar::PlayerBar(QWidget *parent)
     repeat_btn_->setIcon(IconProvider::getIcon("repeat", c.text_secondary, 20));
     DesignTokens::applyAccessible(
         repeat_btn_,
-        "Repetir desactivado",
-        "Cambia el modo de repeticion.",
-        "Repetir: Desactivado");
+        tr_q("repeat_disabled_desc"),
+        tr_q("repeat_mode_desc"),
+        tr_q("repeat_disabled_tooltip"));
     repeat_btn_->setStyleSheet(DesignTokens::iconButtonStyle());
 
     controls_layout->addWidget(shuffle_btn_);
@@ -166,9 +169,9 @@ PlayerBar::PlayerBar(QWidget *parent)
     progress_->setFocusPolicy(Qt::StrongFocus);
     DesignTokens::applyAccessible(
         progress_,
-        "Progreso de reproduccion",
-        "Permite mover la posicion del track actual.",
-        "Progreso (←/→ para saltar 5s)");
+        tr_q("playback_progress"),
+        tr_q("playback_progress_desc"),
+        tr_q("playback_progress_keys"));
     progress_->setStyleSheet(DesignTokens::sliderStyle(true));
 
     time_label_ = new QLabel("0:00 / 0:00", this);
@@ -200,9 +203,9 @@ PlayerBar::PlayerBar(QWidget *parent)
     volume_slider_->setFocusPolicy(Qt::StrongFocus);
     DesignTokens::applyAccessible(
         volume_slider_,
-        "Volumen",
-        "Ajusta el volumen de reproduccion.",
-        "Volumen (↑/↓)");
+        tr_q("volume"),
+        tr_q("volume_accessible_desc"),
+        tr_q("volume_accessible_keys"));
     volume_slider_->setStyleSheet(DesignTokens::sliderStyle(false));
 
     right_layout->addWidget(volume_icon);
@@ -216,16 +219,7 @@ PlayerBar::PlayerBar(QWidget *parent)
 
     // Set panel background
     setAttribute(Qt::WA_StyledBackground, true);
-    setStyleSheet(QString(
-        "PlayerBar {"
-        "    background-color: %1;"
-        "    border: 1px solid %2;"
-        "    border-radius: 16px;"
-        "}"
-    )
-        .arg(c.bg_surface.name())
-        .arg(DesignTokens::rgba(c.border))
-    );
+    setStyleSheet(QString("PlayerBar { %1 }").arg(DesignTokens::panelStyle("surface", 16)));
 
     QWidget::setTabOrder({shuffle_btn_, prev_btn_, play_btn_, next_btn_, repeat_btn_, progress_, volume_slider_});
 
@@ -242,9 +236,9 @@ PlayerBar::PlayerBar(QWidget *parent)
         shuffle_btn_->setIcon(IconProvider::getIcon("shuffle", on ? c.accent : c.text_secondary, 20));
         DesignTokens::applyAccessible(
             shuffle_btn_,
-            on ? "Aleatorio activado" : "Aleatorio desactivado",
-            "Activa o desactiva la reproduccion aleatoria.",
-            on ? "Aleatorio: Activado" : "Aleatorio: Desactivado");
+            on ? tr_q("shuffle_enabled") : tr_q("shuffle_disabled"),
+            tr_q("shuffle_accessible_desc"),
+            on ? tr_q("shuffle_active_status") : tr_q("shuffle_inactive_status"));
         emit shuffle_toggled(on);
     });
 
@@ -268,16 +262,18 @@ void PlayerBar::set_track_info(const std::string &title, const std::string &arti
         .arg(c.text_secondary.name())
         .arg(artist_str)
     );
-    track_label_->setAccessibleName(QString("Track actual: %1").arg(title_str));
-    track_label_->setAccessibleDescription(QString("Artista: %1").arg(artist_str));
+    track_label_->setAccessibleName(tr_q("current_track_accessible").arg(title_str));
+    track_label_->setAccessibleDescription(tr_q("artist_accessible").arg(artist_str));
 
     // Load artwork
-    QPixmap art_pix;
     const int artwork_size = artwork_label_->width() > 0 ? artwork_label_->width() : 44;
-    if (!thumbnail.empty() && art_pix.load(QString::fromStdString(thumbnail))) {
-        artwork_label_->setPixmap(getRoundedPixmap(
-            art_pix.scaled(artwork_size, artwork_size, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation), 6
-        ));
+    if (!thumbnail.empty()) {
+        QPointer<QLabel> label_ptr(artwork_label_);
+        ArtworkLoader::load(QString::fromStdString(thumbnail), QSize(artwork_size, artwork_size), [label_ptr](const QPixmap &pixmap) {
+            if (label_ptr) {
+                label_ptr->setPixmap(getRoundedPixmap(pixmap, 6));
+            }
+        });
     } else {
         QPixmap default_art = IconProvider::getIcon("music_note", c.text_secondary, 22).pixmap(artwork_size, artwork_size);
         artwork_label_->setPixmap(getRoundedPixmap(default_art, 6));
@@ -298,7 +294,7 @@ void PlayerBar::set_progress(int32_t pos_ms, int32_t dur_ms) {
         };
         time_label_->setText(fmt(pos_ms) + " / " + fmt(dur_ms));
         progress_->setAccessibleDescription(
-            QString("Posicion %1 de %2").arg(fmt(pos_ms), fmt(dur_ms)));
+            tr_q("track_position_accessible").arg(fmt(pos_ms), fmt(dur_ms)));
     }
 }
 
@@ -310,9 +306,9 @@ void PlayerBar::set_playing(bool playing) {
     ));
     DesignTokens::applyAccessible(
         play_btn_,
-        playing ? "Pausar" : "Reproducir",
-        "Inicia o pausa la reproduccion.",
-        playing ? "Pausar (Espacio)" : "Reproducir (Espacio)");
+        playing ? tr_q("pause") : tr_q("play"),
+        tr_q("play_accessible_desc"),
+        playing ? tr_q("pause_shortcut_tooltip") : tr_q("play_shortcut_tooltip"));
 }
 
 void PlayerBar::set_volume_value(int32_t volume) {
@@ -329,9 +325,9 @@ void PlayerBar::set_shuffle(bool on) {
     shuffle_btn_->setIcon(IconProvider::getIcon("shuffle", on ? c.accent : c.text_secondary, 20));
     DesignTokens::applyAccessible(
         shuffle_btn_,
-        on ? "Aleatorio activado" : "Aleatorio desactivado",
-        "Activa o desactiva la reproduccion aleatoria.",
-        on ? "Aleatorio: Activado" : "Aleatorio: Desactivado");
+        on ? tr_q("shuffle_enabled") : tr_q("shuffle_disabled"),
+        tr_q("shuffle_accessible_desc"),
+        on ? tr_q("shuffle_active_status") : tr_q("shuffle_inactive_status"));
     shuffle_btn_->blockSignals(false);
 }
 
@@ -343,23 +339,23 @@ void PlayerBar::set_repeat_mode(int mode) {
         repeat_btn_->setIcon(IconProvider::getIcon("repeat", c.text_secondary, 20));
         DesignTokens::applyAccessible(
             repeat_btn_,
-            "Repetir desactivado",
-            "Cambia el modo de repeticion.",
-            "Repetir: Desactivado");
+            tr_q("repeat_disabled_desc"),
+            tr_q("repeat_mode_desc"),
+            tr_q("repeat_disabled_tooltip"));
     } else if (mode == 1) {
         repeat_btn_->setIcon(IconProvider::getIcon("repeat", c.accent, 20));
         DesignTokens::applyAccessible(
             repeat_btn_,
-            "Repetir todas",
-            "Repite todos los tracks de la cola.",
-            "Repetir: Todas");
+            tr_q("repeat_all_accessible_name"),
+            tr_q("repeat_all_desc"),
+            tr_q("repeat_all_tooltip"));
     } else {
         repeat_btn_->setIcon(IconProvider::getIcon("repeat_one", c.accent, 20));
         DesignTokens::applyAccessible(
             repeat_btn_,
-            "Repetir una",
-            "Repite solo el track actual.",
-            "Repetir: Una");
+            tr_q("repeat_one_accessible_name"),
+            tr_q("repeat_one_desc"),
+            tr_q("repeat_one_tooltip"));
     }
 }
 
@@ -409,15 +405,7 @@ void PlayerBar::update_theme() {
     QColor rep_color = repeat_mode_ > 0 ? c.accent : c.text_secondary;
     repeat_btn_->setIcon(IconProvider::getIcon(repeat_mode_ == 2 ? "repeat_one" : "repeat", rep_color, 20));
     
-    setStyleSheet(QString(
-        "PlayerBar {"
-        "    background-color: %1;"
-        "    border: 1px solid %2;"
-        "    border-radius: 16px;"
-        "}"
-    )
-        .arg(c.bg_surface.name())
-        .arg(DesignTokens::rgba(c.border)));
+    setStyleSheet(QString("PlayerBar { %1 }").arg(DesignTokens::panelStyle("surface", 16)));
     shuffle_btn_->setStyleSheet(DesignTokens::iconButtonStyle());
     prev_btn_->setStyleSheet(DesignTokens::iconButtonStyle());
     next_btn_->setStyleSheet(DesignTokens::iconButtonStyle());

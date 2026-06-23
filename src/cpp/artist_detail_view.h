@@ -20,6 +20,7 @@ public:
                    const QString &duration, Track track,
                    QWidget *parent = nullptr);
 
+    void update_theme();
 signals:
     void play_requested(Track track);
 
@@ -40,8 +41,10 @@ public:
 
     void set_artist_info(const Artist &artist);
     void set_artist_tracks(const std::vector<Track> &tracks,
-                           const std::vector<Album> &albums);
+                           const std::vector<Album> &albums,
+                           const std::vector<Album> &singles);
     void clear();
+    void update_theme();
 
 signals:
     void play_requested(Track track);
@@ -65,10 +68,9 @@ private:
     QWidget *tracks_widget_;
     QVBoxLayout *tracks_layout_;
 
-    // Albums
-    std::vector<Album> albums_;
-    QWidget *albums_widget_ = nullptr;
-    QVBoxLayout *albums_layout_ = nullptr;
+    // Dynamic section containers
+    QWidget *albums_container_ = nullptr;
+    QWidget *singles_container_ = nullptr;
 };
 
 #endif

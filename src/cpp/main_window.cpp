@@ -64,6 +64,9 @@
 
 
 
+// Non-owning global pointer pointing to the active DoremiMainWindow instance.
+// The window's lifetime is managed by the application event loop, but we ensure
+// any existing instance is deleted upon re-initialization to prevent memory leaks.
 DoremiMainWindow *g_main_window = nullptr;
 
 namespace {
@@ -121,23 +124,38 @@ DoremiMainWindow::DoremiMainWindow(QWidget *parent)
     auto *placeholder = new QLabel("Selecciona una sección", stack_);
     placeholder->setAlignment(Qt::AlignCenter);
     placeholder->setStyleSheet("color: #6A6A8A; font-size: 16px;");
-    stack_->addWidget(placeholder);             // idx 0
-    stack_->addWidget(home_view_);              // idx 1
-    stack_->addWidget(search_view_);            // idx 2
-    stack_->addWidget(library_view_);           // idx 3
-    stack_->addWidget(settings_view_);          // idx 4
-    stack_->addWidget(trending_view_);          // idx 5
-    stack_->addWidget(downloads_view_);         // idx 6
-    stack_->addWidget(stats_view_);             // idx 7
-    stack_->addWidget(history_view_);           // idx 8
-    stack_->addWidget(album_detail_view_);      // idx 9
-    stack_->addWidget(artist_detail_view_);     // idx 10
-    stack_->addWidget(playlist_detail_view_);   // idx 11
-    stack_->addWidget(show_detail_view_);        // idx 12
-    stack_->addWidget(welcome_view_);           // idx 13
+    
+    int idx_placeholder = stack_->addWidget(placeholder);
+    int idx_home = stack_->addWidget(home_view_);
+    int idx_search = stack_->addWidget(search_view_);
+    int idx_library = stack_->addWidget(library_view_);
+    int idx_settings = stack_->addWidget(settings_view_);
+    int idx_trending = stack_->addWidget(trending_view_);
+    int idx_downloads = stack_->addWidget(downloads_view_);
+    int idx_stats = stack_->addWidget(stats_view_);
+    int idx_history = stack_->addWidget(history_view_);
+    int idx_album = stack_->addWidget(album_detail_view_);
+    int idx_artist = stack_->addWidget(artist_detail_view_);
+    int idx_playlist = stack_->addWidget(playlist_detail_view_);
+    int idx_show = stack_->addWidget(show_detail_view_);
+    int idx_welcome = stack_->addWidget(welcome_view_);
 
+    Q_ASSERT(idx_placeholder == static_cast<int>(ViewIndex::Placeholder));
+    Q_ASSERT(idx_home == static_cast<int>(ViewIndex::Home));
+    Q_ASSERT(idx_search == static_cast<int>(ViewIndex::Search));
+    Q_ASSERT(idx_library == static_cast<int>(ViewIndex::Library));
+    Q_ASSERT(idx_settings == static_cast<int>(ViewIndex::Settings));
+    Q_ASSERT(idx_trending == static_cast<int>(ViewIndex::Trending));
+    Q_ASSERT(idx_downloads == static_cast<int>(ViewIndex::Downloads));
+    Q_ASSERT(idx_stats == static_cast<int>(ViewIndex::Stats));
+    Q_ASSERT(idx_history == static_cast<int>(ViewIndex::History));
+    Q_ASSERT(idx_album == static_cast<int>(ViewIndex::AlbumDetail));
+    Q_ASSERT(idx_artist == static_cast<int>(ViewIndex::ArtistDetail));
+    Q_ASSERT(idx_playlist == static_cast<int>(ViewIndex::PlaylistDetail));
+    Q_ASSERT(idx_show == static_cast<int>(ViewIndex::ShowDetail));
+    Q_ASSERT(idx_welcome == static_cast<int>(ViewIndex::Welcome));
 
-    stack_->setCurrentIndex(1); // start at home
+    stack_->setCurrentIndex(static_cast<int>(ViewIndex::Home)); // start at home
     auto *right_container = new QWidget(central);
     auto *right_layout = new QVBoxLayout(right_container);
     right_layout->setContentsMargins(0, 0, 0, 0);
@@ -149,15 +167,13 @@ DoremiMainWindow::DoremiMainWindow(QWidget *parent)
     body_scroll_ = new QScrollArea(right_container);
     body_scroll_->setWidgetResizable(true);
     body_scroll_->setFrameShape(QFrame::NoFrame);
-    body_scroll_->setStyleSheet("background: transparent; border: none;");
+    body_scroll_->setStyleSheet(DesignTokens::scrollAreaStyle());
     body_scroll_->setWidget(stack_);
     right_layout->addWidget(body_scroll_, 1);
 
     body->addWidget(right_container, 1);
 
-    root->addLayout(body, 1);
-
-    player_shell_ = new QWidget(central);
+    player_shell_ = new QWidget(right_container);
     player_shell_->setAttribute(Qt::WA_StyledBackground, true);
     player_shell_->setStyleSheet("background: transparent;");
     player_shell_layout_ = new QHBoxLayout(player_shell_);
@@ -165,7 +181,9 @@ DoremiMainWindow::DoremiMainWindow(QWidget *parent)
     player_shell_layout_->setSpacing(0);
     player_bar_ = new PlayerBar(player_shell_);
     player_shell_layout_->addWidget(player_bar_);
-    root->addWidget(player_shell_);
+    right_layout->addWidget(player_shell_);
+
+    root->addLayout(body, 1);
 
     setCentralWidget(central);
 
@@ -466,9 +484,20 @@ void DoremiMainWindow::connect_signals() {
     QObject::connect(library_view_, &LibraryView::add_to_queue_end_requested, this,
         [](Track track) { on_add_to_queue_end(track); });
     QObject::connect(library_view_, &LibraryView::show_requested, this,
-        [this](const std::string &id) {
-            if (!ensure_online_action("abrir detalles de podcast")) return;
+        [](const std::string &id) {
             on_show_requested(id);
+        });
+    QObject::connect(library_view_, &LibraryView::playlist_requested, this,
+        [](const std::string &id) {
+            on_playlist_requested(id);
+        });
+    QObject::connect(library_view_, &LibraryView::album_requested, this,
+        [](const std::string &id) {
+            on_album_requested(id);
+        });
+    QObject::connect(library_view_, &LibraryView::artist_requested, this,
+        [](const std::string &id) {
+            on_artist_requested(id);
         });
     QObject::connect(library_view_, &LibraryView::create_playlist_requested, this,
         [](const std::string &name, const std::string &desc, const std::string &privacy) {
@@ -674,18 +703,15 @@ void DoremiMainWindow::update_player_state(int32_t state, int32_t pos, int32_t d
     }
 }
 
-static std::string g_last_track_title;
-static std::string g_last_track_artist;
-
 void DoremiMainWindow::set_mini_player_info(const std::string &title, const std::string &artist,
                                              const std::string &thumb) {
     player_bar_->set_track_info(title, artist, thumb);
     if (now_playing_view_) {
         now_playing_view_->setTrackInfo(title, artist, thumb);
     }
-    if (playback_playing_ && !title.empty() && (title != g_last_track_title || artist != g_last_track_artist)) {
-        g_last_track_title = title;
-        g_last_track_artist = artist;
+    if (playback_playing_ && !title.empty() && (title != last_track_title_ || artist != last_track_artist_)) {
+        last_track_title_ = title;
+        last_track_artist_ = artist;
         show_notif("Reproduciendo: " + title + " — " + artist, "info");
     }
 }
@@ -722,7 +748,7 @@ void DoremiMainWindow::update_responsive_layout() {
         title_bar_->set_sidebar_offset(sidebar_width);
     }
     if (player_shell_layout_) {
-        player_shell_layout_->setContentsMargins(sidebar_width + 16, 0, 16, 12);
+        player_shell_layout_->setContentsMargins(16, 0, 16, 12);
     }
     if (player_bar_) {
         player_bar_->set_compact(width() < 1120);
@@ -745,11 +771,9 @@ void DoremiMainWindow::set_track_lyrics(const std::string &plain, const std::str
     }
 }
 
-void DoremiMainWindow::set_playback_queue(const rust::Vec<Track> &queue, int32_t current_index) {
+void DoremiMainWindow::set_playback_queue(const std::vector<Track> &queue, int32_t current_index) {
     if (now_playing_view_) {
-        std::vector<Track> q;
-        for (const auto &t : queue) q.push_back(t);
-        now_playing_view_->setQueue(q, current_index);
+        now_playing_view_->setQueue(queue, current_index);
     }
     if (player_bar_ && current_index >= 0 && current_index < static_cast<int32_t>(queue.size())) {
         const auto &t = queue[current_index];
@@ -761,11 +785,9 @@ void DoremiMainWindow::set_playback_queue(const rust::Vec<Track> &queue, int32_t
     }
 }
 
-void DoremiMainWindow::set_related_tracks(const rust::Vec<Track> &tracks) {
+void DoremiMainWindow::set_related_tracks(const std::vector<Track> &tracks) {
     if (now_playing_view_) {
-        std::vector<Track> t;
-        for (const auto &tr : tracks) t.push_back(tr);
-        now_playing_view_->setRelatedTracks(t);
+        now_playing_view_->setRelatedTracks(tracks);
     }
 }
 
@@ -792,15 +814,9 @@ void DoremiMainWindow::set_online_status(bool is_online) {
     }
 }
 
-void DoremiMainWindow::set_history_data(const rust::Vec<Track> &history, const rust::Vec<rust::String> &played_at, const rust::Vec<rust::String> &feedback_tokens) {
+void DoremiMainWindow::set_history_data(const std::vector<Track> &history, const std::vector<std::string> &played_at, const std::vector<std::string> &feedback_tokens) {
     if (history_view_) {
-        std::vector<Track> h;
-        for (const auto &t : history) h.push_back(t);
-        std::vector<std::string> pa;
-        for (const auto &x : played_at) pa.push_back(Ffi::to_std_string(x));
-        std::vector<std::string> ft;
-        for (const auto &y : feedback_tokens) ft.push_back(Ffi::to_std_string(y));
-        history_view_->set_history(h, pa, ft);
+        history_view_->set_history(history, played_at, feedback_tokens);
     }
 }
 
@@ -839,41 +855,36 @@ rust::String get_or_create_thumbnail(rust::Str title, int32_t variant) {
         return rust::String(cached_path);
     }
 
-    const std::string filepath = Ffi::on_gui_blocking(
-        "get_or_create_thumbnail",
-        std::string(),
-        [title_copy, variant, hash, filepath_q]() {
-            int r = 50 + (static_cast<unsigned char>(hash[0]) % 156);
-            int g = 30 + (static_cast<unsigned char>(hash[1]) % 120);
-            int b = 70 + (static_cast<unsigned char>(hash[2]) % 140);
+    int r = 50 + (static_cast<unsigned char>(hash[0]) % 156);
+    int g = 30 + (static_cast<unsigned char>(hash[1]) % 120);
+    int b = 70 + (static_cast<unsigned char>(hash[2]) % 140);
 
-            QColor c1(r, g, b);
-            QColor c2((r + 60) % 256, (g + 40) % 256, (b + 80) % 256);
-            if (QFile::exists(filepath_q)) return Ffi::to_std_string(filepath_q);
+    QColor c1(r, g, b);
+    QColor c2((r + 60) % 256, (g + 40) % 256, (b + 80) % 256);
 
-            QPixmap px(128, 128);
-            px.fill(Qt::transparent);
-            QPainter painter(&px);
-            painter.setRenderHint(QPainter::Antialiasing);
-            QLinearGradient gradient(0, 0, 128, 128);
-            gradient.setColorAt(0.0, c1);
-            gradient.setColorAt(1.0, c2);
-            painter.setBrush(gradient);
-            painter.setPen(Qt::NoPen);
-            painter.drawRoundedRect(0, 0, 128, 128, 12, 12);
+    QImage img(128, 128, QImage::Format_ARGB32_Premultiplied);
+    img.fill(Qt::transparent);
+    QPainter painter(&img);
+    painter.setRenderHint(QPainter::Antialiasing);
+    QLinearGradient gradient(0, 0, 128, 128);
+    gradient.setColorAt(0.0, c1);
+    gradient.setColorAt(1.0, c2);
+    painter.setBrush(gradient);
+    painter.setPen(Qt::NoPen);
+    painter.drawRoundedRect(0, 0, 128, 128, 12, 12);
 
-            const QString display_title = Ffi::to_qstring(title_copy);
-            const QChar first = display_title.isEmpty() ? QChar('?') : display_title.at(0).toUpper();
-            painter.setPen(QPen(QColor(255, 255, 255, 200), 2));
-            QFont font = painter.font();
-            font.setPixelSize(52);
-            font.setBold(true);
-            painter.setFont(font);
-            painter.drawText(QRect(0, 0, 128, 128), Qt::AlignCenter, QString(first));
-            painter.end();
-            px.save(filepath_q, "PNG");
-            return Ffi::to_std_string(filepath_q);
-        });
+    const QString display_title = Ffi::to_qstring(title_copy);
+    const QChar first = display_title.isEmpty() ? QChar('?') : display_title.at(0).toUpper();
+    painter.setPen(QPen(QColor(255, 255, 255, 200), 2));
+    QFont font = painter.font();
+    font.setPixelSize(52);
+    font.setBold(true);
+    painter.setFont(font);
+    painter.drawText(QRect(0, 0, 128, 128), Qt::AlignCenter, QString(first));
+    painter.end();
+    img.save(filepath_q, "PNG");
+
+    const std::string filepath = Ffi::to_std_string(filepath_q);
     if (!filepath.empty()) {
         QMutexLocker locker(&placeholder_cache_mutex);
         placeholder_cache.insert(filepath_q, filepath);
@@ -905,7 +916,11 @@ void create_main_window(rust::Str, rust::Str, rust::Str, int32_t) {
         new QApplication(argc, const_cast<char **>(argv));
         QPixmapCache::setCacheLimit(65536);
     }
-    g_main_window = new DoremiMainWindow();
+    if (g_main_window) {
+        delete g_main_window;
+    }
+    // DoremiMainWindow's constructor assigns g_main_window = this;
+    new DoremiMainWindow();
 }
 
 void show_main_window() {
@@ -1097,17 +1112,24 @@ void set_library_playlists(rust::Vec<Playlist> playlists) {
     });
 }
 
-static std::vector<Playlist> s_context_playlists;
+void DoremiMainWindow::set_context_playlists(const std::vector<Playlist> &playlists) {
+    context_playlists_ = playlists;
+}
 
 const std::vector<Playlist> &get_context_playlists() {
-    return s_context_playlists;
+    static const std::vector<Playlist> empty_playlists;
+    if (g_main_window) {
+        return g_main_window->context_playlists();
+    }
+    return empty_playlists;
 }
 
 void set_context_playlists(rust::Vec<Playlist> playlists) {
     std::vector<Playlist> p;
+    p.reserve(playlists.size());
     for (const auto &x : playlists) p.push_back(x);
-    mutate_main_window("set_context_playlists", [p = std::move(p)](DoremiMainWindow &) mutable {
-        s_context_playlists = std::move(p);
+    mutate_main_window("set_context_playlists", [p = std::move(p)](DoremiMainWindow &window) {
+        window.set_context_playlists(p);
     });
 }
 
@@ -1204,12 +1226,13 @@ void set_settings_lastfm_enabled(bool on) {
 void set_settings_lastfm_session(bool authenticated, rust::Str username, rust::Str apiKey, rust::Str apiSecret) {
     const std::string username_copy = Ffi::to_std_string(username);
     const std::string api_key_copy = Ffi::to_std_string(apiKey);
-    const std::string api_secret_copy = Ffi::to_std_string(apiSecret);
-    mutate_main_window("set_settings_lastfm_session", [=](DoremiMainWindow &window) {
+    std::string api_secret_copy = Ffi::to_std_string(apiSecret);
+    mutate_main_window("set_settings_lastfm_session", [authenticated, username_copy, api_key_copy, api_secret_copy](DoremiMainWindow &window) mutable {
         if (window.settings_view()) {
             window.settings_view()->set_settings_lastfm_session(
                 authenticated, username_copy, api_key_copy, api_secret_copy);
         }
+        std::fill(api_secret_copy.begin(), api_secret_copy.end(), '\0');
     });
 }
 
@@ -1302,21 +1325,19 @@ void set_dominant_colors(rust::Vec<rust::String> colors) {
 
 void set_playback_queue(rust::Vec<Track> queue, int32_t current_index) {
     std::vector<Track> tracks;
+    tracks.reserve(queue.size());
     for (const auto &track : queue) tracks.push_back(track);
     mutate_main_window("set_playback_queue", [tracks = std::move(tracks), current_index](DoremiMainWindow &window) {
-        rust::Vec<Track> queue_copy;
-        for (const auto &track : tracks) queue_copy.push_back(track);
-        window.set_playback_queue(queue_copy, current_index);
+        window.set_playback_queue(tracks, current_index);
     });
 }
 
 void set_related_tracks(rust::Vec<Track> tracks) {
     std::vector<Track> t;
+    t.reserve(tracks.size());
     for (const auto &tr : tracks) t.push_back(tr);
     mutate_main_window("set_related_tracks", [t = std::move(t)](DoremiMainWindow &window) {
-        rust::Vec<Track> tracks_copy;
-        for (const auto &tr : t) tracks_copy.push_back(tr);
-        window.set_related_tracks(tracks_copy);
+        window.set_related_tracks(t);
     });
 }
 
@@ -1379,23 +1400,13 @@ void set_trending_state(rust::Str state, rust::Str message) {
 
 // ── Downloads ──
 
-void set_downloads_list(rust::Vec<rust::String> titles,
-                         rust::Vec<rust::String> artists,
-                         rust::Vec<rust::String> thumbnails,
-                         rust::Vec<rust::String> video_ids,
-                         rust::Vec<rust::String> statuses,
-                         rust::Vec<double> progresses) {
-    std::vector<std::string> t, a, th, v, st;
-    std::vector<double> pr;
-    for (auto &x : titles) t.push_back(Ffi::to_std_string(x));
-    for (auto &x : artists) a.push_back(Ffi::to_std_string(x));
-    for (auto &x : thumbnails) th.push_back(Ffi::to_std_string(x));
-    for (auto &x : video_ids) v.push_back(Ffi::to_std_string(x));
-    for (auto &x : statuses) st.push_back(Ffi::to_std_string(x));
-    for (auto &x : progresses) pr.push_back(x);
-    mutate_main_window("set_downloads_list", [t = std::move(t), a = std::move(a), th = std::move(th),
-                                               v = std::move(v), st = std::move(st), pr = std::move(pr)](DoremiMainWindow &window) {
-        if (window.downloads_view()) window.downloads_view()->set_downloads(t, a, th, v, st, pr);
+void set_downloads_list(rust::Vec<DownloadItem> items) {
+    std::vector<DownloadItem> list;
+    for (auto &x : items) {
+        list.push_back(x);
+    }
+    mutate_main_window("set_downloads_list", [list = std::move(list)](DoremiMainWindow &window) {
+        if (window.downloads_view()) window.downloads_view()->set_downloads(list);
     });
 }
 
@@ -1424,19 +1435,16 @@ void set_batch_download_progress(rust::Str parent_id, int32_t total, int32_t com
 
 void set_history_data(rust::Vec<Track> history, rust::Vec<rust::String> played_at, rust::Vec<rust::String> feedback_tokens) {
     std::vector<Track> h;
+    h.reserve(history.size());
     for (const auto &t : history) h.push_back(t);
     std::vector<std::string> pa;
+    pa.reserve(played_at.size());
     for (const auto &x : played_at) pa.push_back(Ffi::to_std_string(x));
     std::vector<std::string> ft;
+    ft.reserve(feedback_tokens.size());
     for (const auto &y : feedback_tokens) ft.push_back(Ffi::to_std_string(y));
     mutate_main_window("set_history_data", [h = std::move(h), pa = std::move(pa), ft = std::move(ft)](DoremiMainWindow &window) {
-        rust::Vec<Track> r_history;
-        for (const auto &t : h) r_history.push_back(t);
-        rust::Vec<rust::String> r_played_at;
-        for (const auto &x : pa) r_played_at.push_back(x);
-        rust::Vec<rust::String> r_feedback_tokens;
-        for (const auto &y : ft) r_feedback_tokens.push_back(y);
-        window.set_history_data(r_history, r_played_at, r_feedback_tokens);
+        window.set_history_data(h, pa, ft);
     });
 }
 
@@ -1444,32 +1452,32 @@ void set_history_data(rust::Vec<Track> history, rust::Vec<rust::String> played_a
 
 void set_album_detail(Album album, rust::Vec<Track> tracks) {
     std::vector<Track> tt;
+    tt.reserve(tracks.size());
     for (const auto &x : tracks) tt.push_back(x);
     mutate_main_window("set_album_detail", [album = std::move(album), tt = std::move(tt)](DoremiMainWindow &window) {
         if (!window.album_detail_view()) return;
-        std::vector<Track> r_tracks;
-        for (const auto &t : tt) r_tracks.push_back(t);
         window.album_detail_view()->set_album_info(album);
-        window.album_detail_view()->set_album_tracks(r_tracks);
+        window.album_detail_view()->set_album_tracks(tt);
         window.navigate_to("album_detail");
     });
 }
 
 // ── Artist Detail ──
 
-void set_artist_detail(Artist artist, rust::Vec<Track> tracks, rust::Vec<Album> albums) {
+void set_artist_detail(Artist artist, rust::Vec<Track> tracks, rust::Vec<Album> albums, rust::Vec<Album> singles) {
     std::vector<Track> tt;
+    tt.reserve(tracks.size());
     for (const auto &x : tracks) tt.push_back(x);
     std::vector<Album> al;
+    al.reserve(albums.size());
     for (const auto &x : albums) al.push_back(x);
-    mutate_main_window("set_artist_detail", [artist = std::move(artist), tt = std::move(tt), al = std::move(al)](DoremiMainWindow &window) {
+    std::vector<Album> si;
+    si.reserve(singles.size());
+    for (const auto &x : singles) si.push_back(x);
+    mutate_main_window("set_artist_detail", [artist = std::move(artist), tt = std::move(tt), al = std::move(al), si = std::move(si)](DoremiMainWindow &window) {
         if (!window.artist_detail_view()) return;
-        std::vector<Track> r_tracks;
-        for (const auto &t : tt) r_tracks.push_back(t);
-        std::vector<Album> r_albums;
-        for (const auto &a : al) r_albums.push_back(a);
         window.artist_detail_view()->set_artist_info(artist);
-        window.artist_detail_view()->set_artist_tracks(r_tracks, r_albums);
+        window.artist_detail_view()->set_artist_tracks(tt, al, si);
         window.navigate_to("artist_detail");
     });
 }
@@ -1478,13 +1486,12 @@ void set_artist_detail(Artist artist, rust::Vec<Track> tracks, rust::Vec<Album> 
 
 void set_playlist_detail(Playlist playlist, rust::Vec<Track> tracks) {
     std::vector<Track> tt;
+    tt.reserve(tracks.size());
     for (const auto &x : tracks) tt.push_back(x);
     mutate_main_window("set_playlist_detail", [playlist = std::move(playlist), tt = std::move(tt)](DoremiMainWindow &window) {
         if (!window.playlist_detail_view()) return;
-        std::vector<Track> r_tracks;
-        for (const auto &t : tt) r_tracks.push_back(t);
         window.playlist_detail_view()->set_playlist_info(playlist);
-        window.playlist_detail_view()->set_playlist_tracks(r_tracks);
+        window.playlist_detail_view()->set_playlist_tracks(tt);
         window.navigate_to("playlist_detail");
     });
 }
@@ -1547,8 +1554,10 @@ void DoremiMainWindow::setup_ui_test(const std::string &view, const std::string 
         navigate_to(view);
     }
 
-    // 3. Set timer to take screenshot and exit
-    QTimer::singleShot(2500, this, [this, screenshot_path]() {
+    // 3. Set timer to take screenshot and exit.
+    // Delay is 3500ms to ensure: navigation completes (queued first), then
+    // mock data arrives and renders (queued second by Rust), before capture.
+    QTimer::singleShot(3500, this, [this, screenshot_path]() {
         QPixmap pixmap = grab();
         if (pixmap.save(QString::fromStdString(screenshot_path))) {
             qDebug() << "UI Test screenshot successfully saved to:" << QString::fromStdString(screenshot_path);

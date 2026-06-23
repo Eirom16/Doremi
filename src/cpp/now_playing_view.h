@@ -43,6 +43,7 @@ public:
     void setSubtitleGlowEffect(bool enabled);
 
 
+    void update_theme();
 signals:
     void close_clicked();
     void play_pause_clicked();

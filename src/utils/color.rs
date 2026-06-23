@@ -175,7 +175,10 @@ fn dominant_colors_cache_key(path: &Path) -> Option<String> {
         .map(|value| value.as_secs())
         .unwrap_or_default();
     let key_src = format!("{}:{}:{modified}", path.to_string_lossy(), meta.len());
-    Some(format!("color:dominant:{:x}", md5::compute(key_src.as_bytes())))
+    Some(format!(
+        "color:dominant:{:x}",
+        md5::compute(key_src.as_bytes())
+    ))
 }
 
 #[cfg(test)]
@@ -192,6 +195,7 @@ mod tests {
 
     #[test]
     fn dominant_colors_are_cached_by_file_identity() {
+        let _guard = crate::db::TEST_MUTEX.lock().unwrap();
         setup_test_db();
         let path = std::env::temp_dir().join(format!(
             "doremi-color-cache-test-{}.png",

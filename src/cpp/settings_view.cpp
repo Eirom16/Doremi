@@ -38,7 +38,7 @@ SettingsView::SettingsView(QWidget *parent)
     sidebar_layout->setContentsMargins(14, 16, 14, 16);
     sidebar_layout->setSpacing(8);
 
-    auto *title = new QLabel(QString::fromStdString(std::string(doremi_tr("settings_title"))), sidebar);
+    auto *title = new QLabel(tr_q("settings_title"), sidebar);
     title->setFont(DesignTokens::getFont("display", 24));
     title->setStyleSheet(QString("font-weight: bold; color: %1; background: transparent;").arg(c.text_primary.name()));
     sidebar_layout->addWidget(title);
@@ -108,15 +108,15 @@ SettingsView::SettingsView(QWidget *parent)
         return layout;
     };
 
-    auto *appearance_content = add_page(QString::fromStdString(std::string(doremi_tr("settings_appearance"))), "palette");
-    auto *playback_content = add_page(QString::fromStdString(std::string(doremi_tr("settings_playback"))), "play_circle");
-    auto *equalizer_content = add_page(QString::fromStdString(std::string(doremi_tr("settings_equalizer"))), "equalizer");
-    auto *integrations_content = add_page(QString::fromStdString(std::string(doremi_tr("settings_integrations"))), "hub");
-    auto *subtitles_content = add_page(QString::fromStdString(std::string(doremi_tr("settings_subtitles"))), "subtitles");
-    auto *downloads_content = add_page(QString::fromStdString(std::string(doremi_tr("settings_downloads"))), "download");
-    auto *storage_content = add_page(QString::fromStdString(std::string(doremi_tr("settings_storage"))), "database");
-    auto *language_content = add_page(QString::fromStdString(std::string(doremi_tr("language"))), "language");
-    auto *about_content = add_page(QString::fromStdString(std::string(doremi_tr("settings_about"))), "info");
+    auto *appearance_content = add_page(tr_q("settings_appearance"), "palette");
+    auto *playback_content = add_page(tr_q("settings_playback"), "play_circle");
+    auto *equalizer_content = add_page(tr_q("settings_equalizer"), "equalizer");
+    auto *integrations_content = add_page(tr_q("settings_integrations"), "hub");
+    auto *subtitles_content = add_page(tr_q("settings_subtitles"), "subtitles");
+    auto *downloads_content = add_page(tr_q("settings_downloads"), "download");
+    auto *storage_content = add_page(tr_q("settings_storage"), "database");
+    auto *language_content = add_page(tr_q("language"), "language");
+    auto *about_content = add_page(tr_q("settings_about"), "info");
     sidebar_layout->addStretch(1);
 
     root->addWidget(sidebar);
@@ -198,13 +198,13 @@ SettingsView::SettingsView(QWidget *parent)
 
     sleep_timer_cmb_ = new QComboBox(this);
     sleep_timer_cmb_->addItems({
-        QString::fromStdString(std::string(doremi_tr("sleep_disabled"))),
-        QString::fromStdString(std::string(doremi_tr("minutes_5"))),
-        QString::fromStdString(std::string(doremi_tr("minutes_10"))),
-        QString::fromStdString(std::string(doremi_tr("minutes_15"))),
-        QString::fromStdString(std::string(doremi_tr("minutes_30"))),
-        QString::fromStdString(std::string(doremi_tr("minutes_45"))),
-        QString::fromStdString(std::string(doremi_tr("minutes_60")))
+        tr_q("sleep_disabled"),
+        tr_q("minutes_5"),
+        tr_q("minutes_10"),
+        tr_q("minutes_15"),
+        tr_q("minutes_30"),
+        tr_q("minutes_45"),
+        tr_q("minutes_60")
     });
     sleep_timer_cmb_->setStyleSheet(comboStyle);
     content->addWidget(combo_row(std::string(doremi_tr("sleep_timer")), sleep_timer_cmb_));
@@ -306,7 +306,7 @@ SettingsView::SettingsView(QWidget *parent)
     .arg(c.bg_surface.name())
     .arg(c.border.name()));
 
-    lastfm_status_lbl_ = new QLabel(QString::fromStdString(std::string(doremi_tr("lastfm_status_disconnected"))), lastfm_auth_widget_);
+    lastfm_status_lbl_ = new QLabel(tr_q("lastfm_status_disconnected"), lastfm_auth_widget_);
     lastfm_status_lbl_->setFont(DesignTokens::getFont("body", 12));
     lastfm_status_lbl_->setStyleSheet(QString("color: %1; font-weight: bold; background: transparent;").arg(c.text_secondary.name()));
     lf_layout->addWidget(lastfm_status_lbl_);
@@ -340,18 +340,18 @@ SettingsView::SettingsView(QWidget *parent)
     lf_layout->addWidget(input_row("API Secret", lastfm_api_secret_input_));
 
     lastfm_username_input_ = new QLineEdit(lastfm_auth_widget_);
-    lastfm_username_input_->setPlaceholderText(QString::fromStdString(std::string(doremi_tr("username"))));
+    lastfm_username_input_->setPlaceholderText(tr_q("username"));
     lastfm_username_input_->setStyleSheet(input_style);
     lf_layout->addWidget(input_row(std::string(doremi_tr("username")), lastfm_username_input_));
 
     lastfm_password_input_ = new QLineEdit(lastfm_auth_widget_);
-    lastfm_password_input_->setPlaceholderText(QString::fromStdString(std::string(doremi_tr("password"))));
+    lastfm_password_input_->setPlaceholderText(tr_q("password"));
     lastfm_password_input_->setEchoMode(QLineEdit::Password);
     lastfm_password_input_->setStyleSheet(input_style);
     lf_layout->addWidget(input_row(std::string(doremi_tr("password")), lastfm_password_input_));
 
     // Connect button with dynamic variants
-    lastfm_auth_btn_ = new RippleButton(QString::fromStdString(std::string(doremi_tr("lastfm_btn_connect"))), lastfm_auth_widget_, RippleButton::Variant::Primary);
+    lastfm_auth_btn_ = new RippleButton(tr_q("lastfm_btn_connect"), lastfm_auth_widget_, RippleButton::Variant::Primary);
     lf_layout->addWidget(lastfm_auth_btn_);
 
     content->addWidget(lastfm_auth_widget_);
@@ -371,9 +371,9 @@ SettingsView::SettingsView(QWidget *parent)
 
     sub_alignment_cmb_ = new QComboBox(this);
     sub_alignment_cmb_->addItems({
-        QString::fromStdString(std::string(doremi_tr("align_left"))),
-        QString::fromStdString(std::string(doremi_tr("align_center"))),
-        QString::fromStdString(std::string(doremi_tr("align_right")))
+        tr_q("align_left"),
+        tr_q("align_center"),
+        tr_q("align_right")
     });
     sub_alignment_cmb_->setStyleSheet(comboStyle);
     content->addWidget(combo_row(std::string(doremi_tr("subtitle_alignment")), sub_alignment_cmb_));
@@ -413,7 +413,7 @@ SettingsView::SettingsView(QWidget *parent)
     loc_widget->setFixedHeight(36);
     auto *loc_lay = new QHBoxLayout(loc_widget);
     loc_lay->setContentsMargins(0, 0, 0, 0);
-    auto *loc_lbl = new QLabel(QString::fromStdString(std::string(doremi_tr("download_location"))), loc_widget);
+    auto *loc_lbl = new QLabel(tr_q("download_location"), loc_widget);
     loc_lbl->setFont(DesignTokens::getFont("body", 13));
     loc_lbl->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
     loc_lay->addWidget(loc_lbl);
@@ -436,7 +436,7 @@ SettingsView::SettingsView(QWidget *parent)
     download_location_input_->setFixedWidth(200);
     loc_lay->addWidget(download_location_input_);
 
-    download_location_btn_ = new RippleButton(QString::fromStdString(std::string(doremi_tr("select_folder"))), this, RippleButton::Variant::Secondary);
+    download_location_btn_ = new RippleButton(tr_q("select_folder"), this, RippleButton::Variant::Secondary);
     download_location_btn_->setFixedWidth(140);
     download_location_btn_->setFixedHeight(28);
     loc_lay->addWidget(download_location_btn_);
@@ -473,7 +473,7 @@ SettingsView::SettingsView(QWidget *parent)
     db_widget->setFixedHeight(36);
     auto *db_lay = new QHBoxLayout(db_widget);
     db_lay->setContentsMargins(0, 0, 0, 0);
-    auto *db_title_lbl = new QLabel(QString::fromStdString(std::string(doremi_tr("db_size"))), db_widget);
+    auto *db_title_lbl = new QLabel(tr_q("db_size"), db_widget);
     db_title_lbl->setFont(DesignTokens::getFont("body", 13));
     db_title_lbl->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
     db_lay->addWidget(db_title_lbl);
@@ -484,7 +484,7 @@ SettingsView::SettingsView(QWidget *parent)
     cache_size_lbl_ = new QLabel("0.00 MB", this);
     cache_size_lbl_->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
     cache_size_lbl_->setFont(DesignTokens::getFont("body", 13));
-    clean_cache_btn_ = new RippleButton(QString::fromStdString(std::string(doremi_tr("clean_cache"))), this, RippleButton::Variant::Secondary);
+    clean_cache_btn_ = new RippleButton(tr_q("clean_cache"), this, RippleButton::Variant::Secondary);
     clean_cache_btn_->setFixedWidth(140);
     clean_cache_btn_->setFixedHeight(28);
     content->addWidget(storage_row(std::string(doremi_tr("cache_size")), cache_size_lbl_, clean_cache_btn_));
@@ -492,7 +492,7 @@ SettingsView::SettingsView(QWidget *parent)
     downloads_size_lbl_ = new QLabel("0.00 MB", this);
     downloads_size_lbl_->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
     downloads_size_lbl_->setFont(DesignTokens::getFont("body", 13));
-    clear_downloads_btn_ = new RippleButton(QString::fromStdString(std::string(doremi_tr("clear_downloads"))), this, RippleButton::Variant::Danger);
+    clear_downloads_btn_ = new RippleButton(tr_q("clear_downloads"), this, RippleButton::Variant::Danger);
     clear_downloads_btn_->setFixedWidth(140);
     clear_downloads_btn_->setFixedHeight(28);
     content->addWidget(storage_row(std::string(doremi_tr("downloads_size")), downloads_size_lbl_, clear_downloads_btn_));
@@ -503,12 +503,12 @@ SettingsView::SettingsView(QWidget *parent)
     backup_lay->setContentsMargins(0, 8, 0, 0);
     backup_lay->setSpacing(12);
 
-    export_backup_btn_ = new RippleButton(QString::fromStdString(std::string(doremi_tr("export_backup"))), backup_widget, RippleButton::Variant::Primary);
+    export_backup_btn_ = new RippleButton(tr_q("export_backup"), backup_widget, RippleButton::Variant::Primary);
     export_backup_btn_->setIcon(IconProvider::getIcon("save", QColor("#FFFFFF"), 16));
     export_backup_btn_->setFixedHeight(36);
     backup_lay->addWidget(export_backup_btn_, 1);
 
-    import_backup_btn_ = new RippleButton(QString::fromStdString(std::string(doremi_tr("import_backup"))), backup_widget, RippleButton::Variant::Secondary);
+    import_backup_btn_ = new RippleButton(tr_q("import_backup"), backup_widget, RippleButton::Variant::Secondary);
     import_backup_btn_->setIcon(IconProvider::getIcon("open_in_new", c.accent, 16));
     import_backup_btn_->setFixedHeight(36);
     backup_lay->addWidget(import_backup_btn_, 1);
@@ -565,7 +565,7 @@ SettingsView::SettingsView(QWidget *parent)
     content->addWidget(about_ver);
 
     auto *about_desc = new QLabel(
-        QString::fromStdString(std::string(doremi_tr("about_desc"))),
+        tr_q("about_desc"),
         this
     );
     about_desc->setFont(DesignTokens::getFont("body", 13));
@@ -588,7 +588,7 @@ SettingsView::SettingsView(QWidget *parent)
     auto *cl_layout = new QVBoxLayout(changelog_card);
     cl_layout->setSpacing(10);
 
-    auto *cl_title = new QLabel(QString::fromStdString(std::string(doremi_tr("changelog_title"))), changelog_card);
+    auto *cl_title = new QLabel(tr_q("changelog_title"), changelog_card);
     cl_title->setFont(DesignTokens::getFont("body", 14));
     cl_title->setStyleSheet(QString("font-weight: bold; color: %1; background: transparent; border: none;").arg(c.text_primary.name()));
     cl_layout->addWidget(cl_title);
@@ -638,13 +638,13 @@ SettingsView::SettingsView(QWidget *parent)
     content->addWidget(changelog_card);
 
     // Update Check button
-    auto *check_updates_btn = new RippleButton(QString::fromStdString(std::string(doremi_tr("check_updates"))), this, RippleButton::Variant::Secondary);
+    auto *check_updates_btn = new RippleButton(tr_q("check_updates"), this, RippleButton::Variant::Secondary);
     check_updates_btn->setIcon(IconProvider::getIcon("sync", c.accent, 20));
     check_updates_btn->setMinimumHeight(44);
     
     QObject::connect(check_updates_btn, &QPushButton::clicked, this, [check_updates_btn]() {
         check_updates_btn->setEnabled(false);
-        check_updates_btn->setText(QString::fromStdString(std::string(doremi_tr("checking_updates_btn"))));
+        check_updates_btn->setText(tr_q("checking_updates_btn"));
         
         // Call Rust check function
         on_check_for_updates_requested();
@@ -652,7 +652,7 @@ SettingsView::SettingsView(QWidget *parent)
         // Restore button state after 4 seconds (fallback)
         QTimer::singleShot(4000, check_updates_btn, [check_updates_btn]() {
             check_updates_btn->setEnabled(true);
-            check_updates_btn->setText(QString::fromStdString(std::string(doremi_tr("check_updates"))));
+            check_updates_btn->setText(tr_q("check_updates"));
         });
     });
     content->addWidget(check_updates_btn);
@@ -736,7 +736,9 @@ SettingsView::SettingsView(QWidget *parent)
         emit setting_changed("stop_on_close", v ? "true" : "false");
     });
     QObject::connect(lastfm_auth_btn_, &QPushButton::clicked, this, [this]() {
-        if (lastfm_auth_btn_->text() == "Conectar Cuenta") {
+        // BF3.1: use a boolean flag instead of comparing translated button text,
+        // which fails in any locale that doesn't produce exactly "Conectar Cuenta".
+        if (!lastfm_connected_) {
             std::string apiKey = Ffi::to_std_string(lastfm_api_key_input_->text());
             std::string apiSecret = Ffi::to_std_string(lastfm_api_secret_input_->text());
             std::string username = Ffi::to_std_string(lastfm_username_input_->text());
@@ -777,7 +779,7 @@ SettingsView::SettingsView(QWidget *parent)
         emit setting_changed("download_location", Ffi::to_std_string(download_location_input_->text()));
     });
     QObject::connect(download_location_btn_, &QPushButton::clicked, this, [this]() {
-        QString dir = QFileDialog::getExistingDirectory(this, QString::fromStdString(std::string(doremi_tr("select_folder"))), download_location_input_->text());
+        QString dir = QFileDialog::getExistingDirectory(this, tr_q("select_folder"), download_location_input_->text());
         if (!dir.isEmpty()) {
             download_location_input_->setText(dir);
             emit setting_changed("download_location", Ffi::to_std_string(dir));
@@ -794,8 +796,8 @@ SettingsView::SettingsView(QWidget *parent)
     QObject::connect(clean_cache_btn_, &QPushButton::clicked, this, [this]() {
         QMessageBox::StandardButton reply = QMessageBox::question(
             this,
-            QString::fromStdString(std::string(doremi_tr("warning"))),
-            QString::fromStdString(std::string(doremi_tr("confirm_clear_cache"))),
+            tr_q("warning"),
+            tr_q("confirm_clear_cache"),
             QMessageBox::Yes | QMessageBox::No
         );
         if (reply == QMessageBox::Yes) {
@@ -808,8 +810,8 @@ SettingsView::SettingsView(QWidget *parent)
     QObject::connect(clear_downloads_btn_, &QPushButton::clicked, this, [this]() {
         QMessageBox::StandardButton reply = QMessageBox::question(
             this,
-            QString::fromStdString(std::string(doremi_tr("warning"))),
-            QString::fromStdString(std::string(doremi_tr("confirm_clear_downloads"))),
+            tr_q("warning"),
+            tr_q("confirm_clear_downloads"),
             QMessageBox::Yes | QMessageBox::No
         );
         if (reply == QMessageBox::Yes) {
@@ -822,7 +824,7 @@ SettingsView::SettingsView(QWidget *parent)
     QObject::connect(export_backup_btn_, &QPushButton::clicked, this, [this]() {
         QString path = QFileDialog::getSaveFileName(
             this,
-            QString::fromStdString(std::string(doremi_tr("export_backup"))),
+            tr_q("export_backup"),
             QDir::homePath() + "/doremi_backup.zip",
             "Zip Files (*.zip)"
         );
@@ -839,7 +841,7 @@ SettingsView::SettingsView(QWidget *parent)
     QObject::connect(import_backup_btn_, &QPushButton::clicked, this, [this]() {
         QString path = QFileDialog::getOpenFileName(
             this,
-            QString::fromStdString(std::string(doremi_tr("import_backup"))),
+            tr_q("import_backup"),
             QDir::homePath(),
             "Zip Files (*.zip)"
         );
@@ -1040,19 +1042,23 @@ void SettingsView::set_settings_lastfm_enabled(bool on) {
 }
 
 void SettingsView::set_settings_lastfm_session(bool authenticated, const std::string &username, const std::string &apiKey, const std::string &apiSecret) {
+    std::string api_secret_copy = apiSecret;
     if (authenticated) {
         lastfm_status_lbl_->setText(QString::fromStdString(std::string(doremi_tr("lastfm_status_connected")) + username));
         lastfm_api_key_input_->setText(QString::fromStdString(apiKey));
-        lastfm_api_secret_input_->setText(QString::fromStdString(apiSecret));
+        lastfm_api_secret_input_->setEchoMode(QLineEdit::Password);
+        lastfm_api_secret_input_->setText("********");
         lastfm_api_key_input_->setEnabled(false);
         lastfm_api_secret_input_->setEnabled(false);
         lastfm_username_input_->setVisible(false);
         lastfm_password_input_->setVisible(false);
-        lastfm_auth_btn_->setText(QString::fromStdString(std::string(doremi_tr("lastfm_btn_disconnect"))));
+        lastfm_auth_btn_->setText(tr_q("lastfm_btn_disconnect"));
         lastfm_auth_btn_->setVariant(RippleButton::Variant::Danger);
+        lastfm_connected_ = true;  // BF3.1: sync flag
     } else {
-        lastfm_status_lbl_->setText(QString::fromStdString(std::string(doremi_tr("lastfm_status_disconnected"))));
+        lastfm_status_lbl_->setText(tr_q("lastfm_status_disconnected"));
         lastfm_api_key_input_->setText("");
+        lastfm_api_secret_input_->setEchoMode(QLineEdit::Normal);
         lastfm_api_secret_input_->setText("");
         lastfm_username_input_->setText("");
         lastfm_password_input_->setText("");
@@ -1060,9 +1066,11 @@ void SettingsView::set_settings_lastfm_session(bool authenticated, const std::st
         lastfm_api_secret_input_->setEnabled(true);
         lastfm_username_input_->setVisible(true);
         lastfm_password_input_->setVisible(true);
-        lastfm_auth_btn_->setText(QString::fromStdString(std::string(doremi_tr("lastfm_btn_connect"))));
+        lastfm_auth_btn_->setText(tr_q("lastfm_btn_connect"));
         lastfm_auth_btn_->setVariant(RippleButton::Variant::Primary);
+        lastfm_connected_ = false;  // BF3.1: sync flag
     }
+    std::fill(api_secret_copy.begin(), api_secret_copy.end(), '\0');
 }
 
 void SettingsView::set_settings_stop_on_close(bool stop) {
@@ -1171,4 +1179,13 @@ QWidget *SettingsView::storage_row(const std::string &label, QLabel *val_lbl, Ri
     l->addSpacing(16);
     l->addWidget(btn);
     return w;
+}
+
+void SettingsView::update_theme() {
+    for (auto *le : findChildren<QLineEdit *>()) {
+        le->setStyleSheet(DesignTokens::textInputStyle());
+    }
+    for (auto *cb : findChildren<QComboBox *>()) {
+        cb->setStyleSheet(DesignTokens::textInputStyle());
+    }
 }

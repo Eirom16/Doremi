@@ -63,8 +63,7 @@ fn normalize_region(region: &str) -> String {
 
 fn context() -> Value {
     let current = current_client_context();
-    let now = chrono::Utc::now();
-    let client_version = format!("1.{}.01.00", now.format("%Y%m%d"));
+    let client_version = "1.20240108.01.00";
     serde_json::json!({
         "context": {"client": {
             "clientName": "WEB_REMIX",

@@ -24,7 +24,7 @@ UpdateDialog::UpdateDialog(QWidget *parent)
     }
     active_instance_ = this;
 
-    setWindowTitle(QString::fromStdString(std::string(doremi_tr("update_window_title"))));
+    setWindowTitle(tr_q("update_window_title"));
     setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
     setAttribute(Qt::WA_TranslucentBackground);
     setModal(true);
@@ -100,7 +100,7 @@ void UpdateDialog::build_ui() {
     auto *title_col = new QVBoxLayout();
     title_col->setSpacing(2);
 
-    title_lbl_ = new QLabel(QString::fromStdString(std::string(doremi_tr("update_available_title"))), panel_);
+    title_lbl_ = new QLabel(tr_q("update_available_title"), panel_);
     title_lbl_->setFont(DesignTokens::getFont("heading", 18));
     title_lbl_->setStyleSheet(QString("color: %1; background: transparent; font-weight: bold;").arg(c.text_primary.name()));
 
@@ -133,7 +133,7 @@ void UpdateDialog::build_ui() {
     layout->addWidget(sep);
 
     // Release Notes Box
-    notes_label_ = new QLabel(QString::fromStdString(std::string(doremi_tr("update_notes_label"))), panel_);
+    notes_label_ = new QLabel(tr_q("update_notes_label"), panel_);
     notes_label_->setFont(DesignTokens::getFont("body", 12));
     notes_label_->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
     layout->addWidget(notes_label_);
@@ -178,7 +178,7 @@ void UpdateDialog::build_ui() {
         "}"
     ).arg(c.bg_surface.name()).arg(c.accent.name()));
 
-    progress_label_ = new QLabel(QString::fromStdString(std::string(doremi_tr("update_preparing"))), progress_container_);
+    progress_label_ = new QLabel(tr_q("update_preparing"), progress_container_);
     progress_label_->setFont(DesignTokens::getFont("body", 12));
     progress_label_->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
 
@@ -191,12 +191,12 @@ void UpdateDialog::build_ui() {
     auto *btn_row = new QHBoxLayout();
     btn_row->setSpacing(10);
 
-    github_btn_ = new RippleButton(QString::fromStdString(std::string(doremi_tr("update_btn_github"))), panel_, RippleButton::Variant::Ghost);
+    github_btn_ = new RippleButton(tr_q("update_btn_github"), panel_, RippleButton::Variant::Ghost);
     github_btn_->setIcon(IconProvider::getIcon("open_in_new", c.text_secondary, 20));
     github_btn_->setFont(DesignTokens::getFont("body", 13));
     connect(github_btn_, &QPushButton::clicked, this, &UpdateDialog::on_github_clicked);
 
-    postpone_btn_ = new RippleButton(QString::fromStdString(std::string(doremi_tr("update_btn_postpone"))), panel_, RippleButton::Variant::Secondary);
+    postpone_btn_ = new RippleButton(tr_q("update_btn_postpone"), panel_, RippleButton::Variant::Secondary);
     connect(postpone_btn_, &QPushButton::clicked, this, &QDialog::reject);
 
     update_btn_ = new RippleButton(panel_, RippleButton::Variant::Primary);
@@ -226,7 +226,7 @@ void UpdateDialog::set_release_info(const QString &version, const QString &notes
 
     version_lbl_->setText(QString("%1  →  %2").arg(QString::fromStdString(std::string(get_app_version()))).arg(version));
     notes_box_->setPlainText(notes);
-    update_btn_->setText(QString::fromStdString(std::string(doremi_tr("update_btn_upgrade"))) + version);
+    update_btn_->setText(tr_q("update_btn_upgrade") + version);
 }
 
 void UpdateDialog::on_github_clicked() {
@@ -235,7 +235,7 @@ void UpdateDialog::on_github_clicked() {
 
 void UpdateDialog::on_update_clicked() {
     if (asset_url_.isEmpty()) {
-        progress_label_->setText(QString::fromStdString(std::string(doremi_tr("update_no_package"))));
+        progress_label_->setText(tr_q("update_no_package"));
         progress_container_->show();
         return;
     }
@@ -243,7 +243,7 @@ void UpdateDialog::on_update_clicked() {
     update_btn_->setEnabled(false);
     postpone_btn_->setEnabled(false);
     progress_container_->show();
-    progress_label_->setText(QString::fromStdString(std::string(doremi_tr("update_starting"))));
+    progress_label_->setText(tr_q("update_starting"));
     downloading_ = true;
 
     // Call Rust to start downloading
@@ -267,7 +267,7 @@ void UpdateDialog::set_download_failed(const QString &error) {
 void UpdateDialog::set_download_finished(const QString &package_path) {
     package_path_ = package_path;
     progress_bar_->setValue(100);
-    progress_label_->setText(QString::fromStdString(std::string(doremi_tr("update_auth_required"))));
+    progress_label_->setText(tr_q("update_auth_required"));
 
     // Request Sudo Password Dialog
     QString pwd;
@@ -275,14 +275,14 @@ void UpdateDialog::set_download_finished(const QString &package_path) {
     if (sudo_dlg.exec() == QDialog::Accepted) {
         pwd = sudo_dlg.get_password();
     } else {
-        progress_label_->setText(QString::fromStdString(std::string(doremi_tr("update_cancelled"))) + package_path_);
+        progress_label_->setText(tr_q("update_cancelled") + package_path_);
         update_btn_->setEnabled(true);
         postpone_btn_->setEnabled(true);
         downloading_ = false;
         return;
     }
 
-    progress_label_->setText(QString::fromStdString(std::string(doremi_tr("update_installing"))));
+    progress_label_->setText(tr_q("update_installing"));
 
     // Call Rust to start installation
     on_install_update_requested(
@@ -293,12 +293,12 @@ void UpdateDialog::set_download_finished(const QString &package_path) {
 void UpdateDialog::set_install_finished(bool success) {
     const auto &c = DesignTokens::current();
     if (success) {
-        progress_label_->setText(QString::fromStdString(std::string(doremi_tr("update_install_success"))));
-        update_btn_->setText(QString::fromStdString(std::string(doremi_tr("update_install_restarting"))));
+        progress_label_->setText(tr_q("update_install_success"));
+        update_btn_->setText(tr_q("update_install_restarting"));
         update_btn_->setIcon(IconProvider::getIcon("check_circle", c.accent, 20));
         QTimer::singleShot(2000, this, &UpdateDialog::restart_app);
     } else {
-        progress_label_->setText(QString::fromStdString(std::string(doremi_tr("update_install_failed"))) + package_path_);
+        progress_label_->setText(tr_q("update_install_failed") + package_path_);
         update_btn_->setEnabled(true);
         postpone_btn_->setEnabled(true);
         downloading_ = false;

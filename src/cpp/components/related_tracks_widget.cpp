@@ -1,11 +1,13 @@
 #include "related_tracks_widget.h"
 #include "../design_tokens.h"
 #include "../icon_provider.h"
+#include "artwork_loader.h"
 #include <QHBoxLayout>
 #include <QMouseEvent>
 #include <QMenu>
 #include <QPainter>
 #include <QPainterPath>
+#include <QPointer>
 
 static QPixmap getRoundedPixmap(const QPixmap &src, int radius) {
     if (src.isNull()) return src;
@@ -36,11 +38,13 @@ RelatedTrackRow::RelatedTrackRow(const Track &track, QWidget *parent)
     thumb_label->setStyleSheet(QString("background-color: %1; border-radius: 4px;")
         .arg(c.bg_elevated.name()));
 
-    QPixmap pm;
-    if (!track.thumbnail.empty() && pm.load(QString::fromStdString(static_cast<std::string>(track.thumbnail)))) {
-        thumb_label->setPixmap(getRoundedPixmap(
-            pm.scaled(38, 38, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation), 4
-        ));
+    if (!track.thumbnail.empty()) {
+        QPointer<QLabel> label_ptr(thumb_label);
+        ArtworkLoader::load(QString::fromStdString(static_cast<std::string>(track.thumbnail)), QSize(38, 38), [label_ptr](const QPixmap &pixmap) {
+            if (label_ptr) {
+                label_ptr->setPixmap(getRoundedPixmap(pixmap, 4));
+            }
+        });
     } else {
         QPixmap default_art = IconProvider::getIcon("music_note", c.text_secondary, 18).pixmap(38, 38);
         thumb_label->setPixmap(getRoundedPixmap(default_art, 4));
@@ -118,7 +122,7 @@ RelatedTracksWidget::RelatedTracksWidget(QWidget *parent)
     setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     setFrameShape(QFrame::NoFrame);
-    setStyleSheet("background: transparent;");
+    setStyleSheet(DesignTokens::scrollAreaStyle());
 
     container_ = new QWidget(this);
     container_->setStyleSheet("background: transparent;");

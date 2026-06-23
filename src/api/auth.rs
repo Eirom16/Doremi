@@ -38,8 +38,15 @@ pub fn handle_session_revoked() {
 }
 
 pub fn cache_scope() -> String {
+    use sha2::Digest;
     stored_headers()
-        .map(|content| format!("user:{:x}", md5::compute(content.as_bytes())))
+        .and_then(|content| extract_sapisid(&content))
+        .map(|sapisid| {
+            let mut hasher = sha2::Sha256::new();
+            hasher.update(sapisid.as_bytes());
+            let result = hasher.finalize();
+            format!("user:{:x}", result)
+        })
         .unwrap_or_else(|| "anonymous".to_string())
 }
 
@@ -47,7 +54,7 @@ pub fn is_authenticated() -> bool {
     stored_headers().as_deref().is_some_and(session_has_sapisid)
 }
 
-fn session_has_sapisid(content: &str) -> bool {
+fn extract_sapisid(content: &str) -> Option<String> {
     serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(content)
         .ok()
         .and_then(|headers| {
@@ -57,7 +64,10 @@ fn session_has_sapisid(content: &str) -> bool {
                 .and_then(|(_, value)| value.as_str())
                 .and_then(extract_sapisid_from_cookie)
         })
-        .is_some()
+}
+
+fn session_has_sapisid(content: &str) -> bool {
+    extract_sapisid(content).is_some()
 }
 
 fn extract_sapisid_from_cookie(cookie_val: &str) -> Option<String> {

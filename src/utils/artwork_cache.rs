@@ -143,16 +143,17 @@ mod tests {
         assert_eq!(cache_key("https://example.invalid/a.jpg", "A/B C"), "ABC");
         assert_eq!(
             cache_key("https://example.invalid/a.jpg", ""),
-            format!("{:x}", md5::compute("https://example.invalid/a.jpg".as_bytes()))
+            format!(
+                "{:x}",
+                md5::compute("https://example.invalid/a.jpg".as_bytes())
+            )
         );
     }
 
     #[test]
     fn enforce_limit_removes_old_files() {
-        let root = std::env::temp_dir().join(format!(
-            "doremi-artwork-cache-test-{}",
-            std::process::id()
-        ));
+        let root =
+            std::env::temp_dir().join(format!("doremi-artwork-cache-test-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
         std::fs::write(root.join("a.img"), vec![1_u8; 8]).unwrap();

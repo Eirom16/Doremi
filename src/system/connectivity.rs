@@ -1,7 +1,7 @@
-use std::time::Duration;
-use tokio::time::sleep;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
+use tokio::time::sleep;
 
 pub struct ConnectivityMonitor;
 
@@ -58,14 +58,12 @@ impl ConnectivityMonitor {
 
     async fn check_connection(timeout: Duration) -> bool {
         // Try connecting to reliable targets
-        let targets = vec![
-            "music.youtube.com:443",
-            "1.1.1.1:53",
-            "8.8.8.8:53",
-        ];
+        let targets = vec!["music.youtube.com:443", "1.1.1.1:53", "8.8.8.8:53"];
 
         for target in targets {
-            if let Ok(Ok(_)) = tokio::time::timeout(timeout, tokio::net::TcpStream::connect(target)).await {
+            if let Ok(Ok(_)) =
+                tokio::time::timeout(timeout, tokio::net::TcpStream::connect(target)).await
+            {
                 return true;
             }
         }

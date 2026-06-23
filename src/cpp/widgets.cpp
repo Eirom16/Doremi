@@ -1,9 +1,13 @@
 #include "widgets.h"
 #include "design_tokens.h"
 #include "icon_provider.h"
+#include "components/artwork_loader.h"
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QApplication>
+#include <QPainter>
+#include <QPainterPath>
+#include <QPointer>
 #include <QMenu>
 #include <QAction>
 #include <QKeyEvent>
@@ -100,12 +104,12 @@ ClickableItem::ClickableItem(const std::string &title, const std::string &subtit
     lay->setSpacing(12);
 
     // Left artwork placeholder
-    auto *artwork = new QLabel(this);
-    artwork->setFixedSize(36, 36);
-    artwork->setStyleSheet(QString("background-color: %1; border-radius: 4px;").arg(c.bg_elevated.name()));
-    artwork->setPixmap(IconProvider::getIcon("music_note", c.text_secondary, 18).pixmap(36, 36));
-    artwork->setAlignment(Qt::AlignCenter);
-    lay->addWidget(artwork);
+    artwork_label_ = new QLabel(this);
+    artwork_label_->setFixedSize(36, 36);
+    artwork_label_->setStyleSheet(QString("background-color: %1; border-radius: 4px;").arg(c.bg_elevated.name()));
+    artwork_label_->setPixmap(IconProvider::getIcon("music_note", c.text_secondary, 18).pixmap(36, 36));
+    artwork_label_->setAlignment(Qt::AlignCenter);
+    lay->addWidget(artwork_label_);
 
     auto *vl = new QVBoxLayout();
     vl->setSpacing(2);
@@ -128,6 +132,35 @@ ClickableItem::ClickableItem(const std::string &title, const std::string &subtit
 
     connect(this, &QWidget::customContextMenuRequested, this, [this](const QPoint &pos) {
         show_context_menu(mapToGlobal(pos));
+    });
+}
+
+void ClickableItem::set_item_type(const std::string &type) {
+    item_type_ = type;
+    const auto &c = DesignTokens::current();
+    QString iconName = "music_note";
+    if (type == "artist") iconName = "person";
+    else if (type == "album") iconName = "album";
+    else if (type == "playlist") iconName = "queue_music";
+    else if (type == "podcast" || type == "show" || type == "episode") iconName = "podcasts";
+    
+    artwork_label_->setPixmap(IconProvider::getIcon(iconName, c.text_secondary, 18).pixmap(36, 36));
+}
+
+void ClickableItem::set_thumbnail(const std::string &thumbnail_url) {
+    if (thumbnail_url.empty()) return;
+    QPointer<QLabel> label_ptr(artwork_label_);
+    ArtworkLoader::load(QString::fromStdString(thumbnail_url), QSize(36, 36), [label_ptr](const QPixmap &pixmap) {
+        if (!label_ptr) return;
+        QPixmap dest(pixmap.size());
+        dest.fill(Qt::transparent);
+        QPainter painter(&dest);
+        painter.setRenderHint(QPainter::Antialiasing);
+        QPainterPath path;
+        path.addRoundedRect(pixmap.rect(), 4, 4);
+        painter.setClipPath(path);
+        painter.drawPixmap(0, 0, pixmap);
+        label_ptr->setPixmap(dest.scaled(36, 36, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation));
     });
 }
 

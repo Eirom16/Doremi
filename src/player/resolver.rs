@@ -65,7 +65,10 @@ impl StreamResolver {
                 if download.status == "completed" {
                     let path = std::path::Path::new(&download.file_path);
                     if path.exists() && path.is_file() {
-                        log::info!("Stream resolver resolved to local downloaded file: {}", download.file_path);
+                        log::info!(
+                            "Stream resolver resolved to local downloaded file: {}",
+                            download.file_path
+                        );
                         return Ok(download.file_path);
                     } else {
                         log::warn!(
@@ -87,7 +90,9 @@ impl StreamResolver {
 
         // Check if we are online before trying network resolution
         if !crate::bridge::is_connectivity_online() {
-            return Err(DoremiError::Network("Dispositivo sin conexión a Internet y pista no disponible localmente".to_string()));
+            return Err(DoremiError::Network(
+                "Dispositivo sin conexión a Internet y pista no disponible localmente".to_string(),
+            ));
         }
 
         let cache_key = format!("stream_url:ytdlp:{video_id}");

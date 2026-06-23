@@ -83,13 +83,20 @@ impl Drop for AudioInner {
     }
 }
 
-// Safe: all access is serialized through the Mutex
+// SAFETY: `AudioInner` holds raw VLC pointers (`*mut libvlc_equalizer_t`) which are not
+// automatically Send/Sync. The following impls are sound under these invariants:
+//  1. Every access to the raw pointers goes through the enclosing `Mutex<AudioInner>`, so
+//     there is at most one thread accessing the data at a time.
+//  2. No libVLC FFI call is made while the Mutex is held from a VLC callback (i.e. no
+//     re-entrant locking from within a VLC event handler), preventing deadlocks.
+//  3. The equalizer raw pointer lifetime is managed exclusively inside AudioInner::drop.
+// Violating any of these invariants would be unsound.
 unsafe impl Send for AudioInner {}
 unsafe impl Sync for AudioInner {}
 
 impl AudioEngine {
-    pub fn new() -> Self {
-        let inner = Arc::new(Mutex::new(AudioInner {
+    fn disabled_inner() -> Arc<Mutex<AudioInner>> {
+        Arc::new(Mutex::new(AudioInner {
             instance: None,
             player: None,
             secondary_player: None,
@@ -99,7 +106,17 @@ impl AudioEngine {
             volume: 50,
             stream_url: None,
             equalizer: None,
-        }));
+        }))
+    }
+
+    pub fn disabled() -> Self {
+        Self {
+            inner: Self::disabled_inner(),
+        }
+    }
+
+    pub fn new() -> Self {
+        let inner = Self::disabled_inner();
 
         let engine = Self { inner };
 
@@ -128,22 +145,22 @@ impl AudioEngine {
     pub fn is_available(&self) -> bool {
         self.inner
             .lock()
-            .map(|i| i.player.is_some())
-            .unwrap_or(false)
+            .unwrap_or_else(|e| e.into_inner())
+            .player
+            .is_some()
     }
 
     pub fn state(&self) -> PlayState {
         self.inner
             .lock()
-            .map(|i| i.state)
-            .unwrap_or(PlayState::Stopped)
+            .unwrap_or_else(|e| e.into_inner())
+            .state
     }
 
     pub fn has_error(&self) -> bool {
-        if let Ok(inner) = self.inner.lock() {
-            if let Some(player) = &inner.player {
-                return player.state() == State::Error;
-            }
+        let inner = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(player) = &inner.player {
+            return player.state() == State::Error;
         }
         false
     }
@@ -162,25 +179,23 @@ impl AudioEngine {
     }
 
     pub fn position_ms(&self) -> i64 {
-        self.inner.lock().map(|i| i.position_ms).unwrap_or(0)
+        self.inner.lock().unwrap_or_else(|e| e.into_inner()).position_ms
     }
 
     pub fn duration_ms(&self) -> i64 {
-        self.inner.lock().map(|i| i.duration_ms).unwrap_or(0)
+        self.inner.lock().unwrap_or_else(|e| e.into_inner()).duration_ms
     }
 
     pub fn volume(&self) -> i32 {
-        self.inner.lock().map(|i| i.volume).unwrap_or(50)
+        self.inner.lock().unwrap_or_else(|e| e.into_inner()).volume
     }
 
     pub fn play_url(&self, url: &str, normalize: bool) {
-        // Lock 1: get instance reference to create Media
+        // Lock 1: get instance reference to create Media (released before FFI calls)
         let playback_url = crate::player::stream_proxy::proxied_url(url);
         let media = {
-            let inner = match self.inner.lock() {
-                Ok(i) => i,
-                Err(_) => return,
-            };
+            // BF0.4: use unwrap_or_else so a poisoned mutex doesn't panic the UI thread.
+            let inner = self.inner.lock().unwrap_or_else(|e| e.into_inner());
             let instance = match &inner.instance {
                 Some(i) => i,
                 None => return,
@@ -200,18 +215,28 @@ impl AudioEngine {
         if normalize {
             add_media_option(&media, ":audio-filter=normvol");
         }
-        media.parse();
+        if tokio::runtime::Handle::try_current().is_ok() {
+            tokio::task::block_in_place(|| {
+                media.parse();
+            });
+        } else {
+            media.parse();
+        }
         let dur = media.duration().unwrap_or(0);
 
-        // Lock 2: update state
-        if let Ok(mut inner) = self.inner.lock() {
+        // Lock 2: update state (lock dropped before FFI call below)
+        {
+            let mut inner = self.inner.lock().unwrap_or_else(|e| e.into_inner());
             inner.duration_ms = dur;
             inner.stream_url = Some(url.to_string());
             inner.state = PlayState::Loading;
         }
 
-        // Lock 3: set media and play
-        if let Ok(inner) = self.inner.lock() {
+        // Lock 3: set media and play (FFI outside the lock is done here because
+        // the MutexGuard is held for the entire block; VLC will not call back into
+        // Rust while set_media/play are running synchronously from this thread).
+        {
+            let inner = self.inner.lock().unwrap_or_else(|e| e.into_inner());
             if let Some(player) = &inner.player {
                 player.set_media(&media);
                 let _ = player.play();
@@ -222,10 +247,8 @@ impl AudioEngine {
     pub fn play_crossfade(&self, url: &str, normalize: bool) {
         let playback_url = crate::player::stream_proxy::proxied_url(url);
         let media = {
-            let inner = match self.inner.lock() {
-                Ok(i) => i,
-                Err(_) => return,
-            };
+            // BF0.4: release lock before FFI
+            let inner = self.inner.lock().unwrap_or_else(|e| e.into_inner());
             let instance = match &inner.instance {
                 Some(i) => i,
                 None => return,
@@ -245,9 +268,16 @@ impl AudioEngine {
         if normalize {
             add_media_option(&media, ":audio-filter=normvol");
         }
-        media.parse();
+        if tokio::runtime::Handle::try_current().is_ok() {
+            tokio::task::block_in_place(|| {
+                media.parse();
+            });
+        } else {
+            media.parse();
+        }
 
-        if let Ok(mut inner) = self.inner.lock() {
+        {
+            let mut inner = self.inner.lock().unwrap_or_else(|e| e.into_inner());
             if let Some(instance) = &inner.instance {
                 if inner.secondary_player.is_none() {
                     inner.secondary_player = MediaPlayer::new(instance);
@@ -298,10 +328,7 @@ impl AudioEngine {
     }
 
     pub fn toggle_play_pause(&self) {
-        let mut inner = match self.inner.lock() {
-            Ok(i) => i,
-            Err(_) => return,
-        };
+        let mut inner = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         let player = match &inner.player {
             Some(p) => p,
             None => return,

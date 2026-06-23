@@ -94,3 +94,6 @@ public:
     static void loadFonts();
     static QFont getFont(const QString &level, int size = -1);
 };
+
+// Translation helper to avoid double conversion: rust::String -> std::string -> QString
+QString tr_q(const char *key);

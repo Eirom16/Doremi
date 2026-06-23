@@ -19,6 +19,7 @@ public:
                   const QString &duration, Track track,
                   QWidget *parent = nullptr);
 
+    void update_theme();
 signals:
     void play_requested(Track track);
 
@@ -40,6 +41,7 @@ public:
     void set_album_info(const Album &album);
     void set_album_tracks(const std::vector<Track> &tracks);
     void clear();
+    void update_theme();
 
 signals:
     void play_requested(Track track);

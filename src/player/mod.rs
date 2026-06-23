@@ -52,6 +52,15 @@ impl PlayerService {
             log::info!("VLC audio engine initialized");
         }
 
+        Self::with_audio(audio, preload_next)
+    }
+
+    pub fn new_disabled_audio(preload_next: bool) -> Self {
+        log::info!("VLC audio engine disabled for UI test");
+        Self::with_audio(AudioEngine::disabled(), preload_next)
+    }
+
+    fn with_audio(audio: AudioEngine, preload_next: bool) -> Self {
         Self {
             audio,
             queue: Arc::new(Mutex::new(PlaybackQueue::new())),
@@ -505,7 +514,9 @@ impl PlayerService {
             self.audio.stop();
             // Update settings to reset the sleep timer value
             settings.player.sleep_timer_minutes = 0;
-            let _ = settings.save(&dirs.settings_path());
+            if let Err(e) = settings.save(&dirs.settings_path()) {
+                log::warn!("Failed to save settings on sleep timer expiration: {e}");
+            }
             crate::bridge::bridge::show_notification("Temporizador de apagado finalizado.", "info");
         }
 
@@ -571,6 +582,9 @@ impl PlayerService {
                 && self
                     .last_is_playing
                     .load(std::sync::atomic::Ordering::Relaxed)
+                && !self
+                    .crossfade_active
+                    .load(std::sync::atomic::Ordering::Relaxed)
             {
                 self.next();
             } else if settings.player.crossfade_enabled
@@ -592,6 +606,7 @@ impl PlayerService {
                             "Initiating crossfade transition from current track to {}",
                             track.title
                         );
+                        self.crossfade_active.store(true, std::sync::atomic::Ordering::Relaxed);
                         let normalize = settings.player.normalize_audio;
                         let queue = self.queue.clone();
                         let audio = self.audio.clone();
@@ -638,7 +653,13 @@ impl PlayerService {
                                         Some(std::time::Instant::now());
 
                                     sync_queue_to_ui(&queue);
+                                } else {
+                                    log::info!("Resolved URL for crossfade track {id}, but queue state changed. Cancelling crossfade.");
+                                    crossfade_active.store(false, std::sync::atomic::Ordering::Relaxed);
                                 }
+                            } else {
+                                log::warn!("Failed to resolve stream URL for crossfade track {id}. Cancelling crossfade.");
+                                crossfade_active.store(false, std::sync::atomic::Ordering::Relaxed);
                             }
                         });
                     }
@@ -668,7 +689,9 @@ impl PlayerService {
 
                     // Invalidate cache
                     let cache_key = format!("stream_url:{}", track.id);
-                    let _ = crate::db::cache::ResponseCache::invalidate(&cache_key);
+                    if let Err(e) = crate::db::cache::ResponseCache::invalidate(&cache_key) {
+                        log::warn!("Failed to invalidate response cache for track {}: {}", track.id, e);
+                    }
 
                     // Clear stream url in the queue
                     {
@@ -881,13 +904,9 @@ impl PlayerService {
                 {
                     self.lastfm_scrobbled
                         .store(true, std::sync::atomic::Ordering::Relaxed);
-                    
+
                     // Scrobble to Last.fm
-                    crate::services::lastfm::scrobble(
-                        &track.artist,
-                        &track.title,
-                        &track.album,
-                    );
+                    crate::services::lastfm::scrobble(&track.artist, &track.title, &track.album);
 
                     // Mark play as success (increment play count, skipped = 0)
                     let _ = crate::db::repo::PlayHistoryRepo::record_success(&track.id);
@@ -895,7 +914,8 @@ impl PlayerService {
 
                 // Periodically save current playback progress to database (every 5 seconds)
                 if accumulated > 0 && accumulated % 5000 < elapsed_ms {
-                    let _ = crate::db::repo::PlayHistoryRepo::update_progress(&track.id, pos as i64);
+                    let _ =
+                        crate::db::repo::PlayHistoryRepo::update_progress(&track.id, pos as i64);
                 }
             }
         } else {

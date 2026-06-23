@@ -167,7 +167,10 @@ impl Default for ApiClient {
 mod tests {
     use super::*;
 
+    /// Integration test — requires valid YouTube Music credentials and internet.
+    /// Run explicitly with: cargo test -- --ignored test_real_search --nocapture
     #[tokio::test]
+    #[ignore = "requires valid YouTube Music credentials and internet access"]
     async fn test_real_search() {
         let _ = env_logger::builder().is_test(true).try_init();
         let client = ApiClient::new();
@@ -200,5 +203,15 @@ mod tests {
             song_results.artists.is_empty(),
             "Should not return artists when filtering by songs"
         );
+    }
+
+    /// Integration test — requires authenticated YouTube Music session.
+    /// Run explicitly with: cargo test -- --ignored test_real_library_albums --nocapture
+    #[tokio::test]
+    #[ignore = "requires valid YouTube Music credentials and internet access"]
+    async fn test_real_library_albums() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        let results = crate::api::endpoints::library_albums().await;
+        println!("Real library albums result: {:?}", results);
     }
 }

@@ -4,6 +4,34 @@
 #include "design_tokens.h"
 #include "icon_provider.h"
 
+static QString searchBarInputStyle() {
+    const auto &c = DesignTokens::current();
+    return QString(
+        "QLineEdit {\n"
+        "    background-color: %1;\n"
+        "    border: 1px solid %2;\n"
+        "    border-radius: 8px;\n"
+        "    padding: 8px 12px 8px 36px;\n"
+        "    color: %3;\n"
+        "    selection-background-color: %4;\n"
+        "}\n"
+        "QLineEdit:hover {\n"
+        "    border-color: %5;\n"
+        "}\n"
+        "QLineEdit:focus {\n"
+        "    border: 2px solid %6;\n"
+        "    background-color: %7;\n"
+        "}\n"
+    )
+    .arg(c.bg_base.name())
+    .arg(DesignTokens::rgba(c.border))
+    .arg(c.text_primary.name())
+    .arg(DesignTokens::rgba(c.accent_dim))
+    .arg(c.text_secondary.name())
+    .arg(c.accent.name())
+    .arg(c.bg_elevated.name());
+}
+
 TitleBar::TitleBar(QWidget *parent)
     : QWidget(parent)
 {
@@ -29,8 +57,9 @@ TitleBar::TitleBar(QWidget *parent)
     layout_->addSpacing(24);
 
     search_input_ = new QLineEdit(this);
-    search_input_->setMinimumWidth(360);
-    search_input_->setMaximumWidth(560);
+    search_input_->setMinimumWidth(400);
+    search_input_->setMaximumWidth(800);
+    search_input_->setFixedHeight(40);
     search_input_->setPlaceholderText("Buscar canciones, artistas, álbumes...");
     search_input_->setFont(DesignTokens::getFont("body", 13));
     search_input_->setFocusPolicy(Qt::StrongFocus);
@@ -48,7 +77,7 @@ TitleBar::TitleBar(QWidget *parent)
     
     search_input_->addAction(IconProvider::getIcon("search", c.text_secondary, 18), QLineEdit::LeadingPosition);
     
-    search_input_->setStyleSheet(DesignTokens::textInputStyle());
+    search_input_->setStyleSheet(searchBarInputStyle());
     layout_->addWidget(search_input_, 1);
     layout_->addStretch(1);
 
@@ -71,7 +100,7 @@ TitleBar::TitleBar(QWidget *parent)
         .arg(c.bg_surface.name())
         .arg(QString("rgba(%1, %2, %3, %4)").arg(c.border.red()).arg(c.border.green()).arg(c.border.blue()).arg(c.border.alpha() / 255.0))
     );
-    setFixedHeight(48);
+    setFixedHeight(60);
 }
 
 void TitleBar::set_search_text(const std::string &text) {
@@ -128,6 +157,6 @@ void TitleBar::update_theme() {
     }
     
     if (search_input_) {
-        search_input_->setStyleSheet(DesignTokens::textInputStyle());
+        search_input_->setStyleSheet(searchBarInputStyle());
     }
 }

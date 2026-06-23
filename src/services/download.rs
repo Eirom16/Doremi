@@ -112,7 +112,66 @@ impl DownloadManager {
             parent_playlist_title: None,
             parent_playlist_thumbnail_url: None,
         };
-        let _ = self.sender.send(task);
+        if let Err(e) = self.sender.send(task) {
+            log::error!("Failed to enqueue download task: {e}");
+        }
+        Self::refresh_downloads_ui();
+        crate::bridge::bridge::show_notification(
+            &format!("Descarga añadida a la cola: {}", title),
+            "info",
+        );
+    }
+
+    pub fn add_download_with_parent(
+        &self,
+        video_id: &str,
+        title: &str,
+        artist: &str,
+        thumbnail_url: &str,
+        parent_playlist_id: &str,
+        parent_playlist_title: &str,
+        parent_playlist_thumbnail_url: &str,
+    ) {
+        log::info!(
+            "Queued download with parent: {} - {} (parent: {})",
+            artist,
+            title,
+            parent_playlist_title
+        );
+
+        let dummy = DownloadTrack {
+            video_id: video_id.to_string(),
+            title: title.to_string(),
+            artist: artist.to_string(),
+            album: String::new(),
+            file_path: String::new(),
+            thumbnail_url: thumbnail_url.to_string(),
+            duration_ms: 0,
+            downloaded_at: String::new(),
+            parent_playlist_id: Some(parent_playlist_id.to_string()),
+            parent_playlist_title: Some(parent_playlist_title.to_string()),
+            parent_playlist_thumbnail_url: Some(parent_playlist_thumbnail_url.to_string()),
+            status: "queued".to_string(),
+            progress: 0.0,
+            error: String::new(),
+            cancelled: false,
+        };
+        if let Err(e) = DownloadsRepo::add(&dummy) {
+            log::error!("Failed to save queued download: {e}");
+        }
+
+        let task = DownloadTask {
+            video_id: video_id.to_string(),
+            title: title.to_string(),
+            artist: artist.to_string(),
+            thumbnail_url: thumbnail_url.to_string(),
+            parent_playlist_id: Some(parent_playlist_id.to_string()),
+            parent_playlist_title: Some(parent_playlist_title.to_string()),
+            parent_playlist_thumbnail_url: Some(parent_playlist_thumbnail_url.to_string()),
+        };
+        if let Err(e) = self.sender.send(task) {
+            log::error!("Failed to enqueue download task: {e}");
+        }
         Self::refresh_downloads_ui();
         crate::bridge::bridge::show_notification(
             &format!("Descarga añadida a la cola: {}", title),
@@ -164,7 +223,9 @@ impl DownloadManager {
                 parent_playlist_title: Some(parent_title.to_string()),
                 parent_playlist_thumbnail_url: Some(parent_thumbnail.to_string()),
             };
-            let _ = self.sender.send(task);
+            if let Err(e) = self.sender.send(task) {
+                log::error!("Failed to enqueue batch download task: {e}");
+            }
         }
 
         Self::refresh_downloads_ui();
@@ -188,14 +249,23 @@ impl DownloadManager {
         }
 
         if let Ok(pids) = self.child_pids.lock() {
-            if let Some(pid) = pids.get(video_id) {
-                let _ = std::process::Command::new("kill")
-                    .arg(pid.to_string())
-                    .output();
+            if let Some(&pid) = pids.get(video_id) {
+                // BF1.2: never send kill with pid=0 — in POSIX that signals the
+                // entire process group, which would terminate the whole application.
+                if pid > 0 {
+                    if let Err(e) = std::process::Command::new("kill")
+                        .arg(pid.to_string())
+                        .output()
+                    {
+                        log::warn!("Failed to execute kill command for pid {pid}: {e}");
+                    }
+                }
             }
         }
 
-        let _ = DownloadsRepo::mark_cancelled(video_id);
+        if let Err(e) = DownloadsRepo::mark_cancelled(video_id) {
+            log::warn!("Failed to mark download as cancelled in DB for {video_id}: {e}");
+        }
         Self::refresh_downloads_ui();
     }
 
@@ -208,7 +278,9 @@ impl DownloadManager {
             self.cancel_download(id);
         }
 
-        let _ = DownloadsRepo::clear_all();
+        if let Err(e) = DownloadsRepo::clear_all() {
+            log::warn!("Failed to clear all downloads in DB: {e}");
+        }
         Self::refresh_downloads_ui();
     }
 
@@ -225,7 +297,9 @@ impl DownloadManager {
                         track.artist,
                         track.title
                     );
-                    let _ = DownloadsRepo::update_status(&track.video_id, "queued", 0.0, "");
+                    if let Err(e) = DownloadsRepo::update_status(&track.video_id, "queued", 0.0, "") {
+                        log::warn!("Failed to reset download status in DB for {}: {}", track.video_id, e);
+                    }
                     let task = DownloadTask {
                         video_id: track.video_id.clone(),
                         title: track.title.clone(),
@@ -235,19 +309,23 @@ impl DownloadManager {
                         parent_playlist_title: track.parent_playlist_title.clone(),
                         parent_playlist_thumbnail_url: track.parent_playlist_thumbnail_url.clone(),
                     };
-                    let _ = self.sender.send(task);
+                    if let Err(e) = self.sender.send(task) {
+                        log::error!("Failed to enqueue resumed download task: {e}");
+                    }
                 }
             }
         }
     }
 
     fn save_status(video_id: &str, status: &DownloadStatus) {
-        let _ = DownloadsRepo::update_status(
+        if let Err(e) = DownloadsRepo::update_status(
             video_id,
             status.as_str(),
             status.progress(),
             status.error(),
-        );
+        ) {
+            log::warn!("Failed to save status in DB for {video_id}: {e}");
+        }
         crate::bridge::bridge::set_download_progress(video_id, status.progress(), status.as_str());
     }
 
@@ -386,16 +464,18 @@ impl DownloadManager {
             dirs.cache_dir().join("downloads")
         };
 
-        std::fs::create_dir_all(&out_dir)
+        tokio::fs::create_dir_all(&out_dir)
+            .await
             .map_err(|e| format!("Failed to create downloads folder: {e}"))?;
 
         if cancel_flag.load(Ordering::SeqCst) {
             return Err("Cancelled".to_string());
         }
 
-        let has_ffmpeg = std::process::Command::new("ffmpeg")
+        let has_ffmpeg = tokio::process::Command::new("ffmpeg")
             .arg("-version")
             .output()
+            .await
             .is_ok();
 
         let clean_artist = sanitize_filename(&task.artist);
@@ -471,9 +551,9 @@ impl DownloadManager {
             .spawn()
             .map_err(|e| format!("Failed to start yt-dlp: {e}"))?;
 
-        {
+        if let Some(pid) = child.id() {
             let mut pids = child_pids.lock().unwrap();
-            pids.insert(task.video_id.clone(), child.id().unwrap_or(0));
+            pids.insert(task.video_id.clone(), pid);
         }
 
         if cancel_flag.load(Ordering::SeqCst) {
@@ -483,7 +563,10 @@ impl DownloadManager {
 
         Self::save_status(&task.video_id, &DownloadStatus::Downloading(0.0));
 
-        let progress_re = Regex::new(r"\[download\]\s+(\d+\.?\d*)%").unwrap();
+        // BF2.7: Regex is compiled once at first use instead of once per download.
+        static PROGRESS_RE: std::sync::LazyLock<Regex> =
+            std::sync::LazyLock::new(|| Regex::new(r"\[download\]\s+(\d+\.?\d*)%").unwrap());
+        let progress_re = &*PROGRESS_RE;
 
         let stdout = child.stdout.take().ok_or("No stdout")?;
         use tokio::io::AsyncBufReadExt;
@@ -516,6 +599,20 @@ impl DownloadManager {
             }
         }
 
+        // BF1.3: Drain stderr in a concurrent task so that the pipe buffer cannot fill
+        // up and block the yt-dlp process while we are waiting on stdout.
+        let stderr_handle = if let Some(stderr) = child.stderr.take() {
+            Some(tokio::spawn(async move {
+                use tokio::io::AsyncReadExt;
+                let mut buf = String::new();
+                let mut reader = tokio::io::BufReader::new(stderr);
+                let _ = reader.read_to_string(&mut buf).await;
+                buf
+            }))
+        } else {
+            None
+        };
+
         let output = child
             .wait()
             .await
@@ -525,12 +622,14 @@ impl DownloadManager {
             return Err("Cancelled".to_string());
         }
 
+        // Collect stderr output that was being drained concurrently.
+        let stderr_str = if let Some(handle) = stderr_handle {
+            handle.await.unwrap_or_default()
+        } else {
+            String::new()
+        };
+
         if !output.success() {
-            let mut stderr_str = String::new();
-            if let Some(mut s) = child.stderr.take() {
-                use tokio::io::AsyncReadExt;
-                let _ = s.read_to_string(&mut stderr_str).await;
-            }
             let err_msg = if stderr_str.trim().is_empty() {
                 "yt-dlp exited with error".to_string()
             } else {
@@ -550,23 +649,30 @@ impl DownloadManager {
         };
         let mut temp_final_path = out_dir.join(format!("{}.{}", temp_filename_base, ext));
 
-        if !temp_final_path.exists() {
+        if tokio::fs::metadata(&temp_final_path).await.is_err() {
             let webm_path = out_dir.join(format!("{}.webm", temp_filename_base));
-            if webm_path.exists() {
+            if tokio::fs::metadata(&webm_path).await.is_ok() {
                 temp_final_path = webm_path;
             } else {
                 let mut found = false;
-                if let Ok(entries) = std::fs::read_dir(&out_dir) {
-                    for entry in entries.flatten() {
-                        let path = entry.path();
-                        if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
-                            if stem == temp_filename_base {
-                                temp_final_path = path;
-                                found = true;
-                                break;
+                let out_dir_clone = out_dir.clone();
+                let temp_filename_base_clone = temp_filename_base.clone();
+                let search_res = tokio::task::spawn_blocking(move || {
+                    if let Ok(entries) = std::fs::read_dir(&out_dir_clone) {
+                        for entry in entries.flatten() {
+                            let path = entry.path();
+                            if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
+                                if stem == temp_filename_base_clone {
+                                    return Some(path);
+                                }
                             }
                         }
                     }
+                    None
+                }).await;
+                if let Ok(Some(path)) = search_res {
+                    temp_final_path = path;
+                    found = true;
                 }
                 if !found {
                     return Err("Could not locate downloaded file".to_string());
@@ -580,19 +686,20 @@ impl DownloadManager {
             .unwrap_or(ext);
         let mut final_path = out_dir.join(format!("{}.{}", filename_base, final_ext));
         let mut index = 1;
-        while final_path.exists() {
+        while tokio::fs::metadata(&final_path).await.is_ok() {
             final_path = out_dir.join(format!("{} ({}).{}", filename_base, index, final_ext));
             index += 1;
         }
 
         // Atomic rename
-        std::fs::rename(&temp_final_path, &final_path)
+        tokio::fs::rename(&temp_final_path, &final_path)
+            .await
             .map_err(|e| format!("Failed to rename temporary file to final path: {e}"))?;
 
-        if !final_path.exists() {
+        if tokio::fs::metadata(&final_path).await.is_err() {
             return Err("Downloaded file does not exist at final path".to_string());
         }
-        let size = std::fs::metadata(&final_path).map(|m| m.len()).unwrap_or(0);
+        let size = tokio::fs::metadata(&final_path).await.map(|m| m.len()).unwrap_or(0);
         if size == 0 {
             return Err("Downloaded file is empty (0 bytes)".to_string());
         }
@@ -646,16 +753,25 @@ impl DownloadManager {
     pub fn refresh_downloads_ui() {
         Self::reconcile_downloads();
         if let Ok(downloads) = DownloadsRepo::all() {
-            let titles: Vec<String> = downloads.iter().map(|d| d.title.clone()).collect();
-            let artists: Vec<String> = downloads.iter().map(|d| d.artist.clone()).collect();
-            let thumbnails: Vec<String> =
-                downloads.iter().map(|d| d.thumbnail_url.clone()).collect();
-            let video_ids: Vec<String> = downloads.iter().map(|d| d.video_id.clone()).collect();
-            let statuses: Vec<String> = downloads.iter().map(|d| d.status.clone()).collect();
-            let progresses: Vec<f64> = downloads.iter().map(|d| d.progress).collect();
-            crate::bridge::bridge::set_downloads_list(
-                titles, artists, thumbnails, video_ids, statuses, progresses,
-            );
+            let items: Vec<crate::bridge::bridge::DownloadItem> = downloads
+                .iter()
+                .map(|d| crate::bridge::bridge::DownloadItem {
+                    video_id: d.video_id.clone(),
+                    title: d.title.clone(),
+                    artist: d.artist.clone(),
+                    album: d.album.clone(),
+                    thumbnail_url: d.thumbnail_url.clone(),
+                    parent_playlist_id: d.parent_playlist_id.clone().unwrap_or_default(),
+                    parent_playlist_title: d.parent_playlist_title.clone().unwrap_or_default(),
+                    parent_playlist_thumbnail_url: d
+                        .parent_playlist_thumbnail_url
+                        .clone()
+                        .unwrap_or_default(),
+                    status: d.status.clone(),
+                    progress: d.progress,
+                })
+                .collect();
+            crate::bridge::bridge::set_downloads_list(items);
         }
     }
 

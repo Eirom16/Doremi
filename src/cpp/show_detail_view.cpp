@@ -19,16 +19,19 @@ EpisodeRow::EpisodeRow(const QString &title, const QString &description,
 
     auto *info = new QVBoxLayout;
     auto *title_lbl = new QLabel(title);
+    title_lbl->setObjectName("titleLabel");
     title_lbl->setStyleSheet(QString("font-size: 14px; font-weight: 600; color: %1;").arg(c.text_primary.name()));
     title_lbl->setWordWrap(false);
     title_lbl->setFixedHeight(20);
 
     auto *desc_lbl = new QLabel(description);
+    desc_lbl->setObjectName("descLabel");
     desc_lbl->setStyleSheet(QString("font-size: 12px; color: %1;").arg(c.text_secondary.name()));
     desc_lbl->setWordWrap(false);
     desc_lbl->setFixedHeight(16);
 
     auto *duration_lbl = new QLabel(duration);
+    duration_lbl->setObjectName("durationLabel");
     duration_lbl->setStyleSheet(QString("font-size: 11px; color: %1;").arg(c.text_muted.name()));
 
     info->addWidget(title_lbl);
@@ -79,7 +82,10 @@ void EpisodeRow::contextMenuEvent(QContextMenuEvent *event) {
         t.album = "";
         t.duration_ms = static_cast<int32_t>(episode_.duration_ms);
         t.thumbnail = episode_.thumbnail;
-        on_download_requested(t);
+        std::string parent_id = "show_" + static_cast<std::string>(episode_.show_id);
+        std::string parent_title = static_cast<std::string>(episode_.show);
+        std::string parent_thumbnail = static_cast<std::string>(episode_.thumbnail);
+        on_download_requested_with_parent(t, parent_id, parent_title, parent_thumbnail);
     }
 }
 
@@ -107,7 +113,7 @@ void ShowDetailView::setupLayout() {
     auto *scroll = new QScrollArea;
     scroll->setWidgetResizable(true);
     scroll->setFrameShape(QFrame::NoFrame);
-    scroll->setStyleSheet("QScrollArea { background: transparent; border: none; }");
+    scroll->setStyleSheet(DesignTokens::scrollAreaStyle());
 
     auto *container = new QWidget;
     container->setStyleSheet("background: transparent;");
@@ -129,6 +135,7 @@ void ShowDetailView::setupLayout() {
     header_info->setSpacing(8);
 
     auto *back_btn = new QPushButton("← Volver");
+    back_btn->setObjectName("backBtn");
     back_btn->setCursor(Qt::PointingHandCursor);
     back_btn->setStyleSheet(
         QString("QPushButton { background: transparent; color: %1; font-size: 14px; border: none; padding: 4px 0; }"
@@ -177,6 +184,7 @@ void ShowDetailView::setupLayout() {
 
     // Episodes section
     auto *ep_header = new QLabel("Episodios");
+    ep_header->setObjectName("episodesHeader");
     ep_header->setStyleSheet(QString("font-size: 18px; font-weight: 600; color: %1; margin-top: 16px;").arg(c.text_primary.name()));
     content_layout_->addWidget(ep_header);
 
@@ -273,14 +281,14 @@ void ShowDetailView::updateSubscriptionButtonState(bool subscribed) {
     is_subscribed_ = subscribed;
     const auto &c = DesignTokens::current();
     if (subscribed) {
-        subscribe_btn_->setText(QString::fromStdString(std::string(doremi_tr("unsubscribe"))));
+        subscribe_btn_->setText(tr_q("unsubscribe"));
         subscribe_btn_->setStyleSheet(QString(
             "QPushButton { background: transparent; border: 1px solid %1; border-radius: 18px; color: %1; padding: 0 16px; font-weight: bold; }"
             "QPushButton:hover { background: rgba(%2, %3, %4, 0.08); }")
             .arg(c.text_primary.name())
             .arg(c.text_primary.red()).arg(c.text_primary.green()).arg(c.text_primary.blue()));
     } else {
-        subscribe_btn_->setText(QString::fromStdString(std::string(doremi_tr("subscribe"))));
+        subscribe_btn_->setText(tr_q("subscribe"));
         subscribe_btn_->setStyleSheet(QString(
             "QPushButton { background: %1; border: none; border-radius: 18px; color: #FFFFFF; padding: 0 16px; font-weight: bold; }"
             "QPushButton:hover { background: %2; }")
@@ -291,4 +299,50 @@ void ShowDetailView::updateSubscriptionButtonState(bool subscribed) {
 
 bool ShowDetailView::eventFilter(QObject *obj, QEvent *event) {
     return QWidget::eventFilter(obj, event);
+}
+
+void ShowDetailView::update_theme() {
+    const auto &c = DesignTokens::current();
+    if (cover_label_) {
+        cover_label_->setStyleSheet(QString("background: %1; border-radius: 8px;").arg(c.bg_elevated.name()));
+    }
+    if (title_label_) {
+        title_label_->setStyleSheet(QString("font-size: 24px; font-weight: 700; color: %1;").arg(c.text_primary.name()));
+    }
+    if (author_label_) {
+        author_label_->setStyleSheet(QString("font-size: 16px; color: %1;").arg(c.text_secondary.name()));
+    }
+    if (episode_count_label_) {
+        episode_count_label_->setStyleSheet(QString("font-size: 13px; color: %1;").arg(c.text_muted.name()));
+    }
+    if (description_label_) {
+        description_label_->setStyleSheet(QString("font-size: 13px; color: %1;").arg(c.text_secondary.name()));
+    }
+    if (auto *back_btn = findChild<QPushButton*>("backBtn")) {
+        back_btn->setStyleSheet(
+            QString("QPushButton { background: transparent; color: %1; font-size: 14px; border: none; padding: 4px 0; }"
+                    "QPushButton:hover { color: %2; }")
+                .arg(c.accent.name())
+                .arg(c.accent_bright.name()));
+    }
+    if (auto *ep_header = findChild<QLabel*>("episodesHeader")) {
+        ep_header->setStyleSheet(QString("font-size: 18px; font-weight: 600; color: %1; margin-top: 16px;").arg(c.text_primary.name()));
+    }
+    updateSubscriptionButtonState(is_subscribed_);
+    for (auto *row : findChildren<EpisodeRow*>()) {
+        row->update_theme();
+    }
+}
+
+void EpisodeRow::update_theme() {
+    const auto &c = DesignTokens::current();
+    if (auto *title_lbl = findChild<QLabel*>("titleLabel")) {
+        title_lbl->setStyleSheet(QString("font-size: 14px; font-weight: 600; color: %1;").arg(c.text_primary.name()));
+    }
+    if (auto *desc_lbl = findChild<QLabel*>("descLabel")) {
+        desc_lbl->setStyleSheet(QString("font-size: 12px; color: %1;").arg(c.text_secondary.name()));
+    }
+    if (auto *duration_lbl = findChild<QLabel*>("durationLabel")) {
+        duration_lbl->setStyleSheet(QString("font-size: 11px; color: %1;").arg(c.text_muted.name()));
+    }
 }

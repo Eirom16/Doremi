@@ -26,9 +26,8 @@ public:
     explicit ClickableItem(const std::string &title, const std::string &subtitle,
                            QWidget *parent = nullptr);
     void set_item_id(const std::string &id) { item_id_ = id; }
-    // Item kind drives the contextual menu: "song", "video", "artist",
-    // "album" or "playlist". Defaults to "song".
-    void set_item_type(const std::string &type) { item_type_ = type; }
+    void set_item_type(const std::string &type);
+    void set_thumbnail(const std::string &thumbnail_url);
     std::string item_id() const { return item_id_; }
     std::string title() const { return title_; }
     std::string subtitle() const { return subtitle_; }
@@ -46,6 +45,7 @@ protected:
     void focusOutEvent(QFocusEvent *event) override;
 
 private:
+    QLabel *artwork_label_;
     QLabel *title_label_;
     QLabel *sub_label_;
     std::string title_;

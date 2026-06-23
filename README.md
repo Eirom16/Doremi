@@ -26,9 +26,9 @@ Doremi está construido con:
 
 - `src/` — Código fuente principal de Rust
 - `assets/` — Fuentes y recursos visuales
-- `cpp/` — Componentes de interfaz nativa y ventanas
+- `src/cpp/` — Componentes de interfaz nativa y ventanas (Qt6/C++)
 - `src/api/` — Cliente e interacciones con servicios web
-- `src/native/player/` — Reproducción y control de audio
+- `src/player/` — Reproducción y control de audio
 - `src/services/` — Integración con Discord, descargas, lastfm, y más
 
 ## 🚀 Uso

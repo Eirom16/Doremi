@@ -8,18 +8,18 @@
 
 struct RouteInfo {
     const char *route;
-    const char *title;
+    const char *translation_key;
     const char *icon;
 };
 
 static const RouteInfo ROUTES[] = {
-    {"home", "Inicio", "home"},
-    {"trending", "Tendencias", "trending_up"},
-    {"library", "Biblioteca", "library_music"},
-    {"history", "Historial", "history"},
-    {"downloads", "Descargas", "download"},
-    {"stats", "Estadísticas", "bar_chart"},
-    {"settings", "Configuración", "settings"}
+    {"home", "home", "home"},
+    {"trending", "trending", "trending_up"},
+    {"library", "library", "library_music"},
+    {"history", "history", "history"},
+    {"downloads", "downloads", "download"},
+    {"stats", "stats", "bar_chart"},
+    {"settings", "settings", "settings"}
 };
 
 NavSidebar::NavSidebar(QWidget *parent)
@@ -37,11 +37,13 @@ NavSidebar::NavSidebar(QWidget *parent)
         btn->setFixedHeight(44);
         btn->setCursor(Qt::PointingHandCursor);
         btn->setFocusPolicy(Qt::StrongFocus);
+        
+        QString title = tr_q(routeInfo.translation_key);
         DesignTokens::applyAccessible(
             btn,
-            QString("Ir a %1").arg(routeInfo.title),
-            QString("Abre la seccion %1").arg(routeInfo.title),
-            routeInfo.title);
+            tr_q("go_to").arg(title),
+            tr_q("open_section").arg(title),
+            title);
         
         // Horizontal layout inside button to position icon and text nicely
         auto *btn_layout = new QHBoxLayout(btn);
@@ -50,7 +52,7 @@ NavSidebar::NavSidebar(QWidget *parent)
         
         auto *icon_label = IconProvider::createIconLabel(routeInfo.icon, 20, c.text_secondary, true, btn);
         icon_label->setObjectName("nav_icon");
-        auto *text_label = new QLabel(routeInfo.title, btn);
+        auto *text_label = new QLabel(title, btn);
         text_label->setObjectName("nav_text");
         text_label->setFont(DesignTokens::getFont("body", 13));
         text_label->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
@@ -89,6 +91,7 @@ NavSidebar::NavSidebar(QWidget *parent)
     layout->addWidget(profile_btn_);
 
     setFixedWidth(210);
+    setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
     
     // Set sidebar base background
     setAttribute(Qt::WA_StyledBackground, true);
@@ -186,24 +189,24 @@ void NavSidebar::update_profile(bool authenticated, const std::string &name, con
         profile_btn_->setIcon(IconProvider::getIcon("account_circle", c.accent, 20));
         DesignTokens::applyAccessible(
             profile_btn_,
-            QString("Cuenta de %1").arg(QString::fromStdString(name)),
-            "Abre el menu de cuenta.",
-            "Cuenta");
+            tr_q("user_account_of").arg(QString::fromStdString(name)),
+            tr_q("open_account_menu"),
+            tr_q("account"));
     } else {
-        profile_btn_->setText(compact_ ? "" : " Iniciar sesión");
+        profile_btn_->setText(compact_ ? "" : " " + tr_q("login"));
         profile_btn_->setIcon(IconProvider::getIcon("login", c.text_secondary, 20));
         DesignTokens::applyAccessible(
             profile_btn_,
-            "Iniciar sesion",
-            "Abre la pantalla para iniciar sesion.",
-            "Iniciar sesion");
+            tr_q("login"),
+            tr_q("open_login_screen"),
+            tr_q("login"));
     }
 }
 
 void NavSidebar::on_profile_clicked() {
     if (authenticated_) {
         QMenu menu(this);
-        QAction *logout_action = menu.addAction("Cerrar sesión");
+        QAction *logout_action = menu.addAction(tr_q("logout"));
         connect(logout_action, &QAction::triggered, this, []() {
             on_youtube_logout();
         });

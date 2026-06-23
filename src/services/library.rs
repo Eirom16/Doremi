@@ -1,5 +1,7 @@
 use crate::api::client::ApiClient;
-use crate::services::library_cache::{GLOBAL_LIBRARY_CACHE, CacheData, LibraryCache, LibrarySource};
+use crate::services::library_cache::{
+    CacheData, LibraryCache, LibrarySource, GLOBAL_LIBRARY_CACHE,
+};
 
 pub struct LibraryService {
     api: ApiClient,
@@ -31,7 +33,7 @@ impl LibraryService {
             .collect();
 
         // Guardar en caché
-        if let Ok(cache) = GLOBAL_LIBRARY_CACHE.write() {
+        if let Ok(cache) = GLOBAL_LIBRARY_CACHE.read() {
             cache.set(
                 "songs",
                 CacheData {
@@ -64,7 +66,7 @@ impl LibraryService {
             .collect();
 
         // Guardar en caché
-        if let Ok(cache) = GLOBAL_LIBRARY_CACHE.write() {
+        if let Ok(cache) = GLOBAL_LIBRARY_CACHE.read() {
             cache.set(
                 "playlists",
                 CacheData {
@@ -111,7 +113,7 @@ impl LibraryService {
             .collect();
 
         // Guardar en caché
-        if let Ok(cache) = GLOBAL_LIBRARY_CACHE.write() {
+        if let Ok(cache) = GLOBAL_LIBRARY_CACHE.read() {
             cache.set(
                 "albums",
                 CacheData {
@@ -142,7 +144,7 @@ impl LibraryService {
             .collect();
 
         // Guardar en caché
-        if let Ok(cache) = GLOBAL_LIBRARY_CACHE.write() {
+        if let Ok(cache) = GLOBAL_LIBRARY_CACHE.read() {
             cache.set(
                 "artists",
                 CacheData {
@@ -196,7 +198,12 @@ impl LibraryService {
     }
 
     /// Ordenar canciones
-    pub fn sort_songs(&self, _tab: &str, songs: Vec<crate::bridge::bridge::Track>, sort_by: &str) -> Vec<crate::bridge::bridge::Track> {
+    pub fn sort_songs(
+        &self,
+        _tab: &str,
+        songs: Vec<crate::bridge::bridge::Track>,
+        sort_by: &str,
+    ) -> Vec<crate::bridge::bridge::Track> {
         // If sort_by is empty, return as is
         if sort_by.is_empty() {
             return songs;
@@ -213,7 +220,12 @@ impl LibraryService {
     }
 
     /// Ordenar álbumes
-    pub fn sort_albums(&self, _tab: &str, albums: Vec<crate::bridge::bridge::Album>, sort_by: &str) -> Vec<crate::bridge::bridge::Album> {
+    pub fn sort_albums(
+        &self,
+        _tab: &str,
+        albums: Vec<crate::bridge::bridge::Album>,
+        sort_by: &str,
+    ) -> Vec<crate::bridge::bridge::Album> {
         if sort_by.is_empty() {
             return albums;
         }
@@ -227,7 +239,12 @@ impl LibraryService {
     }
 
     /// Ordenar artistas
-    pub fn sort_artists(&self, _tab: &str, artists: Vec<crate::bridge::bridge::Artist>, sort_by: &str) -> Vec<crate::bridge::bridge::Artist> {
+    pub fn sort_artists(
+        &self,
+        _tab: &str,
+        artists: Vec<crate::bridge::bridge::Artist>,
+        sort_by: &str,
+    ) -> Vec<crate::bridge::bridge::Artist> {
         if sort_by.is_empty() {
             return artists;
         }
@@ -239,7 +256,12 @@ impl LibraryService {
     }
 
     /// Ordenar playlists
-    pub fn sort_playlists(&self, _tab: &str, playlists: Vec<crate::bridge::bridge::Playlist>, sort_by: &str) -> Vec<crate::bridge::bridge::Playlist> {
+    pub fn sort_playlists(
+        &self,
+        _tab: &str,
+        playlists: Vec<crate::bridge::bridge::Playlist>,
+        sort_by: &str,
+    ) -> Vec<crate::bridge::bridge::Playlist> {
         if sort_by.is_empty() {
             return playlists;
         }

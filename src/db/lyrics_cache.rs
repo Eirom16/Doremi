@@ -16,53 +16,49 @@ pub struct LyricsCache;
 
 impl LyricsCache {
     pub fn get(artist: &str, title: &str) -> Option<LyricsCacheEntry> {
-        let guard = super::DB.lock().ok()?;
-        let conn = guard.as_ref()?;
-        let row = conn.query_row(
-            "SELECT track_artist, track_title, plain_lyrics, synced_lyrics, source_version, cached_at, expires_at \
-             FROM lyrics_cache WHERE track_artist = ?1 AND track_title = ?2",
-            params![artist, title],
-            |r| Ok((
-                r.get::<_, String>(0)?,
-                r.get::<_, String>(1)?,
-                r.get::<_, String>(2)?,
-                r.get::<_, String>(3)?,
-                r.get::<_, String>(4)?,
-                r.get::<_, String>(5)?,
-                r.get::<_, Option<String>>(6)?,
-            )),
-        );
-        match row {
-            Ok((
-                track_artist,
-                track_title,
-                plain_lyrics,
-                synced_lyrics,
-                source_version,
-                cached_at,
-                expires_at,
-            )) => {
-                if let Some(exp) = &expires_at {
-                    if is_expired(exp) {
-                        let _ = conn.execute(
-                            "DELETE FROM lyrics_cache WHERE track_artist = ?1 AND track_title = ?2",
-                            params![artist, title],
-                        );
-                        return None;
+        // BF1.1: use with_db() to prevent reentrant deadlock if called inside another with_db closure.
+        with_db(|conn| {
+            let row = conn.query_row(
+                "SELECT track_artist, track_title, plain_lyrics, synced_lyrics, source_version, cached_at, expires_at \
+                 FROM lyrics_cache WHERE track_artist = ?1 AND track_title = ?2",
+                params![artist, title],
+                |r| Ok((
+                    r.get::<_, String>(0)?,
+                    r.get::<_, String>(1)?,
+                    r.get::<_, String>(2)?,
+                    r.get::<_, String>(3)?,
+                    r.get::<_, String>(4)?,
+                    r.get::<_, String>(5)?,
+                    r.get::<_, Option<String>>(6)?,
+                )),
+            );
+            match row {
+                Ok((track_artist, track_title, plain_lyrics, synced_lyrics, source_version, cached_at, expires_at)) => {
+                    if let Some(exp) = &expires_at {
+                        if is_expired(exp) {
+                            let _ = conn.execute(
+                                "DELETE FROM lyrics_cache WHERE track_artist = ?1 AND track_title = ?2",
+                                params![artist, title],
+                            );
+                            return Ok(None);
+                        }
                     }
+                    Ok(Some(LyricsCacheEntry {
+                        track_artist,
+                        track_title,
+                        plain_lyrics,
+                        synced_lyrics,
+                        source_version,
+                        cached_at,
+                        expires_at,
+                    }))
                 }
-                Some(LyricsCacheEntry {
-                    track_artist,
-                    track_title,
-                    plain_lyrics,
-                    synced_lyrics,
-                    source_version,
-                    cached_at,
-                    expires_at,
-                })
+                Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+                Err(e) => Err(e),
             }
-            Err(_) => None,
-        }
+        })
+        .ok()
+        .flatten()
     }
 
     pub fn set(

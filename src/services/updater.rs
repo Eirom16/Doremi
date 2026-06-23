@@ -3,10 +3,22 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use tokio::fs::File;
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use sha2::Digest;
+use zeroize::Zeroize;
 
 const GITHUB_API_URL: &str = "https://api.github.com/repos/Eirom16/Doremi/releases/latest";
 const USER_AGENT: &str = "Doremi-Updater/2.0.0 (Linux)";
+
+/// Whitelist regex for asset names coming from GitHub Releases JSON.
+/// Reject any name with shell metacharacters, path traversal, or spaces.
+static ASSET_NAME_RE: once_cell::sync::Lazy<regex::Regex> =
+    once_cell::sync::Lazy::new(|| regex::Regex::new(r"^[A-Za-z0-9._-]+$").unwrap());
+
+fn is_safe_asset_name(name: &str) -> bool {
+    // Must match the whitelist AND must not contain path-traversal sequences.
+    ASSET_NAME_RE.is_match(name) && !name.contains("..")
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GithubAsset {
@@ -110,7 +122,9 @@ pub async fn check_for_updates() -> Option<ReleaseInfo> {
                         _ => ".pkg.tar.zst",
                     };
 
-                    if let Some(asset) = release.assets.iter().find(|a| a.name.ends_with(suffix)) {
+                    if let Some(asset) = release.assets.iter().find(|a| {
+                        a.name.ends_with(suffix) && is_safe_asset_name(&a.name)
+                    }) {
                         return Some(ReleaseInfo {
                             version: release.tag_name.clone(),
                             notes: release
@@ -121,6 +135,10 @@ pub async fn check_for_updates() -> Option<ReleaseInfo> {
                             asset_name: asset.name.clone(),
                             asset_size: asset.size,
                         });
+                    } else {
+                        log::warn!(
+                            "No asset with a safe name found for package manager '{pkg_mgr}'"
+                        );
                     }
                 }
             }
@@ -137,6 +155,12 @@ pub async fn download_update_package<F>(url: &str, name: &str, mut progress: F) 
 where
     F: FnMut(f64, &str),
 {
+    // BF0.1: validate name before using it as a filesystem component
+    if !is_safe_asset_name(name) {
+        log::error!("Refusing to download package with unsafe asset name: {name:?}");
+        return None;
+    }
+
     let dest = std::env::temp_dir().join(name);
     log::info!(
         "Downloading update package from {} to {dest:?}",
@@ -191,6 +215,51 @@ where
                 }
             }
 
+            // Drop file to flush and close it before calculating hash
+            drop(file);
+
+            progress(99.0, "Verificando checksum...");
+            log::info!("Verifying update package checksum...");
+
+            // 1. Fetch checksum
+            let checksum_text = match fetch_checksum(url).await {
+                Some(text) => text,
+                None => {
+                    log::error!("Failed to download checksum file for update");
+                    let _ = tokio::fs::remove_file(&dest).await;
+                    return None;
+                }
+            };
+
+            // 2. Parse hash
+            let expected_hash = match parse_sha256(&checksum_text, name) {
+                Some(hash) => hash,
+                None => {
+                    log::error!("Failed to parse SHA-256 hash from checksum file");
+                    let _ = tokio::fs::remove_file(&dest).await;
+                    return None;
+                }
+            };
+
+            // 3. Compute file hash
+            let actual_hash = match calculate_file_sha256(&dest).await {
+                Ok(hash) => hash,
+                Err(e) => {
+                    log::error!("Failed to calculate SHA-256 of downloaded file: {e}");
+                    let _ = tokio::fs::remove_file(&dest).await;
+                    return None;
+                }
+            };
+
+            // 4. Compare
+            if actual_hash != expected_hash {
+                log::error!("Checksum mismatch! Expected: {}, got: {}", expected_hash, actual_hash);
+                let _ = tokio::fs::remove_file(&dest).await;
+                return None;
+            }
+
+            log::info!("Checksum verification succeeded: {}", actual_hash);
+            progress(100.0, "Verificación exitosa");
             Some(dest)
         }
         Err(e) => {
@@ -204,20 +273,30 @@ pub async fn install_update_async(package_path: &Path, password: Option<String>)
     let path_str = package_path.to_string_lossy().to_string();
     let pkg_mgr = get_detected_package_manager();
 
-    if let Some(pwd) = password {
-        // Run with sudo -S
-        let install_args = match pkg_mgr.as_str() {
-            "pacman" => vec!["-S", "pacman", "-U", "--noconfirm", &path_str],
-            "apt" => vec!["-S", "apt", "install", "-y", &path_str],
-            "dnf" => vec!["-S", "dnf", "install", "-y", &path_str],
-            "zypper" => vec!["-S", "zypper", "install", "-y", &path_str],
-            _ => return false,
+    if let Some(mut pwd) = password {
+        // BF0.1: construct args without interpolating into shell strings.
+        // Each argument is passed separately to sudo; no bash -c involved.
+        // BF0.1: fix Arch branch — was generating "sudo -S pacman pacman -U ..."
+        //        (pacman duplicated). Now: sudo -S <pkg_mgr> <args...>
+        let (manager, install_args): (&str, Vec<&str>) = match pkg_mgr.as_str() {
+            "pacman" => ("pacman", vec!["-U", "--noconfirm", &path_str]),
+            "apt" => ("apt", vec!["install", "-y", &path_str]),
+            "dnf" => ("dnf", vec!["install", "-y", &path_str]),
+            "zypper" => ("zypper", vec!["install", "-y", &path_str]),
+            _ => {
+                pwd.zeroize();
+                return false;
+            }
         };
 
-        log::info!("Installing package via sudo -S using {pkg_mgr}");
+        log::info!("Installing package via sudo using {pkg_mgr}");
+
+        // Build: sudo -S <manager> <install_args...>
+        let mut sudo_args = vec!["-S", manager];
+        sudo_args.extend_from_slice(&install_args);
 
         let mut child = match tokio::process::Command::new("sudo")
-            .args(&install_args)
+            .args(&sudo_args)
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
@@ -226,12 +305,25 @@ pub async fn install_update_async(package_path: &Path, password: Option<String>)
             Ok(c) => c,
             Err(e) => {
                 log::error!("Failed to spawn sudo install command: {e}");
+                pwd.zeroize();
                 return false;
             }
         };
 
-        if let Some(mut stdin) = child.stdin.take() {
-            let _ = stdin.write_all(format!("{pwd}\n").as_bytes()).await;
+        // BF0.1: propagate stdin write error; zeroize password immediately after use.
+        let write_result = if let Some(mut stdin) = child.stdin.take() {
+            let bytes = format!("{pwd}\n");
+            pwd.zeroize();
+            stdin.write_all(bytes.as_bytes()).await
+        } else {
+            pwd.zeroize();
+            Err(std::io::Error::other("sudo stdin unavailable"))
+        };
+
+        if let Err(e) = write_result {
+            log::error!("Failed to send password to sudo: {e}");
+            let _ = child.kill().await;
+            return false;
         }
 
         match child.wait().await {
@@ -245,40 +337,35 @@ pub async fn install_update_async(package_path: &Path, password: Option<String>)
             }
         }
     } else {
-        // Fallback to pkexec
-        let cmd = match pkg_mgr.as_str() {
-            "pacman" => vec!["pkexec", "pacman", "-U", "--noconfirm", &path_str],
-            "apt" => vec!["pkexec", "apt", "install", "-y", &path_str],
-            "dnf" => vec!["pkexec", "dnf", "install", "-y", &path_str],
-            "zypper" => vec!["pkexec", "zypper", "install", "-y", &path_str],
+        // Prefer pkexec (PolicyKit) — no password transport needed.
+        let (manager, install_args): (&str, Vec<&str>) = match pkg_mgr.as_str() {
+            "pacman" => ("pacman", vec!["-U", "--noconfirm", &path_str]),
+            "apt" => ("apt", vec!["install", "-y", &path_str]),
+            "dnf" => ("dnf", vec!["install", "-y", &path_str]),
+            "zypper" => ("zypper", vec!["install", "-y", &path_str]),
             _ => return false,
         };
 
+        // Build: pkexec <manager> <install_args...>
+        let mut pkexec_args = vec![manager];
+        pkexec_args.extend_from_slice(&install_args);
+
         log::info!("Installing package via pkexec using {pkg_mgr}");
 
-        match Command::new(cmd[0]).args(&cmd[1..]).spawn() {
+        match Command::new("pkexec").args(&pkexec_args).spawn() {
             Ok(_) => true,
             Err(e) => {
-                log::error!("Failed to launch pkexec: {e}");
-                // Try terminal fallback
-                let term_cmd = match pkg_mgr.as_str() {
-                    "pacman" => format!("sudo pacman -U --noconfirm {path_str}"),
-                    "apt" => format!("sudo apt install -y {path_str}"),
-                    "dnf" => format!("sudo dnf install -y {path_str}"),
-                    "zypper" => format!("sudo zypper install -y {path_str}"),
-                    _ => return false,
-                };
-
+                log::warn!("Failed to launch pkexec: {e}; trying terminal fallback");
+                // BF0.1: terminal fallback uses separate args — no bash -c with interpolated path.
+                // The path has already been validated as safe (alphanumeric/._-) by is_safe_asset_name
+                // before download, but we pass it as a discrete argument rather than in a shell string.
                 for term in &["konsole", "gnome-terminal", "xterm", "alacritty"] {
                     if is_command_available(term) {
-                        let _ = Command::new(term)
-                            .args([
-                                "-e",
-                                "bash",
-                                "-c",
-                                &format!("{}; read -p 'Presiona Enter para cerrar'", term_cmd),
-                            ])
-                            .spawn();
+                        // Pass manager and args as discrete tokens; the terminal emulator
+                        // launches them directly rather than through a shell string.
+                        let mut term_args: Vec<&str> = vec!["-e", manager];
+                        term_args.extend_from_slice(&install_args);
+                        let _ = Command::new(term).args(&term_args).spawn();
                         return true;
                     }
                 }
@@ -300,13 +387,113 @@ pub fn validate_sudo_password(password: &str) -> bool {
         Err(_) => return false,
     };
 
+    // BF0.1: propagate stdin write error instead of silently ignoring it.
     if let Some(mut stdin) = child.stdin.take() {
         use std::io::Write;
-        let _ = stdin.write_all(format!("{password}\n").as_bytes());
+        if stdin.write_all(format!("{password}\n").as_bytes()).is_err() {
+            log::warn!("Failed to write password to sudo stdin during validation");
+            let _ = child.wait();
+            return false;
+        }
     }
 
     match child.wait() {
         Ok(status) => status.success(),
         Err(_) => false,
     }
+}
+
+async fn fetch_checksum(asset_url: &str) -> Option<String> {
+    let client = reqwest::Client::new();
+    let urls = vec![
+        format!("{}.sha256", asset_url),
+        format!("{}.sha256sum", asset_url),
+    ];
+    for url in urls {
+        log::info!("Trying to fetch checksum from: {}", crate::utils::security::redact_url(&url));
+        if let Ok(resp) = client.get(&url).header("User-Agent", USER_AGENT).send().await {
+            if resp.status().is_success() {
+                if let Ok(text) = resp.text().await {
+                    return Some(text);
+                }
+            }
+        }
+    }
+    if let Some(last_slash) = asset_url.rfind('/') {
+        let base_url = &asset_url[..last_slash];
+        let fallback_urls = vec![
+            format!("{}/SHA256SUMS", base_url),
+            format!("{}/checksums.txt", base_url),
+            format!("{}/SHA256SUM", base_url),
+        ];
+        for url in fallback_urls {
+            log::info!("Trying fallback checksum URL: {}", crate::utils::security::redact_url(&url));
+            if let Ok(resp) = client.get(&url).header("User-Agent", USER_AGENT).send().await {
+                if resp.status().is_success() {
+                    if let Ok(text) = resp.text().await {
+                        return Some(text);
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+fn find_64_char_hex(text: &str) -> Option<String> {
+    let chars: Vec<char> = text.chars().collect();
+    let mut start = None;
+    let mut count = 0;
+    for (i, &c) in chars.iter().enumerate() {
+        if c.is_ascii_hexdigit() {
+            if start.is_none() {
+                start = Some(i);
+            }
+            count += 1;
+        } else {
+            if count == 64 {
+                if let Some(s) = start {
+                    return Some(chars[s..s+64].iter().collect::<String>().to_lowercase());
+                }
+            }
+            start = None;
+            count = 0;
+        }
+    }
+    if count == 64 {
+        if let Some(s) = start {
+            return Some(chars[s..s+64].iter().collect::<String>().to_lowercase());
+        }
+    }
+    None
+}
+
+fn parse_sha256(checksum_text: &str, asset_name: &str) -> Option<String> {
+    for line in checksum_text.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        if line.contains(asset_name) {
+            if let Some(hash) = find_64_char_hex(line) {
+                return Some(hash);
+            }
+        }
+    }
+    find_64_char_hex(checksum_text)
+}
+
+async fn calculate_file_sha256(path: &Path) -> Result<String, std::io::Error> {
+    let mut file = File::open(path).await?;
+    let mut hasher = sha2::Sha256::new();
+    let mut buffer = [0u8; 8192];
+    loop {
+        let n = file.read(&mut buffer).await?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buffer[..n]);
+    }
+    let result = hasher.finalize();
+    Ok(format!("{:x}", result))
 }

@@ -36,21 +36,19 @@ fn main() {
                 // Primary instance. Spawn thread to listen for forwarded arguments.
                 std::thread::spawn(move || {
                     use std::io::Read;
-                    for stream in listener.incoming() {
-                        if let Ok(mut stream) = stream {
-                            let mut buffer = Vec::new();
-                            stream
-                                .set_read_timeout(Some(std::time::Duration::from_secs(2)))
-                                .ok();
-                            if stream.read_to_end(&mut buffer).is_ok() {
-                                if let Ok(text) = String::from_utf8(buffer) {
-                                    let received_args: Vec<String> = text
-                                        .split('\n')
-                                        .map(|s| s.to_string())
-                                        .filter(|s| !s.is_empty())
-                                        .collect();
-                                    doremi_core::bridge::handle_forwarded_args(received_args);
-                                }
+                    for mut stream in listener.incoming().flatten() {
+                        let mut buffer = Vec::new();
+                        stream
+                            .set_read_timeout(Some(std::time::Duration::from_secs(2)))
+                            .ok();
+                        if stream.read_to_end(&mut buffer).is_ok() {
+                            if let Ok(text) = String::from_utf8(buffer) {
+                                let received_args: Vec<String> = text
+                                    .split('\n')
+                                    .map(|s| s.to_string())
+                                    .filter(|s| !s.is_empty())
+                                    .collect();
+                                doremi_core::bridge::handle_forwarded_args(received_args);
                             }
                         }
                     }

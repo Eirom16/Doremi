@@ -304,8 +304,18 @@ impl Default for SubtitleSettings {
     }
 }
 
+static SETTINGS_CACHE: once_cell::sync::Lazy<std::sync::RwLock<std::collections::HashMap<std::path::PathBuf, AppSettings>>> =
+    once_cell::sync::Lazy::new(|| std::sync::RwLock::new(std::collections::HashMap::new()));
+
 impl AppSettings {
     pub fn load(path: &Path) -> Self {
+        let path_buf = path.to_path_buf();
+        if let Ok(cache) = SETTINGS_CACHE.read() {
+            if let Some(settings) = cache.get(&path_buf) {
+                return settings.clone();
+            }
+        }
+
         let mut settings = Self::default();
         if path.exists() {
             match std::fs::read_to_string(path) {
@@ -372,6 +382,11 @@ impl AppSettings {
             Err(e) => log::debug!("Could not load Google client secret: {e}"),
         }
 
+        // Cache the fully loaded settings
+        if let Ok(mut cache) = SETTINGS_CACHE.write() {
+            cache.insert(path_buf, settings.clone());
+        }
+
         settings
     }
 
@@ -397,6 +412,12 @@ impl AppSettings {
         }
         let data = toml::to_string_pretty(self)?;
         write_private_file(path, data.as_bytes())?;
+        
+        // Update cache
+        if let Ok(mut cache) = SETTINGS_CACHE.write() {
+            cache.insert(path.to_path_buf(), self.clone());
+        }
+        
         Ok(())
     }
 
@@ -474,5 +495,46 @@ mod tests {
         assert_eq!(deserialized.downloads.location, "/path/to/downloads");
         assert_eq!(deserialized.downloads.format, "m4a");
         assert_eq!(deserialized.downloads.quality, "320k");
+    }
+    #[test]
+    fn default_settings_have_sensible_values() {
+        let s = AppSettings::default();
+        assert_eq!(s.appearance.theme_mode, "dark");
+        assert_eq!(s.appearance.accent_color, "#7C4DFF");
+        assert!(s.player.crossfade_enabled);
+        assert!(s.player.normalize_audio);
+        assert_eq!(s.player.volume, 80);
+        assert!(!s.integrations.lastfm_enabled);
+    }
+
+    #[test]
+    fn settings_round_trip_without_data_loss() {
+        let mut original = AppSettings::default();
+        original.appearance.theme_mode = "light".to_string();
+        original.appearance.font_size = 16;
+        original.player.volume = 55;
+        original.player.crossfade_enabled = false;
+
+        let toml_str = toml::to_string(&original).unwrap();
+        let restored: AppSettings = toml::from_str(&toml_str).unwrap();
+
+        assert_eq!(restored.appearance.theme_mode, "light");
+        assert_eq!(restored.appearance.font_size, 16);
+        assert_eq!(restored.player.volume, 55);
+        assert!(!restored.player.crossfade_enabled);
+    }
+
+    #[test]
+    fn partial_settings_file_uses_defaults_for_missing_fields() {
+        // Simulate a settings file from an older version that only has some fields
+        let partial_toml = r#"
+[appearance]
+theme_mode = "light"
+"#;
+        let settings: AppSettings = toml::from_str(partial_toml).unwrap();
+        assert_eq!(settings.appearance.theme_mode, "light");
+        // Missing fields should fall back to defaults
+        assert_eq!(settings.player.volume, 80);
+        assert!(settings.player.normalize_audio);
     }
 }

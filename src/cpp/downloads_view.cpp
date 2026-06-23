@@ -7,9 +7,11 @@
 #include "downloads_view.h"
 #include "design_tokens.h"
 #include "icon_provider.h"
+#include "widgets.h"
 #include <QMenu>
 #include <QAction>
 #include <QMessageBox>
+#include <QButtonGroup>
 
 static QPixmap getRoundedPixmap(const QPixmap &src, int radius) {
     if (src.isNull()) return src;
@@ -25,7 +27,7 @@ static QPixmap getRoundedPixmap(const QPixmap &src, int radius) {
 }
 
 DownloadsView::DownloadsView(QWidget *parent)
-    : QWidget(parent)
+    : QWidget(parent), active_tab_("songs")
 {
     const auto &c = DesignTokens::current();
 
@@ -37,15 +39,93 @@ DownloadsView::DownloadsView(QWidget *parent)
     list_->setContentsMargins(24, 24, 24, 24);
     list_->setSpacing(6);
 
-    auto *header = new QLabel("Descargas", this);
+    auto *header = new QLabel(tr_q("downloads"), this);
     header->setFont(DesignTokens::getFont("display", 24));
     header->setStyleSheet(QString("color: %1; font-weight: bold; background: transparent;").arg(c.text_primary.name()));
     list_->addWidget(header);
 
-    status_label_ = new QLabel("Sin descargas", this);
+    // Tab bar setup
+    auto *tab_bar = new QWidget(this);
+    tab_bar->setFixedHeight(44);
+    tab_bar->setStyleSheet(QString("background-color: transparent; border-bottom: 1px solid %1;")
+        .arg(QString("rgba(%1, %2, %3, %4)").arg(c.border.red()).arg(c.border.green()).arg(c.border.blue()).arg(c.border.alpha() / 255.0))
+    );
+    
+    auto *tab_lay = new QHBoxLayout(tab_bar);
+    tab_lay->setContentsMargins(0, 0, 0, 0);
+    tab_lay->setSpacing(8);
+    
+    struct TabSpec {
+        const char *key;
+        const char *translation_key;
+    };
+    const TabSpec tabs[] = {
+        {"songs", "songs"},
+        {"albums", "albums"},
+        {"playlists", "playlists"},
+        {"shows", "shows"}
+    };
+
+    QButtonGroup *group = new QButtonGroup(this);
+    group->setExclusive(true);
+
+    for (const auto &tab : tabs) {
+        auto *btn = new QPushButton(tr_q(tab.translation_key), tab_bar);
+        btn->setProperty("tabKey", QString(tab.key));
+        btn->setCheckable(true);
+        btn->setFixedHeight(43);
+        btn->setCursor(Qt::PointingHandCursor);
+        btn->setFont(DesignTokens::getFont("body", 13));
+        
+        QString btnStyle = QString(
+            "QPushButton {\n"
+            "    background: transparent;\n"
+            "    border: none;\n"
+            "    border-bottom: 2px solid transparent;\n"
+            "    color: %1;\n"
+            "    padding: 0 12px;\n"
+            "}\n"
+            "QPushButton:hover {\n"
+            "    color: %2;\n"
+            "}\n"
+            "QPushButton:checked {\n"
+            "    color: %3;\n"
+            "    border-bottom: 2px solid %3;\n"
+            "    font-weight: 500;\n"
+            "}\n"
+        )
+        .arg(c.text_secondary.name())
+        .arg(c.text_primary.name())
+        .arg(c.accent.name());
+        
+        btn->setStyleSheet(btnStyle);
+        tab_lay->addWidget(btn);
+        group->addButton(btn);
+        tab_btns_.push_back(btn);
+
+        if (std::string(tab.key) == active_tab_) {
+            btn->setChecked(true);
+        }
+
+        connect(btn, &QPushButton::toggled, this, [this, btn](bool checked) {
+            if (checked) {
+                active_tab_ = btn->property("tabKey").toString().toStdString();
+                update_view();
+            }
+        });
+    }
+    tab_lay->addStretch(1);
+    list_->addWidget(tab_bar);
+
+    status_label_ = new QLabel(tr_q("no_downloads"), this);
     status_label_->setFont(DesignTokens::getFont("body", 14));
     status_label_->setStyleSheet(QString("color: %1; padding: 24px 0; background: transparent;").arg(c.text_muted.name()));
     list_->addWidget(status_label_);
+
+    rows_layout_ = new QVBoxLayout();
+    rows_layout_->setContentsMargins(0, 0, 0, 0);
+    rows_layout_->setSpacing(6);
+    list_->addLayout(rows_layout_);
 
     list_->addStretch(1);
     root->addLayout(list_);
@@ -62,15 +142,16 @@ QWidget *DownloadsView::make_download_row(const std::string &video_id, const std
     bool is_completed = (status == "completed");
     bool is_cancelled = (status == "cancelled");
 
-    auto *row = new QWidget(this);
+    QWidget *row = new QWidget(this);
+    row->setObjectName("DownloadRow");
     row->setFixedHeight(is_active || is_failed ? 88 : 64);
 
     QString rowStyle = QString(
-        "QWidget {\n"
+        "QWidget#DownloadRow {\n"
         "    background-color: transparent;\n"
         "    border-radius: 8px;\n"
         "}\n"
-        "QWidget:hover {\n"
+        "QWidget#DownloadRow:hover {\n"
         "    background-color: %1;\n"
         "}\n"
     )
@@ -85,6 +166,7 @@ QWidget *DownloadsView::make_download_row(const std::string &video_id, const std
     top->setSpacing(12);
 
     auto *thumb = new QLabel(row);
+    thumb->setObjectName("downloadRowThumb");
     thumb->setFixedSize(36, 36);
     thumb->setAlignment(Qt::AlignCenter);
     thumb->setStyleSheet(QString("background: %1; border-radius: 4px;").arg(c.bg_elevated.name()));
@@ -110,6 +192,7 @@ QWidget *DownloadsView::make_download_row(const std::string &video_id, const std
     vl->setContentsMargins(0, 0, 0, 0);
 
     auto *t = new QLabel(QString::fromStdString(title), row);
+    t->setObjectName("downloadRowTitle");
     t->setFont(DesignTokens::getFont("body", 13));
     QString titleColor = is_cancelled ? c.text_muted.name() : c.text_primary.name();
     t->setStyleSheet(QString("color: %1; font-weight: bold; background: transparent;").arg(titleColor));
@@ -121,6 +204,7 @@ QWidget *DownloadsView::make_download_row(const std::string &video_id, const std
     vl->addWidget(t);
 
     auto *a = new QLabel(QString::fromStdString(artist), row);
+    a->setObjectName("downloadRowArtist");
     a->setFont(DesignTokens::getFont("caption", 11));
     a->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
     vl->addWidget(a);
@@ -129,15 +213,16 @@ QWidget *DownloadsView::make_download_row(const std::string &video_id, const std
         auto *status_text = new QLabel(row);
         status_text->setObjectName("status_label");
         QString statusMsg;
-        if (status == "queued") statusMsg = "En cola…";
-        else if (status == "resolving") statusMsg = "Resolviendo…";
-        else statusMsg = QString("Descargando… %1%").arg(static_cast<int>(progress));
+        if (status == "queued") statusMsg = tr_q("queued_status");
+        else if (status == "resolving") statusMsg = tr_q("resolving_status");
+        else statusMsg = tr_q("downloading_status").arg(static_cast<int>(progress));
         status_text->setText(statusMsg);
         status_text->setFont(DesignTokens::getFont("caption", 10));
         status_text->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_muted.name()));
         vl->addWidget(status_text);
     } else if (is_failed) {
-        auto *err_text = new QLabel("Error en la descarga", row);
+        auto *err_text = new QLabel(tr_q("download_error"), row);
+        err_text->setObjectName("downloadRowError");
         err_text->setFont(DesignTokens::getFont("caption", 10));
         err_text->setStyleSheet(QString("color: %1; background: transparent;").arg(c.error.name()));
         vl->addWidget(err_text);
@@ -147,6 +232,7 @@ QWidget *DownloadsView::make_download_row(const std::string &video_id, const std
 
     if (is_active) {
         auto *cancel_btn = new QPushButton(row);
+        cancel_btn->setObjectName("downloadRowCancel");
         cancel_btn->setFixedSize(28, 28);
         cancel_btn->setCursor(Qt::PointingHandCursor);
         cancel_btn->setIcon(IconProvider::getIcon("close", c.text_secondary, 14));
@@ -162,6 +248,7 @@ QWidget *DownloadsView::make_download_row(const std::string &video_id, const std
         top->addWidget(cancel_btn);
     } else if (is_completed) {
         auto *play_btn = new QPushButton(row);
+        play_btn->setObjectName("downloadRowPlay");
         play_btn->setFixedSize(28, 28);
         play_btn->setCursor(Qt::PointingHandCursor);
         play_btn->setIcon(IconProvider::getIcon("play_arrow", QColor("#FFFFFF"), 14));
@@ -181,6 +268,7 @@ QWidget *DownloadsView::make_download_row(const std::string &video_id, const std
         top->addWidget(play_btn);
     } else if (is_failed) {
         auto *retry_btn = new QPushButton(row);
+        retry_btn->setObjectName("downloadRowRetry");
         retry_btn->setFixedSize(28, 28);
         retry_btn->setCursor(Qt::PointingHandCursor);
         retry_btn->setIcon(IconProvider::getIcon("refresh", c.accent, 14));
@@ -226,28 +314,30 @@ QWidget *DownloadsView::make_download_row(const std::string &video_id, const std
 
         QAction *play = nullptr;
         if (is_completed) {
-            play = menu.addAction("Reproducir");
+            play = menu.addAction(tr_q("play"));
         }
 
         bool is_fav = get_track_favorite_state(video_id);
-        QAction *fav = menu.addAction(is_fav ? "Quitar de favoritos" : "Agregar a favoritos");
+        QAction *fav = menu.addAction(is_fav 
+            ? tr_q("remove_favorite")
+            : tr_q("add_favorite"));
 
         QAction *next = nullptr;
         QAction *end = nullptr;
         if (is_completed) {
-            next = menu.addAction("Reproducir siguiente");
-            end = menu.addAction("Agregar a la cola");
+            next = menu.addAction(tr_q("play_next"));
+            end = menu.addAction(tr_q("add_to_queue"));
         }
 
         QAction *cancel = nullptr;
         if (is_active) {
-            cancel = menu.addAction("Cancelar descarga");
+            cancel = menu.addAction(tr_q("cancel_download"));
         }
 
-        QAction *delete_db = menu.addAction("Eliminar de la lista");
+        QAction *delete_db = menu.addAction(tr_q("remove_from_list"));
         QAction *delete_both = nullptr;
         if (is_completed) {
-            delete_both = menu.addAction("Eliminar descarga (borrar archivo)");
+            delete_both = menu.addAction(tr_q("delete_download_file"));
         }
 
         QAction *chosen = menu.exec(sender_widget->mapToGlobal(pos));
@@ -276,8 +366,8 @@ QWidget *DownloadsView::make_download_row(const std::string &video_id, const std
         } else if (chosen == delete_db) {
             auto reply = QMessageBox::question(
                 this,
-                "Eliminar descarga",
-                "¿Quieres eliminar esta descarga de la lista?",
+                tr_q("confirm_delete_download_title"),
+                tr_q("confirm_delete_download_list_desc"),
                 QMessageBox::Yes | QMessageBox::No,
                 QMessageBox::No);
             if (reply == QMessageBox::Yes) {
@@ -286,8 +376,8 @@ QWidget *DownloadsView::make_download_row(const std::string &video_id, const std
         } else if (chosen == delete_both) {
             auto reply = QMessageBox::question(
                 this,
-                "Eliminar archivo descargado",
-                "¿Quieres eliminar esta descarga de la lista y borrar el archivo local?",
+                tr_q("delete_download_file_title"),
+                tr_q("delete_download_file_desc"),
                 QMessageBox::Yes | QMessageBox::No,
                 QMessageBox::No);
             if (reply == QMessageBox::Yes) {
@@ -323,21 +413,17 @@ QWidget *DownloadsView::make_batch_row(const std::string &/*parent_id*/, const s
     const auto &c = DesignTokens::current();
 
     auto *row = new QWidget(this);
+    row->setObjectName("BatchRow");
     row->setFixedHeight(80);
 
     QString rowStyle = QString(
-        "QWidget {\n"
-        "    background-color: %1;\n"
-        "    border-radius: 10px;\n"
-        "    border: 1px solid %2;\n"
-        "}\n"
-        "QWidget:hover {\n"
-        "    background-color: %3;\n"
+        "QWidget#BatchRow { %1 }\n"
+        "QWidget#BatchRow:hover {\n"
+        "    background-color: %2;\n"
         "}\n"
     )
-    .arg(c.bg_elevated.name())
-    .arg(c.border.name())
-    .arg(QString("rgba(%1, %2, %3, %4)").arg(c.accent_dim.red()).arg(c.accent_dim.green()).arg(c.accent_dim.blue()).arg(c.accent_dim.alpha() / 255.0));
+    .arg(DesignTokens::panelStyle("elevated", 10))
+    .arg(DesignTokens::rgba(c.accent_dim));
     row->setStyleSheet(rowStyle);
 
     auto *lay = new QVBoxLayout(row);
@@ -403,29 +489,132 @@ void DownloadsView::update_batch_row(QWidget *row, int total, int completed, dou
     }
 }
 
-void DownloadsView::set_downloads(const std::vector<std::string> &titles,
-                                   const std::vector<std::string> &artists,
-                                   const std::vector<std::string> &thumbnails,
-                                   const std::vector<std::string> &video_ids,
-                                   const std::vector<std::string> &statuses,
-                                   const std::vector<double> &progresses) {
+void DownloadsView::set_downloads(const std::vector<DownloadItem> &items) {
+    all_downloads_ = items;
+    update_view();
+}
+
+void DownloadsView::update_view() {
     clear_downloads();
-    size_t n = std::min({titles.size(), artists.size(), thumbnails.size(),
-                         video_ids.size(), statuses.size(), progresses.size()});
-    if (n == 0) {
-        status_label_->setText("Sin descargas");
-        status_label_->show();
-        return;
-    }
-    status_label_->hide();
-    for (size_t i = 0; i < n; ++i) {
-        int idx = list_->count() - 1;
-        auto *row = make_download_row(video_ids[i], titles[i], artists[i], thumbnails[i],
-                                       progresses[i], statuses[i]);
-        if (!video_ids[i].empty()) {
-            row_map_[video_ids[i]] = row;
+
+    if (active_tab_ == "songs") {
+        if (all_downloads_.empty()) {
+            status_label_->setText(tr_q("no_downloads"));
+            status_label_->show();
+            return;
         }
-        list_->insertWidget(idx, row);
+        status_label_->hide();
+
+        for (const auto &item : all_downloads_) {
+            std::string parent_id = static_cast<std::string>(item.parent_playlist_id);
+            if (parent_id.rfind("show_", 0) == 0 || parent_id.rfind("podcast_", 0) == 0) {
+                continue;
+            }
+
+            auto *row = make_download_row(
+                static_cast<std::string>(item.video_id),
+                static_cast<std::string>(item.title),
+                static_cast<std::string>(item.artist),
+                static_cast<std::string>(item.thumbnail_url),
+                item.progress,
+                static_cast<std::string>(item.status)
+            );
+            if (!item.video_id.empty()) {
+                row_map_[static_cast<std::string>(item.video_id)] = row;
+            }
+            rows_layout_->addWidget(row);
+        }
+    } else {
+        struct GroupData {
+            std::string id;
+            std::string title;
+            std::string thumbnail;
+            std::string artist;
+            int count = 0;
+        };
+        std::vector<GroupData> groups;
+        std::map<std::string, size_t> group_index;
+
+        for (const auto &item : all_downloads_) {
+            if (static_cast<std::string>(item.status) != "completed") {
+                continue;
+            }
+
+            std::string parent_id = static_cast<std::string>(item.parent_playlist_id);
+            if (parent_id.empty()) {
+                continue;
+            }
+
+            bool matches = false;
+            if (active_tab_ == "albums") {
+                matches = (parent_id.rfind("VL", 0) != 0 && parent_id.rfind("PL", 0) != 0 &&
+                           parent_id.rfind("show_", 0) != 0 && parent_id.rfind("podcast_", 0) != 0);
+            } else if (active_tab_ == "playlists") {
+                matches = (parent_id.rfind("VL", 0) == 0 || parent_id.rfind("PL", 0) == 0);
+            } else if (active_tab_ == "shows") {
+                matches = (parent_id.rfind("show_", 0) == 0 || parent_id.rfind("podcast_", 0) == 0);
+            }
+
+            if (matches) {
+                if (group_index.find(parent_id) == group_index.end()) {
+                    GroupData gd;
+                    gd.id = parent_id;
+                    gd.title = static_cast<std::string>(item.parent_playlist_title);
+                    if (gd.title.empty()) {
+                        gd.title = static_cast<std::string>(item.album);
+                    }
+                    if (gd.title.empty()) {
+                        gd.title = "Colección Desconocida";
+                    }
+                    gd.thumbnail = static_cast<std::string>(item.parent_playlist_thumbnail_url);
+                    if (gd.thumbnail.empty()) {
+                        gd.thumbnail = static_cast<std::string>(item.thumbnail_url);
+                    }
+                    gd.artist = static_cast<std::string>(item.artist);
+                    gd.count = 1;
+                    group_index[parent_id] = groups.size();
+                    groups.push_back(gd);
+                } else {
+                    groups[group_index[parent_id]].count++;
+                }
+            }
+        }
+
+        if (groups.empty()) {
+            status_label_->setText("Sin descargas en esta categoría");
+            status_label_->show();
+            return;
+        }
+        status_label_->hide();
+
+        for (const auto &g : groups) {
+            std::string sub_text;
+            if (active_tab_ == "albums") {
+                sub_text = "Álbum • " + std::to_string(g.count) + " canciones";
+            } else if (active_tab_ == "playlists") {
+                sub_text = "Lista de reproducción • " + std::to_string(g.count) + " canciones";
+            } else if (active_tab_ == "shows") {
+                sub_text = "Podcast • " + std::to_string(g.count) + " episodios";
+            }
+
+            auto *ci = new ClickableItem(g.title, sub_text, this);
+            ci->set_item_id(g.id);
+            ci->set_item_type(active_tab_ == "albums" ? "album" :
+                              active_tab_ == "playlists" ? "playlist" : "show");
+            ci->set_thumbnail(g.thumbnail);
+
+            connect(ci, &ClickableItem::clicked, this, [this, g]() {
+                if (active_tab_ == "albums") {
+                    emit album_requested(g.id);
+                } else if (active_tab_ == "playlists") {
+                    emit playlist_requested(g.id);
+                } else if (active_tab_ == "shows") {
+                    emit show_requested(g.id);
+                }
+            });
+
+            rows_layout_->addWidget(ci);
+        }
     }
 }
 
@@ -442,7 +631,7 @@ void DownloadsView::set_batch_progress(const std::string &parent_id, int total, 
     } else {
         status_label_->hide();
         auto *batch_row = make_batch_row(parent_id, "Lote", total, completed, percent);
-        list_->insertWidget(2, batch_row);
+        rows_layout_->insertWidget(0, batch_row);
         batch_row_map_[parent_id] = batch_row;
     }
 }
@@ -453,11 +642,124 @@ void DownloadsView::clear_downloads() {
         it.value()->deleteLater();
     }
     batch_row_map_.clear();
-    while (list_->count() > 3) {
-        auto *item = list_->takeAt(2);
-        if (item->widget()) {
-            item->widget()->deleteLater();
+
+    QLayoutItem *child;
+    while ((child = rows_layout_->takeAt(0)) != nullptr) {
+        if (child->widget()) {
+            child->widget()->deleteLater();
         }
-        delete item;
+        delete child;
+    }
+}
+
+void DownloadsView::update_theme() {
+    const auto &c = DesignTokens::current();
+    if (status_label_) {
+        status_label_->setStyleSheet(QString("color: %1; padding: 24px 0; background: transparent;").arg(c.text_muted.name()));
+    }
+    for (auto *btn : tab_btns_) {
+        if (!btn) continue;
+        QString btnStyle = QString(
+            "QPushButton {\n"
+            "    background: transparent;\n"
+            "    border: none;\n"
+            "    border-bottom: 2px solid transparent;\n"
+            "    color: %1;\n"
+            "    padding: 0 12px;\n"
+            "}\n"
+            "QPushButton:hover {\n"
+            "    color: %2;\n"
+            "}\n"
+            "QPushButton:checked {\n"
+            "    color: %3;\n"
+            "    border-bottom: 2px solid %3;\n"
+            "    font-weight: 500;\n"
+            "}\n"
+        )
+        .arg(c.text_secondary.name())
+        .arg(c.text_primary.name())
+        .arg(c.accent.name());
+        btn->setStyleSheet(btnStyle);
+    }
+    // Update batch rows
+    for (auto *row : findChildren<QWidget*>("BatchRow")) {
+        QString rowStyle = QString(
+            "QWidget#BatchRow { %1 }\n"
+            "QWidget#BatchRow:hover {\n"
+            "    background-color: %2;\n"
+            "}\n"
+        )
+        .arg(DesignTokens::panelStyle("elevated", 10))
+        .arg(DesignTokens::rgba(c.accent_dim));
+        row->setStyleSheet(rowStyle);
+    }
+    for (auto *lbl : findChildren<QLabel*>("batch_title")) {
+        lbl->setStyleSheet(QString("color: %1; font-weight: bold; background: transparent;").arg(c.text_primary.name()));
+    }
+    for (auto *lbl : findChildren<QLabel*>("batch_count")) {
+        lbl->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
+    }
+    for (auto *pb : findChildren<QProgressBar*>("batch_progress")) {
+        pb->setStyleSheet(QString(
+            "QProgressBar { background: %1; border: none; border-radius: 3px; }"
+            "QProgressBar::chunk { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, "
+            "    stop:0 %2, stop:1 %3); border-radius: 3px; }"
+        ).arg(c.bg_overlay.name()).arg(c.accent.name()).arg(c.accent_bright.name()));
+    }
+    // Update individual download rows
+    for (auto *row : findChildren<QWidget*>("DownloadRow")) {
+        QString rowStyle = QString(
+            "QWidget#DownloadRow {\n"
+            "    background-color: transparent;\n"
+            "    border-radius: 8px;\n"
+            "}\n"
+            "QWidget#DownloadRow:hover {\n"
+            "    background-color: %1;\n"
+            "}\n"
+        )
+        .arg(QString("rgba(%1, %2, %3, %4)").arg(c.accent_dim.red()).arg(c.accent_dim.green()).arg(c.accent_dim.blue()).arg(c.accent_dim.alpha() / 255.0));
+        row->setStyleSheet(rowStyle);
+    }
+    for (auto *lbl : findChildren<QLabel*>("downloadRowTitle")) {
+        if (lbl->font().strikeOut()) {
+            lbl->setStyleSheet(QString("color: %1; font-weight: bold; background: transparent;").arg(c.text_muted.name()));
+        } else {
+            lbl->setStyleSheet(QString("color: %1; font-weight: bold; background: transparent;").arg(c.text_primary.name()));
+        }
+    }
+    for (auto *lbl : findChildren<QLabel*>("downloadRowArtist")) {
+        lbl->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
+    }
+    for (auto *lbl : findChildren<QLabel*>("status_label")) {
+        lbl->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_muted.name()));
+    }
+    for (auto *lbl : findChildren<QLabel*>("downloadRowError")) {
+        lbl->setStyleSheet(QString("color: %1; background: transparent;").arg(c.error.name()));
+    }
+    for (auto *pb : findChildren<QProgressBar*>("progress_bar")) {
+        pb->setStyleSheet(QString(
+            "QProgressBar { background: %1; border: none; border-radius: 2px; }"
+            "QProgressBar::chunk { background: %2; border-radius: 2px; }"
+        ).arg(c.bg_elevated.name()).arg(c.accent.name()));
+    }
+    for (auto *btn : findChildren<QPushButton*>("downloadRowCancel")) {
+        btn->setStyleSheet(QString(
+            "QPushButton { background: transparent; border: none; border-radius: 14px; }"
+            "QPushButton:hover { background: %1; }"
+        ).arg(c.bg_elevated.name()));
+        btn->setIcon(IconProvider::getIcon("close", c.text_secondary, 14));
+    }
+    for (auto *btn : findChildren<QPushButton*>("downloadRowPlay")) {
+        btn->setStyleSheet(QString(
+            "QPushButton { background-color: %1; border: none; border-radius: 14px; }"
+            "QPushButton:hover { background-color: %2; }"
+        ).arg(c.accent.name()).arg(c.accent_bright.name()));
+    }
+    for (auto *btn : findChildren<QPushButton*>("downloadRowRetry")) {
+        btn->setStyleSheet(QString(
+            "QPushButton { background: transparent; border: none; border-radius: 14px; }"
+            "QPushButton:hover { background: %1; }"
+        ).arg(c.bg_elevated.name()));
+        btn->setIcon(IconProvider::getIcon("refresh", c.accent, 14));
     }
 }

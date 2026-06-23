@@ -82,7 +82,7 @@ LyricsWidget::LyricsWidget(QWidget *parent)
     scroll_area_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     scroll_area_->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     scroll_area_->setFrameShape(QFrame::NoFrame);
-    scroll_area_->setStyleSheet("background: transparent;");
+    scroll_area_->setStyleSheet(DesignTokens::scrollAreaStyle());
 
     container_ = new QWidget(scroll_area_);
     container_->setStyleSheet("background: transparent;");
@@ -151,7 +151,7 @@ LyricsWidget::LyricsWidget(QWidget *parent)
     sync_minus_btn_->setIcon(IconProvider::getIcon("remove", c.text_primary, 14));
     sync_minus_btn_->setStyleSheet(btnStyle);
     sync_minus_btn_->setCursor(Qt::PointingHandCursor);
-    sync_minus_btn_->setToolTip(QString::fromStdString(std::string(doremi_tr("sync_delay_tooltip_minus"))));
+    sync_minus_btn_->setToolTip(tr_q("sync_delay_tooltip_minus"));
     bar_layout->addWidget(sync_minus_btn_);
 
     // Plus button (+0.5s)
@@ -159,7 +159,7 @@ LyricsWidget::LyricsWidget(QWidget *parent)
     sync_plus_btn_->setIcon(IconProvider::getIcon("add", c.text_primary, 14));
     sync_plus_btn_->setStyleSheet(btnStyle);
     sync_plus_btn_->setCursor(Qt::PointingHandCursor);
-    sync_plus_btn_->setToolTip(QString::fromStdString(std::string(doremi_tr("sync_delay_tooltip_plus"))));
+    sync_plus_btn_->setToolTip(tr_q("sync_delay_tooltip_plus"));
     bar_layout->addWidget(sync_plus_btn_);
 
     // Reset button
@@ -167,7 +167,7 @@ LyricsWidget::LyricsWidget(QWidget *parent)
     sync_reset_btn_->setIcon(IconProvider::getIcon("restart_alt", c.text_secondary, 14));
     sync_reset_btn_->setStyleSheet(btnStyle);
     sync_reset_btn_->setCursor(Qt::PointingHandCursor);
-    sync_reset_btn_->setToolTip(QString::fromStdString(std::string(doremi_tr("sync_delay_tooltip_reset"))));
+    sync_reset_btn_->setToolTip(tr_q("sync_delay_tooltip_reset"));
     bar_layout->addWidget(sync_reset_btn_);
 
     main_layout->addWidget(sync_control_bar_, 0, Qt::AlignCenter);
@@ -315,6 +315,7 @@ void LyricsWidget::clearLayout() {
     }
     top_spacer_ = nullptr;
     bottom_spacer_ = nullptr;
+    lines_.clear();
 }
 
 void LyricsWidget::buildLyricsLayout() {
@@ -576,7 +577,7 @@ void LyricsWidget::updateSyncLabel() {
     QString sign = "";
     if (secs > 0) sign = "+";
     sync_offset_lbl_->setText(QString("%1: %2%3s")
-        .arg(QString::fromStdString(std::string(doremi_tr("sync_offset"))))
+        .arg(tr_q("sync_offset"))
         .arg(sign)
         .arg(QString::number(secs, 'f', 1)));
 }

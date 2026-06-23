@@ -34,9 +34,13 @@ public:
     void set_library_state(const std::string &state, const std::string &message);
     void set_authenticated(bool authenticated);
     std::string current_tab() const;
+    void update_theme();
 signals:
     void tab_changed(const std::string &tab);
     void play_requested(Track track);
+    void playlist_requested(const std::string &playlist_id);
+    void album_requested(const std::string &album_id);
+    void artist_requested(const std::string &artist_id);
     void remove_favorite_requested(const std::string &track_id);
     void add_favorite_album_requested(const std::string &album_id);
     void remove_favorite_album_requested(const std::string &album_id);
@@ -61,7 +65,7 @@ private:
     bool authenticated_;
     void set_active_tab(const std::string &tab);
     void setup_search_bar();
-    QWidget *make_list_item(const std::string &text, const std::string &sub, const std::string &id);
+    QWidget *make_list_item(const std::string &text, const std::string &sub, const std::string &id, const std::string &thumbnail);
     QWidget *make_song_item(const Track &track);
     void clear_list();
     void show_empty_state();

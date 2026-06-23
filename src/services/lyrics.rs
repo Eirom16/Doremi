@@ -23,10 +23,13 @@ pub struct LyricsService {
 impl LyricsService {
     pub fn new() -> Self {
         Self {
+            // BF1.4: use expect() — a build failure here is a programming error, not a
+            // runtime condition. unwrap_or_default() would silently create a client
+            // without a timeout, causing requests to hang indefinitely.
             client: Client::builder()
                 .timeout(std::time::Duration::from_secs(5))
                 .build()
-                .unwrap_or_default(),
+                .expect("LyricsService HTTP client is misconfigured"),
         }
     }
 

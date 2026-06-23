@@ -18,6 +18,7 @@ public:
     void clear_items();
     void add_item(const HomeCard &item);
     void set_state(const std::string &state, const std::string &message);
+    void update_theme();
 signals:
     void play_requested(Track track);
     void album_requested(const std::string &browse_id);

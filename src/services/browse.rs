@@ -23,10 +23,52 @@ pub async fn load_album(browse_id: &str) {
                 .collect();
             crate::bridge::bridge::set_album_detail(album, tracks);
         }
-        Err(error) => crate::bridge::bridge::show_notification(
-            &format!("No se pudo cargar el álbum: {error}"),
-            "error",
-        ),
+        Err(error) => {
+            if let Ok(downloads) = crate::db::repo::DownloadsRepo::all() {
+                let album_downloads: Vec<_> = downloads
+                    .into_iter()
+                    .filter(|d| {
+                        d.parent_playlist_id.as_deref() == Some(browse_id)
+                            && d.status == "completed"
+                    })
+                    .collect();
+                if !album_downloads.is_empty() {
+                    let first = &album_downloads[0];
+                    let album = crate::bridge::bridge::Album {
+                        id: browse_id.to_string(),
+                        title: first
+                            .parent_playlist_title
+                            .clone()
+                            .unwrap_or_else(|| first.album.clone()),
+                        artist: first.artist.clone(),
+                        year: String::new(),
+                        thumbnail: first
+                            .parent_playlist_thumbnail_url
+                            .clone()
+                            .unwrap_or_else(|| first.thumbnail_url.clone()),
+                        track_count: album_downloads.len() as i32,
+                        artist_id: String::new(),
+                    };
+                    let tracks = album_downloads
+                        .into_iter()
+                        .map(|d| crate::bridge::bridge::Track {
+                            id: d.video_id,
+                            title: d.title,
+                            artist: d.artist,
+                            album: d.album,
+                            duration_ms: d.duration_ms,
+                            thumbnail: d.thumbnail_url,
+                        })
+                        .collect();
+                    crate::bridge::bridge::set_album_detail(album, tracks);
+                    return;
+                }
+            }
+            crate::bridge::bridge::show_notification(
+                &format!("No se pudo cargar el álbum: {error}"),
+                "error",
+            );
+        }
     }
 }
 
@@ -52,7 +94,6 @@ pub async fn load_artist(browse_id: &str) {
                     thumbnail: track.thumbnail,
                 })
                 .collect();
-            detail.albums.append(&mut detail.singles);
             let albums = detail
                 .albums
                 .into_iter()
@@ -66,7 +107,20 @@ pub async fn load_artist(browse_id: &str) {
                     artist_id: album.artist_id.unwrap_or_default(),
                 })
                 .collect();
-            crate::bridge::bridge::set_artist_detail(artist, tracks, albums);
+            let singles = detail
+                .singles
+                .into_iter()
+                .map(|album| crate::bridge::bridge::Album {
+                    id: album.id,
+                    title: album.title,
+                    artist: album.artists.join(", "),
+                    year: album.year.map(|year| year.to_string()).unwrap_or_default(),
+                    thumbnail: album.thumbnail,
+                    track_count: album.track_count.unwrap_or_default(),
+                    artist_id: album.artist_id.unwrap_or_default(),
+                })
+                .collect();
+            crate::bridge::bridge::set_artist_detail(artist, tracks, albums, singles);
         }
         Err(error) => crate::bridge::bridge::show_notification(
             &format!("No se pudo cargar el artista: {error}"),
@@ -113,10 +167,52 @@ pub async fn load_playlist(playlist_id: &str) {
                 );
             }
         }
-        Err(error) => crate::bridge::bridge::show_notification(
-            &format!("No se pudo cargar la playlist: {error}"),
-            "error",
-        ),
+        Err(error) => {
+            if let Ok(downloads) = crate::db::repo::DownloadsRepo::all() {
+                let playlist_downloads: Vec<_> = downloads
+                    .into_iter()
+                    .filter(|d| {
+                        d.parent_playlist_id.as_deref() == Some(playlist_id)
+                            && d.status == "completed"
+                    })
+                    .collect();
+                if !playlist_downloads.is_empty() {
+                    let first = &playlist_downloads[0];
+                    let playlist = crate::bridge::bridge::Playlist {
+                        id: playlist_id.to_string(),
+                        name: first
+                            .parent_playlist_title
+                            .clone()
+                            .unwrap_or_else(|| "Lista de reproducción local".to_string()),
+                        description: String::new(),
+                        thumbnail: first
+                            .parent_playlist_thumbnail_url
+                            .clone()
+                            .unwrap_or_else(|| first.thumbnail_url.clone()),
+                        track_count: playlist_downloads.len() as i32,
+                        owner: String::new(),
+                        privacy: String::new(),
+                    };
+                    let tracks = playlist_downloads
+                        .into_iter()
+                        .map(|d| crate::bridge::bridge::Track {
+                            id: d.video_id,
+                            title: d.title,
+                            artist: d.artist,
+                            album: d.album,
+                            duration_ms: d.duration_ms,
+                            thumbnail: d.thumbnail_url,
+                        })
+                        .collect();
+                    crate::bridge::bridge::set_playlist_detail(playlist, tracks);
+                    return;
+                }
+            }
+            crate::bridge::bridge::show_notification(
+                &format!("No se pudo cargar la playlist: {error}"),
+                "error",
+            );
+        }
     }
 }
 

@@ -26,6 +26,7 @@ public:
     void setPlaylistId(const std::string &playlist_id) { playlist_id_ = playlist_id; }
     int index() const { return index_; }
 
+    void update_theme();
 signals:
     void play_requested(Track track);
     void remove_requested(const std::string &playlist_id, const std::string &track_id);
@@ -55,6 +56,7 @@ public:
     void set_playlist_info(const Playlist &playlist);
     void set_playlist_tracks(const std::vector<Track> &tracks);
     void clear();
+    void update_theme();
 
 signals:
     void play_requested(Track track);

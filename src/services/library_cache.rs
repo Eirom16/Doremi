@@ -1,11 +1,10 @@
+use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant};
-use once_cell::sync::Lazy;
 
-pub static GLOBAL_LIBRARY_CACHE: Lazy<RwLock<LibraryCache>> = Lazy::new(|| {
-    RwLock::new(LibraryCache::new(false))
-});
+pub static GLOBAL_LIBRARY_CACHE: Lazy<RwLock<LibraryCache>> =
+    Lazy::new(|| RwLock::new(LibraryCache::new(false)));
 
 /// Origen de la biblioteca
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

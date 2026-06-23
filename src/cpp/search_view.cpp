@@ -12,7 +12,7 @@ SearchView::SearchView(QWidget *parent)
     root->setContentsMargins(24, 24, 24, 24);
     root->setSpacing(16);
 
-    header_ = new QLabel("Resultados", this);
+    header_ = new QLabel(tr_q("results"), this);
     header_->setFont(DesignTokens::getFont("heading_lg", 20));
     header_->setStyleSheet(QString("color: %1; font-weight: bold; background: transparent;").arg(c.text_primary.name()));
     root->addWidget(header_);
@@ -20,18 +20,19 @@ SearchView::SearchView(QWidget *parent)
     filters_ = new QHBoxLayout();
     filters_->setSpacing(8);
     const std::vector<std::pair<const char *, const char *>> filterDefinitions = {
-        {"Todo", "all"}, {"Canciones", "songs"}, {"Videos", "videos"},
-        {"Álbumes", "albums"}, {"Artistas", "artists"}, {"Playlists", "playlists"},
-        {"Podcasts", "podcasts"}
+        {"all", "all"}, {"songs", "songs"}, {"videos", "videos"},
+        {"albums", "albums"}, {"artists", "artists"}, {"playlists", "playlists"},
+        {"shows", "podcasts"}
     };
-    for (const auto &[name, filterValue] : filterDefinitions) {
+    for (const auto &[key, filterValue] : filterDefinitions) {
+        QString name = tr_q(key);
         auto *btn = new QPushButton(name, this);
         btn->setCheckable(true);
         btn->setFixedHeight(32);
         btn->setCursor(Qt::PointingHandCursor);
         btn->setFont(DesignTokens::getFont("body", 12));
         btn->setFocusPolicy(Qt::StrongFocus);
-        btn->setAccessibleName(QString("Filtrar por ") + name);
+        btn->setAccessibleName(tr_q("filter_by").arg(name));
         
         QString btnStyle = QString(
             "QPushButton {\n"
@@ -78,7 +79,7 @@ SearchView::SearchView(QWidget *parent)
     results_->setSpacing(6);
     results_->setContentsMargins(0, 4, 0, 4);
 
-    auto *placeholder = new QLabel("Escribe algo para buscar", this);
+    auto *placeholder = new QLabel(tr_q("type_to_search"), this);
     placeholder->setFont(DesignTokens::getFont("body", 14));
     placeholder->setStyleSheet(QString("color: %1; padding: 24px;").arg(c.text_muted.name()));
     placeholder->setAlignment(Qt::AlignCenter);
@@ -91,7 +92,7 @@ SearchView::SearchView(QWidget *parent)
 
 void SearchView::set_query(const std::string &query) {
     current_query_ = query;
-    header_->setText("Resultados para \"" + QString::fromStdString(query) + "\"");
+    header_->setText(tr_q("search_results_for").arg(QString::fromStdString(query)));
     for (auto *btn : filter_btns_) {
         btn->setChecked(btn->property("filterValue").toString() == "all");
     }
@@ -122,7 +123,7 @@ void SearchView::show_results(const TopResult &top_result, bool has_top_result,
 
     bool has_any = has_top_result || !songs.empty() || !videos.empty() || !artists.empty() || !albums.empty() || !playlists.empty() || !shows.empty() || !episodes.empty();
     if (!has_any) {
-        auto *empty = new QLabel("Sin resultados", this);
+        auto *empty = new QLabel(tr_q("no_results"), this);
         empty->setFont(DesignTokens::getFont("body", 14));
         empty->setStyleSheet(QString("color: %1; padding: 24px;").arg(c.text_muted.name()));
         empty->setAlignment(Qt::AlignCenter);
@@ -133,20 +134,20 @@ void SearchView::show_results(const TopResult &top_result, bool has_top_result,
 
     // Top result: surface the single most relevant hit prominently.
     {
-        auto *sec_header = new QLabel("Mejor resultado", this);
+        auto *sec_header = new QLabel(tr_q("top_result"), this);
         sec_header->setFont(DesignTokens::getFont("micro", 11));
         sec_header->setStyleSheet(QString("color: %1; text-transform: uppercase; padding: 6px 12px 6px;")
             .arg(c.accent.name()));
 
         ClickableItem *top = nullptr;
         if (has_top_result) {
-            std::string label = "Resultado principal";
-            if (top_result.item_type == "artist") label = "Artista";
-            else if (top_result.item_type == "album") label = "Álbum";
-            else if (top_result.item_type == "song") label = "Canción";
-            else if (top_result.item_type == "video") label = "Video";
-            else if (top_result.item_type == "playlist") label = "Playlist";
-            else if (top_result.item_type == "show") label = "Podcast";
+            std::string label = std::string(doremi_tr("top_result"));
+            if (top_result.item_type == "artist") label = std::string(doremi_tr("artist_singular"));
+            else if (top_result.item_type == "album") label = std::string(doremi_tr("album_singular"));
+            else if (top_result.item_type == "song") label = std::string(doremi_tr("song_singular"));
+            else if (top_result.item_type == "video") label = std::string(doremi_tr("video_singular"));
+            else if (top_result.item_type == "playlist") label = std::string(doremi_tr("playlist_singular"));
+            else if (top_result.item_type == "show") label = std::string(doremi_tr("podcast_singular"));
 
             top = new ClickableItem(
                 static_cast<std::string>(top_result.title),
@@ -155,6 +156,7 @@ void SearchView::show_results(const TopResult &top_result, bool has_top_result,
             );
             top->set_item_id(static_cast<std::string>(top_result.id));
             top->set_item_type(static_cast<std::string>(top_result.item_type));
+            top->set_thumbnail(static_cast<std::string>(top_result.thumbnail));
 
             if (top_result.item_type == "artist") {
                 connect(top, &ClickableItem::clicked, this, [this, id = static_cast<std::string>(top_result.id)]() {
@@ -219,6 +221,7 @@ void SearchView::show_results(const TopResult &top_result, bool has_top_result,
                 top = new ClickableItem(static_cast<std::string>(a.name), "Artista", this);
                 top->set_item_id(static_cast<std::string>(a.id));
                 top->set_item_type("artist");
+                top->set_thumbnail(static_cast<std::string>(a.thumbnail));
                 connect(top, &ClickableItem::clicked, this, [this, a]() {
                     emit artist_requested(static_cast<std::string>(a.id));
                 });
@@ -234,6 +237,7 @@ void SearchView::show_results(const TopResult &top_result, bool has_top_result,
                 top = new ClickableItem(static_cast<std::string>(al.title), static_cast<std::string>(al.artist), this);
                 top->set_item_id(static_cast<std::string>(al.id));
                 top->set_item_type("album");
+                top->set_thumbnail(static_cast<std::string>(al.thumbnail));
                 connect(top, &ClickableItem::clicked, this, [this, al]() {
                     emit album_requested(static_cast<std::string>(al.id));
                 });
@@ -249,6 +253,7 @@ void SearchView::show_results(const TopResult &top_result, bool has_top_result,
                 top = new ClickableItem(static_cast<std::string>(t.title), static_cast<std::string>(t.artist), this);
                 top->set_item_id(static_cast<std::string>(t.id));
                 top->set_item_type("song");
+                top->set_thumbnail(static_cast<std::string>(t.thumbnail));
                 connect(top, &ClickableItem::clicked, this, [this, t]() { emit play_requested(t); });
                 connect(top, &ClickableItem::context_action, this, [this, t](const std::string &action, const std::string &) {
                     if (action == "add_favorite") emit add_favorite_requested(t);
@@ -268,7 +273,7 @@ void SearchView::show_results(const TopResult &top_result, bool has_top_result,
     }
 
     if (!songs.empty()) {
-        auto *sec_header = new QLabel("Canciones", this);
+        auto *sec_header = new QLabel(tr_q("songs"), this);
         sec_header->setFont(DesignTokens::getFont("micro", 11));
         sec_header->setStyleSheet(QString("color: %1; text-transform: uppercase; padding: 12px 12px 6px;")
             .arg(c.accent.name()));
@@ -277,6 +282,7 @@ void SearchView::show_results(const TopResult &top_result, bool has_top_result,
             auto *ci = new ClickableItem(static_cast<std::string>(track.title), static_cast<std::string>(track.artist), this);
             ci->set_item_id(static_cast<std::string>(track.id));
             ci->set_item_type("song");
+            ci->set_thumbnail(static_cast<std::string>(track.thumbnail));
             results_->addWidget(ci);
             
             connect(ci, &ClickableItem::clicked, this, [this, track]() {
@@ -299,7 +305,7 @@ void SearchView::show_results(const TopResult &top_result, bool has_top_result,
     }
 
     if (!videos.empty()) {
-        auto *sec_header = new QLabel("Videos", this);
+        auto *sec_header = new QLabel(tr_q("videos"), this);
         sec_header->setFont(DesignTokens::getFont("micro", 11));
         sec_header->setStyleSheet(QString("color: %1; text-transform: uppercase; padding: 12px 12px 6px;")
             .arg(c.accent.name()));
@@ -309,6 +315,7 @@ void SearchView::show_results(const TopResult &top_result, bool has_top_result,
                                            static_cast<std::string>(track.artist), this);
             item->set_item_id(static_cast<std::string>(track.id));
             item->set_item_type("video");
+            item->set_thumbnail(static_cast<std::string>(track.thumbnail));
             results_->addWidget(item);
             connect(item, &ClickableItem::clicked, this, [this, track]() {
                 emit play_requested(track);
@@ -325,15 +332,16 @@ void SearchView::show_results(const TopResult &top_result, bool has_top_result,
     }
 
     if (!artists.empty()) {
-        auto *sec_header = new QLabel("Artistas", this);
+        auto *sec_header = new QLabel(tr_q("artists"), this);
         sec_header->setFont(DesignTokens::getFont("micro", 11));
         sec_header->setStyleSheet(QString("color: %1; text-transform: uppercase; padding: 12px 12px 6px;")
             .arg(c.accent.name()));
         results_->addWidget(sec_header);
         for (const auto &artist : artists) {
-            auto *ci = new ClickableItem(static_cast<std::string>(artist.name), "Artista", this);
+            auto *ci = new ClickableItem(static_cast<std::string>(artist.name), tr_q("artist_singular").toStdString(), this);
             ci->set_item_id(static_cast<std::string>(artist.id));
             ci->set_item_type("artist");
+            ci->set_thumbnail(static_cast<std::string>(artist.thumbnail));
             results_->addWidget(ci);
             connect(ci, &ClickableItem::clicked, this, [this, artist]() {
                 emit artist_requested(static_cast<std::string>(artist.id));
@@ -349,7 +357,7 @@ void SearchView::show_results(const TopResult &top_result, bool has_top_result,
     }
 
     if (!albums.empty()) {
-        auto *sec_header = new QLabel("Álbumes", this);
+        auto *sec_header = new QLabel(tr_q("albums"), this);
         sec_header->setFont(DesignTokens::getFont("micro", 11));
         sec_header->setStyleSheet(QString("color: %1; text-transform: uppercase; padding: 12px 12px 6px;")
             .arg(c.accent.name()));
@@ -358,6 +366,7 @@ void SearchView::show_results(const TopResult &top_result, bool has_top_result,
             auto *ci = new ClickableItem(static_cast<std::string>(album.title), static_cast<std::string>(album.artist), this);
             ci->set_item_id(static_cast<std::string>(album.id));
             ci->set_item_type("album");
+            ci->set_thumbnail(static_cast<std::string>(album.thumbnail));
             results_->addWidget(ci);
             connect(ci, &ClickableItem::clicked, this, [this, album]() {
                 emit album_requested(static_cast<std::string>(album.id));
@@ -373,7 +382,7 @@ void SearchView::show_results(const TopResult &top_result, bool has_top_result,
     }
 
     if (!playlists.empty()) {
-        auto *sec_header = new QLabel("Playlists", this);
+        auto *sec_header = new QLabel(tr_q("playlists"), this);
         sec_header->setFont(DesignTokens::getFont("micro", 11));
         sec_header->setStyleSheet(QString("color: %1; text-transform: uppercase; padding: 12px 12px 6px;")
             .arg(c.accent.name()));
@@ -383,6 +392,7 @@ void SearchView::show_results(const TopResult &top_result, bool has_top_result,
                                          static_cast<std::string>(playlist.description), this);
             ci->set_item_id(static_cast<std::string>(playlist.id));
             ci->set_item_type("playlist");
+            ci->set_thumbnail(static_cast<std::string>(playlist.thumbnail));
             results_->addWidget(ci);
             connect(ci, &ClickableItem::clicked, this, [this, playlist]() {
                 emit playlist_requested(static_cast<std::string>(playlist.id));
@@ -391,7 +401,7 @@ void SearchView::show_results(const TopResult &top_result, bool has_top_result,
     }
 
     if (!shows.empty()) {
-        auto *sec_header = new QLabel("Podcasts", this);
+        auto *sec_header = new QLabel(tr_q("shows"), this);
         sec_header->setFont(DesignTokens::getFont("micro", 11));
         sec_header->setStyleSheet(QString("color: %1; text-transform: uppercase; padding: 12px 12px 6px;")
             .arg(c.accent.name()));
@@ -403,6 +413,7 @@ void SearchView::show_results(const TopResult &top_result, bool has_top_result,
                 this);
             ci->set_item_id(static_cast<std::string>(show.id));
             ci->set_item_type("show");
+            ci->set_thumbnail(static_cast<std::string>(show.thumbnail));
             results_->addWidget(ci);
             connect(ci, &ClickableItem::clicked, this, [this, show]() {
                 emit show_requested(static_cast<std::string>(show.id));
@@ -423,6 +434,7 @@ void SearchView::show_results(const TopResult &top_result, bool has_top_result,
                 this);
             ci->set_item_id(static_cast<std::string>(ep.id));
             ci->set_item_type("episode");
+            ci->set_thumbnail(static_cast<std::string>(ep.thumbnail));
             results_->addWidget(ci);
             connect(ci, &ClickableItem::clicked, this, [this, ep]() {
                 emit show_requested(static_cast<std::string>(ep.show_id));
@@ -440,7 +452,7 @@ void SearchView::show_recent_searches(const std::vector<std::string> &queries) {
     const auto &c = DesignTokens::current();
 
     if (queries.empty()) {
-        auto *empty = new QLabel("Sin búsquedas recientes", this);
+        auto *empty = new QLabel(tr_q("no_recent_searches"), this);
         empty->setFont(DesignTokens::getFont("body", 14));
         empty->setStyleSheet(QString("color: %1; padding: 24px;").arg(c.text_muted.name()));
         empty->setAlignment(Qt::AlignCenter);
@@ -455,18 +467,18 @@ void SearchView::show_recent_searches(const std::vector<std::string> &queries) {
     header_layout->setContentsMargins(12, 12, 12, 6);
     header_layout->setSpacing(8);
 
-    auto *sec_header = new QLabel("Búsquedas recientes", header_row);
+    auto *sec_header = new QLabel(tr_q("recent_searches"), header_row);
     sec_header->setFont(DesignTokens::getFont("micro", 11));
     sec_header->setStyleSheet(QString("color: %1; text-transform: uppercase; background: transparent;")
         .arg(c.accent.name()));
     header_layout->addWidget(sec_header);
     header_layout->addStretch();
 
-    auto *clear_all = new QPushButton("Limpiar todo", header_row);
+    auto *clear_all = new QPushButton(tr_q("clear_all"), header_row);
     clear_all->setCursor(Qt::PointingHandCursor);
     clear_all->setFont(DesignTokens::getFont("micro", 11));
     clear_all->setFocusPolicy(Qt::StrongFocus);
-    clear_all->setAccessibleName("Limpiar todo el historial de búsqueda");
+    clear_all->setAccessibleName(tr_q("clear_history"));
     clear_all->setStyleSheet(QString(
         "QPushButton { background: transparent; border: none; color: %1; padding: 2px 6px; }\n"
         "QPushButton:hover { color: %2; }\n"
@@ -570,5 +582,41 @@ void SearchView::set_recent_searches(const std::vector<std::string> &queries) {
 void SearchView::set_active_filter(const std::string &filter) {
     for (auto *btn : filter_btns_) {
         btn->setChecked(btn->property("filterValue").toString().toStdString() == filter);
+    }
+}
+
+void SearchView::update_theme() {
+    const auto &c = DesignTokens::current();
+    if (header_) {
+        header_->setStyleSheet(QString("color: %1; font-weight: bold; background: transparent;").arg(c.text_primary.name()));
+    }
+    for (auto *btn : filter_btns_) {
+        if (!btn) continue;
+        QString btnStyle = QString(
+            "QPushButton {\n"
+            "    background-color: %1;\n"
+            "    border: 1px solid %2;\n"
+            "    border-radius: 16px;\n"
+            "    padding: 0 16px;\n"
+            "    color: %3;\n"
+            "}\n"
+            "QPushButton:hover {\n"
+            "    background-color: %4;\n"
+            "    color: %5;\n"
+            "}\n"
+            "QPushButton:checked {\n"
+            "    background-color: %6;\n"
+            "    border-color: %6;\n"
+            "    color: #FFFFFF;\n"
+            "    font-weight: 500;\n"
+            "}\n"
+        )
+        .arg(c.bg_surface.name())
+        .arg(c.border.name())
+        .arg(c.text_secondary.name())
+        .arg(QString("rgba(%1, %2, %3, %4)").arg(c.accent_dim.red()).arg(c.accent_dim.green()).arg(c.accent_dim.blue()).arg(c.accent_dim.alpha() / 255.0))
+        .arg(c.text_primary.name())
+        .arg(c.accent.name());
+        btn->setStyleSheet(btnStyle);
     }
 }

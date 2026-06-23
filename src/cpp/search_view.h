@@ -27,6 +27,7 @@ public:
                      const std::vector<Show> &shows = {},
                      const std::vector<Episode> &episodes = {});
     void set_recent_searches(const std::vector<std::string> &queries);
+    void update_theme();
 signals:
     void filter_changed(const std::string &filter);
     void play_requested(Track track);

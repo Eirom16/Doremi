@@ -42,40 +42,40 @@ void NavigationController::navigate_to_internal(const std::string &route, bool r
 
     if (window_->stack_) {
         if (route == "home") {
-            window_->stack_->setCurrentIndex(1);
+            window_->stack_->setCurrentIndex(static_cast<int>(ViewIndex::Home));
         } else if (route == "search") {
-            window_->stack_->setCurrentIndex(2);
+            window_->stack_->setCurrentIndex(static_cast<int>(ViewIndex::Search));
         } else if (route == "library") {
-            window_->stack_->setCurrentIndex(3);
+            window_->stack_->setCurrentIndex(static_cast<int>(ViewIndex::Library));
             if (window_->library_view()) {
                 std::string tab = window_->library_view()->current_tab();
                 if (tab.empty()) tab = "playlists";
                 emit window_->library_view()->tab_changed(tab);
             }
         } else if (route == "settings") {
-            window_->stack_->setCurrentIndex(4);
+            window_->stack_->setCurrentIndex(static_cast<int>(ViewIndex::Settings));
         } else if (route == "trending") {
-            window_->stack_->setCurrentIndex(5);
+            window_->stack_->setCurrentIndex(static_cast<int>(ViewIndex::Trending));
         } else if (route == "downloads") {
-            window_->stack_->setCurrentIndex(6);
+            window_->stack_->setCurrentIndex(static_cast<int>(ViewIndex::Downloads));
             on_downloads_requested();
         } else if (route == "stats") {
-            window_->stack_->setCurrentIndex(7);
+            window_->stack_->setCurrentIndex(static_cast<int>(ViewIndex::Stats));
         } else if (route == "history") {
-            window_->stack_->setCurrentIndex(8);
+            window_->stack_->setCurrentIndex(static_cast<int>(ViewIndex::History));
             on_history_requested();
         } else if (route == "album_detail") {
-            window_->stack_->setCurrentIndex(9);
+            window_->stack_->setCurrentIndex(static_cast<int>(ViewIndex::AlbumDetail));
         } else if (route == "artist_detail") {
-            window_->stack_->setCurrentIndex(10);
+            window_->stack_->setCurrentIndex(static_cast<int>(ViewIndex::ArtistDetail));
         } else if (route == "playlist_detail") {
-            window_->stack_->setCurrentIndex(11);
+            window_->stack_->setCurrentIndex(static_cast<int>(ViewIndex::PlaylistDetail));
         } else if (route == "show_detail") {
-            window_->stack_->setCurrentIndex(12);
+            window_->stack_->setCurrentIndex(static_cast<int>(ViewIndex::ShowDetail));
         } else if (route == "welcome") {
-            window_->stack_->setCurrentIndex(13);
+            window_->stack_->setCurrentIndex(static_cast<int>(ViewIndex::Welcome));
         } else {
-            window_->stack_->setCurrentIndex(1);
+            window_->stack_->setCurrentIndex(static_cast<int>(ViewIndex::Home));
         }
     }
     

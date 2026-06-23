@@ -396,6 +396,7 @@ mod tests {
 
     #[test]
     fn test_legacy_migration() {
+        let _guard = crate::db::TEST_MUTEX.lock().unwrap();
         let temp_dir = std::env::temp_dir().join(format!(
             "doremi-migration-test-{}-{}",
             std::process::id(),
@@ -500,6 +501,8 @@ font_size = 14
             Ok(())
         })
         .unwrap();
+
+        let _ = crate::db::take_connection();
 
         // Clean up temp dir
         let _ = fs::remove_dir_all(temp_dir);

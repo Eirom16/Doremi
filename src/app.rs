@@ -69,10 +69,23 @@ impl DoremiApp {
             return;
         }
 
+        let args: Vec<String> = std::env::args().collect();
+        let ui_test_idx = args.iter().position(|a| a == "--ui-test");
+        let screenshot_idx = args.iter().position(|a| a == "--screenshot");
+        let ui_test_config = ui_test_idx.map(|idx| {
+            let view = args.get(idx + 1).cloned().unwrap_or_default();
+            let screenshot = screenshot_idx
+                .and_then(|i| args.get(i + 1).cloned())
+                .unwrap_or_default();
+            (view, screenshot)
+        });
+
         // Initialize player
-        let player = Arc::new(PlayerService::new_with_preload(
-            self.settings.network.preload_next,
-        ));
+        let player = Arc::new(if ui_test_idx.is_some() {
+            PlayerService::new_disabled_audio(self.settings.network.preload_next)
+        } else {
+            PlayerService::new_with_preload(self.settings.network.preload_next)
+        });
         let restored_queue =
             self.settings.player.resume_on_startup && player.restore_queue_session();
         bridge::init_player(player.clone());
@@ -103,17 +116,18 @@ impl DoremiApp {
         set_window_title("Doremi");
         show_main_window();
 
-        let args: Vec<String> = std::env::args().collect();
-        let ui_test_idx = args.iter().position(|a| a == "--ui-test");
-        let screenshot_idx = args.iter().position(|a| a == "--screenshot");
+        if let Some((view, screenshot)) = ui_test_config {
+            log::info!(
+                "Running in UI Test mode. View: {}, Screenshot: {}",
+                view,
+                screenshot
+            );
 
-        if let Some(idx) = ui_test_idx {
-            let view = args.get(idx + 1).cloned().unwrap_or_default();
-            let screenshot = screenshot_idx.and_then(|i| args.get(i + 1).cloned()).unwrap_or_default();
-            log::info!("Running in UI Test mode. View: {}, Screenshot: {}", view, screenshot);
-            
-            crate::utils::mock_data::load_mock_data_for_view(&view);
+            // IMPORTANT: Call setup_ui_test FIRST so navigation is queued on the Qt thread.
+            // Then load mock data — since Qt processes events in FIFO order, the data will
+            // always arrive AFTER the navigation has been processed, preventing the blank-view bug.
             bridge::bridge::setup_ui_test(&view, &screenshot);
+            crate::utils::mock_data::load_mock_data_for_view(&view);
         } else {
             // Check system dependencies (yt-dlp and ffmpeg)
             let dep_status = crate::utils::dependencies::check_dependencies();
@@ -280,7 +294,8 @@ impl DoremiApp {
 
                     // Load search history
                     if let Ok(history) = SearchHistoryRepo::recent(10) {
-                        let queries: Vec<String> = history.iter().map(|h| h.query.clone()).collect();
+                        let queries: Vec<String> =
+                            history.iter().map(|h| h.query.clone()).collect();
                         set_search_history(queries);
                     }
                 })

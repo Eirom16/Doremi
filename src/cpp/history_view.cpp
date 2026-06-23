@@ -1,6 +1,8 @@
 #include "history_view.h"
+#include <QtGlobal>
 #include "design_tokens.h"
 #include "icon_provider.h"
+#include "components/artwork_loader.h"
 #include <QHBoxLayout>
 #include <QMouseEvent>
 #include <QPainter>
@@ -11,6 +13,7 @@
 #include <QMessageBox>
 #include <QMenu>
 #include <QContextMenuEvent>
+#include <QPointer>
 #include "doremi/src/bridge.rs.h"
 
 HistoryRow::HistoryRow(const Track &track,
@@ -28,21 +31,25 @@ HistoryRow::HistoryRow(const Track &track,
     layout->setSpacing(14);
 
     auto *thumb_lbl = new QLabel(this);
+    thumb_lbl->setObjectName("thumbLabel");
     thumb_lbl->setFixedSize(48, 48);
     thumb_lbl->setStyleSheet(QString("background-color: %1; border-radius: 6px;")
         .arg(c.bg_elevated.name()));
 
-    QPixmap pm;
-    if (!track.thumbnail.empty() && pm.load(QString::fromStdString(static_cast<std::string>(track.thumbnail)))) {
-        QPixmap dest(pm.size());
-        dest.fill(Qt::transparent);
-        QPainter painter(&dest);
-        painter.setRenderHint(QPainter::Antialiasing);
-        QPainterPath path;
-        path.addRoundedRect(pm.rect(), 6, 6);
-        painter.setClipPath(path);
-        painter.drawPixmap(0, 0, pm);
-        thumb_lbl->setPixmap(dest.scaled(48, 48, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation));
+    if (!track.thumbnail.empty()) {
+        QPointer<QLabel> label_ptr(thumb_lbl);
+        ArtworkLoader::load(QString::fromStdString(static_cast<std::string>(track.thumbnail)), QSize(48, 48), [label_ptr](const QPixmap &pixmap) {
+            if (!label_ptr) return;
+            QPixmap dest(pixmap.size());
+            dest.fill(Qt::transparent);
+            QPainter painter(&dest);
+            painter.setRenderHint(QPainter::Antialiasing);
+            QPainterPath path;
+            path.addRoundedRect(pixmap.rect(), 6, 6);
+            painter.setClipPath(path);
+            painter.drawPixmap(0, 0, pixmap);
+            label_ptr->setPixmap(dest.scaled(48, 48, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation));
+        });
     } else {
         QPixmap default_art = IconProvider::getIcon("music_note", c.text_secondary, 24).pixmap(48, 48);
         thumb_lbl->setPixmap(default_art);
@@ -56,11 +63,13 @@ HistoryRow::HistoryRow(const Track &track,
     text_layout->setSpacing(2);
 
     auto *title_lbl = new QLabel(title_, this);
+    title_lbl->setObjectName("titleLabel");
     title_lbl->setFont(DesignTokens::getFont("body", 13));
     title_lbl->setStyleSheet(QString("color: %1; font-weight: 600;").arg(c.text_primary.name()));
     title_lbl->setMaximumWidth(400);
 
     auto *artist_lbl = new QLabel(artist_, this);
+    artist_lbl->setObjectName("artistLabel");
     artist_lbl->setFont(DesignTokens::getFont("caption", 11));
     artist_lbl->setStyleSheet(QString("color: %1;").arg(c.text_secondary.name()));
     artist_lbl->setMaximumWidth(400);
@@ -74,6 +83,7 @@ HistoryRow::HistoryRow(const Track &track,
         int secs = static_cast<int>(track.duration_ms / 1000);
         QString dur = QString("%1:%2").arg(secs / 60).arg(secs % 60, 2, 10, QChar('0'));
         auto *dur_lbl = new QLabel(dur, this);
+        dur_lbl->setObjectName("durationLabel");
         dur_lbl->setFont(DesignTokens::getFont("caption", 11));
         dur_lbl->setStyleSheet(QString("color: %1;").arg(c.text_muted.name()));
         dur_lbl->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
@@ -89,13 +99,14 @@ HistoryRow::HistoryRow(const Track &track,
         QString ago;
         if (dt.isValid()) {
             qint64 secs_ago = dt.secsTo(QDateTime::currentDateTime());
-            if (secs_ago < 60) ago = "Ahora";
+            if (secs_ago < 60) ago = tr_q("now");
             else if (secs_ago < 3600) ago = QString("%1 min").arg(secs_ago / 60);
             else if (secs_ago < 86400) ago = QString("%1 h").arg(secs_ago / 3600);
             else ago = QString("%1 d").arg(secs_ago / 86400);
         }
         if (!ago.isEmpty()) {
             auto *ago_lbl = new QLabel(ago, this);
+            ago_lbl->setObjectName("agoLabel");
             ago_lbl->setFont(DesignTokens::getFont("caption", 10));
             ago_lbl->setStyleSheet(QString("color: %1;").arg(c.text_muted.name()));
             ago_lbl->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
@@ -105,6 +116,7 @@ HistoryRow::HistoryRow(const Track &track,
     }
 
     auto *delete_btn = new QPushButton(this);
+    delete_btn->setObjectName("deleteBtn");
     delete_btn->setFixedSize(28, 28);
     delete_btn->setCursor(Qt::PointingHandCursor);
     delete_btn->setFlat(true);
@@ -113,12 +125,12 @@ HistoryRow::HistoryRow(const Track &track,
         "QPushButton:hover { background: rgba(%1, %2, %3, 0.1); }"
     ).arg(c.text_primary.red()).arg(c.text_primary.green()).arg(c.text_primary.blue()));
     delete_btn->setIcon(IconProvider::getIcon("delete", c.text_muted, 18));
-    delete_btn->setToolTip("Eliminar del historial");
+    delete_btn->setToolTip(tr_q("remove_from_history"));
     connect(delete_btn, &QPushButton::clicked, this, [this]() {
         auto reply = QMessageBox::question(
             this,
-            "Eliminar del historial",
-            "¿Quieres eliminar esta reproducción del historial?",
+            tr_q("remove_from_history"),
+            tr_q("confirm_remove_from_history"),
             QMessageBox::Yes | QMessageBox::No,
             QMessageBox::No);
         if (reply == QMessageBox::Yes) {
@@ -141,17 +153,19 @@ void HistoryRow::mousePressEvent(QMouseEvent *event) {
 
 void HistoryRow::contextMenuEvent(QContextMenuEvent *event) {
     QMenu menu;
-    QAction *play = menu.addAction("Reproducir");
+    QAction *play = menu.addAction(tr_q("play"));
     
     bool is_fav = get_track_favorite_state(static_cast<std::string>(track_.id));
-    QAction *fav = menu.addAction(is_fav ? "Quitar de favoritos" : "Agregar a favoritos");
+    QAction *fav = menu.addAction(is_fav 
+        ? tr_q("remove_favorite")
+        : tr_q("add_favorite"));
     
-    QAction *dl = menu.addAction("Descargar");
+    QAction *dl = menu.addAction(tr_q("download"));
     menu.addSeparator();
-    QAction *next = menu.addAction("Reproducir siguiente");
-    QAction *end = menu.addAction("Agregar a la cola");
+    QAction *next = menu.addAction(tr_q("play_next"));
+    QAction *end = menu.addAction(tr_q("add_to_queue"));
     menu.addSeparator();
-    QAction *remove = menu.addAction("Eliminar del historial");
+    QAction *remove = menu.addAction(tr_q("remove_from_history"));
 
     QAction *chosen = menu.exec(event->globalPos());
     if (chosen == play) {
@@ -171,8 +185,8 @@ void HistoryRow::contextMenuEvent(QContextMenuEvent *event) {
     } else if (chosen == remove) {
         auto reply = QMessageBox::question(
             this,
-            "Eliminar del historial",
-            "¿Quieres eliminar esta reproducción del historial?",
+            tr_q("remove_from_history"),
+            tr_q("confirm_remove_from_history"),
             QMessageBox::Yes | QMessageBox::No,
             QMessageBox::No);
         if (reply == QMessageBox::Yes) {
@@ -211,14 +225,14 @@ void HistoryView::setupLayout() {
     content_layout_->setSpacing(4);
     content_layout_->setAlignment(Qt::AlignTop);
 
-    auto *header_row = new QHBoxLayout();
-    auto *title = new QLabel("Historial", this);
+    auto *header_layout = new QHBoxLayout();
+    auto *title = new QLabel(tr_q("history"), this);
+    title->setObjectName("historyTitle");
     title->setFont(DesignTokens::getFont("display", 22));
     title->setStyleSheet(QString("color: %1; font-weight: bold;").arg(c.text_primary.name()));
-    header_row->addWidget(title);
-    header_row->addStretch();
-    auto *clear_btn = new QPushButton("Limpiar historial", this);
-    clear_btn->setFixedHeight(30);
+
+    auto *clear_btn = new QPushButton(tr_q("clear_history"), this);
+    clear_btn->setObjectName("historyClearBtn");
     clear_btn->setCursor(Qt::PointingHandCursor);
     clear_btn->setStyleSheet(QString(
         "QPushButton { background: transparent; border: 1px solid %1; border-radius: 15px; padding: 0 16px; color: %2; font-size: 12px; }"
@@ -226,26 +240,32 @@ void HistoryView::setupLayout() {
         .arg(c.border.name()).arg(c.text_secondary.name())
         .arg(c.text_primary.red()).arg(c.text_primary.green()).arg(c.text_primary.blue()));
     connect(clear_btn, &QPushButton::clicked, this, [this]() {
-        auto reply = QMessageBox::question(this, "Limpiar historial",
-            "¿Estás seguro de que deseas eliminar todo el historial de reproducción?",
+        auto reply = QMessageBox::question(this, tr_q("clear_history"),
+            tr_q("confirm_clear_history"),
             QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
         if (reply == QMessageBox::Yes) {
             on_clear_history();
         }
     });
-    header_row->addWidget(clear_btn);
-    content_layout_->addLayout(header_row);
 
-    auto *subtitle = new QLabel("Reproducido recientemente", this);
+    header_layout->addWidget(title);
+    header_layout->addStretch();
+    header_layout->addWidget(clear_btn);
+    content_layout_->addLayout(header_layout);
+
+    auto *subtitle = new QLabel(tr_q("recently_played"), this);
+    subtitle->setObjectName("historySubtitle");
     subtitle->setFont(DesignTokens::getFont("caption", 12));
     subtitle->setStyleSheet(QString("color: %1; margin-bottom: 12px;").arg(c.text_secondary.name()));
     content_layout_->addWidget(subtitle);
 
-    empty_label_ = new QLabel("Tu historial está vacío\n\nLas canciones que reproduzcas aparecerán aquí", this);
+    empty_label_ = new QLabel(tr_q("history_empty_desc"), this);
+    empty_label_->setObjectName("historyEmptyLabel");
     empty_label_->setAlignment(Qt::AlignCenter);
     empty_label_->setFont(DesignTokens::getFont("body", 13));
     empty_label_->setStyleSheet(QString("color: %1; padding: 60px 0;").arg(c.text_muted.name()));
     empty_label_->setWordWrap(true);
+    empty_label_->hide();
     content_layout_->addWidget(empty_label_);
 
     main_vbox->addLayout(content_layout_);
@@ -254,7 +274,9 @@ void HistoryView::setupLayout() {
 
 void HistoryView::showEvent(QShowEvent *event) {
     QWidget::showEvent(event);
-    on_history_requested();
+    if (!qEnvironmentVariableIsSet("DOREMI_UI_TEST")) {
+        on_history_requested();
+    }
 }
 
 QString HistoryView::getGroupLabel(const QString &played_at) const {
@@ -262,15 +284,15 @@ QString HistoryView::getGroupLabel(const QString &played_at) const {
     if (!dt.isValid()) {
         dt = QDateTime::fromString(played_at, "yyyy-MM-dd HH:mm:ss");
     }
-    if (!dt.isValid()) return "Otros";
+    if (!dt.isValid()) return tr_q("other");
 
     QDate today = QDate::currentDate();
     QDate play_date = dt.date();
 
-    if (play_date == today) return "Hoy";
-    if (play_date == today.addDays(-1)) return "Ayer";
-    if (play_date >= today.addDays(-7)) return "Esta semana";
-    return "Anteriores";
+    if (play_date == today) return tr_q("today");
+    if (play_date == today.addDays(-1)) return tr_q("yesterday");
+    if (play_date >= today.addDays(-7)) return tr_q("this_week");
+    return tr_q("older");
 }
 
 void HistoryView::clear_history() {
@@ -291,7 +313,7 @@ void HistoryView::set_history(const std::vector<Track> &tracks,
     const auto &c = DesignTokens::current();
 
     if (tracks.empty()) {
-        empty_label_ = new QLabel("Tu historial está vacío\n\nLas canciones que reproduzcas aparecerán aquí", this);
+        empty_label_ = new QLabel(tr_q("history_empty_desc"), this);
         empty_label_->setAlignment(Qt::AlignCenter);
         empty_label_->setFont(DesignTokens::getFont("body", 13));
         empty_label_->setStyleSheet(QString("color: %1; padding: 60px 0;").arg(c.text_muted.name()));
@@ -327,4 +349,53 @@ void HistoryView::set_history(const std::vector<Track> &tracks,
     }
 
     content_layout_->addStretch();
+}
+
+void HistoryRow::update_theme() {
+    const auto &c = DesignTokens::current();
+    if (auto *title_lbl = findChild<QLabel*>("titleLabel")) {
+        title_lbl->setStyleSheet(QString("color: %1; font-weight: bold;").arg(c.text_primary.name()));
+    }
+    if (auto *artist_lbl = findChild<QLabel*>("artistLabel")) {
+        artist_lbl->setStyleSheet(QString("color: %1;").arg(c.text_secondary.name()));
+    }
+    if (auto *dur_lbl = findChild<QLabel*>("durationLabel")) {
+        dur_lbl->setStyleSheet(QString("color: %1;").arg(c.text_muted.name()));
+    }
+    if (auto *ago_lbl = findChild<QLabel*>("agoLabel")) {
+        ago_lbl->setStyleSheet(QString("color: %1;").arg(c.text_muted.name()));
+    }
+    if (auto *delete_btn = findChild<QPushButton*>("deleteBtn")) {
+        delete_btn->setStyleSheet(QString(
+            "QPushButton { background: transparent; border: none; border-radius: 4px; }"
+            "QPushButton:hover { background: rgba(%1, %2, %3, 0.1); }"
+        ).arg(c.text_primary.red()).arg(c.text_primary.green()).arg(c.text_primary.blue()));
+        delete_btn->setIcon(IconProvider::getIcon("delete", c.text_muted, 18));
+    }
+    if (auto *thumb_lbl = findChild<QLabel*>("thumbLabel")) {
+        thumb_lbl->setStyleSheet(QString("background-color: %1; border-radius: 6px;").arg(c.bg_elevated.name()));
+    }
+}
+
+void HistoryView::update_theme() {
+    const auto &c = DesignTokens::current();
+    if (auto *title = findChild<QLabel*>("historyTitle")) {
+        title->setStyleSheet(QString("color: %1; font-weight: bold;").arg(c.text_primary.name()));
+    }
+    if (auto *clear_btn = findChild<QPushButton*>("historyClearBtn")) {
+        clear_btn->setStyleSheet(QString(
+            "QPushButton { background: transparent; border: 1px solid %1; border-radius: 15px; padding: 0 16px; color: %2; font-size: 12px; }"
+            "QPushButton:hover { background: rgba(%3, %4, %5, 0.08); }")
+            .arg(c.border.name()).arg(c.text_secondary.name())
+            .arg(c.text_primary.red()).arg(c.text_primary.green()).arg(c.text_primary.blue()));
+    }
+    if (auto *subtitle = findChild<QLabel*>("historySubtitle")) {
+        subtitle->setStyleSheet(QString("color: %1; margin-bottom: 12px;").arg(c.text_secondary.name()));
+    }
+    if (auto *empty = findChild<QLabel*>("historyEmptyLabel")) {
+        empty->setStyleSheet(QString("color: %1; padding: 60px 0;").arg(c.text_muted.name()));
+    }
+    for (auto *row : findChildren<HistoryRow*>()) {
+        row->update_theme();
+    }
 }

@@ -8,6 +8,9 @@ use std::sync::Mutex;
 
 static DB: Mutex<Option<Connection>> = Mutex::new(None);
 
+#[cfg(test)]
+pub static TEST_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 pub fn global() -> &'static Mutex<Option<Connection>> {
     &DB
 }
@@ -21,6 +24,24 @@ where
         Err(e) => e.into_inner(),
     };
     match guard.as_ref() {
+        Some(conn) => f(conn),
+        None => Err(rusqlite::Error::InvalidParameterName(
+            "Database not initialized".into(),
+        )),
+    }
+}
+
+/// Like [`with_db`] but provides `&mut Connection` for operations that require
+/// mutability (e.g. `conn.transaction()`).
+pub fn with_db_mut<F, R>(f: F) -> SqlResult<R>
+where
+    F: FnOnce(&mut Connection) -> SqlResult<R>,
+{
+    let mut guard = match DB.lock() {
+        Ok(g) => g,
+        Err(e) => e.into_inner(),
+    };
+    match guard.as_mut() {
         Some(conn) => f(conn),
         None => Err(rusqlite::Error::InvalidParameterName(
             "Database not initialized".into(),
@@ -64,13 +85,14 @@ impl Database {
         conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS schema_version (version INTEGER PRIMARY KEY);",
         )?;
+        // BF2.1: propagate errors from the version query instead of silently
+        // defaulting to 0, which would re-run non-idempotent migrations.
         let version: i32 = conn
             .query_row(
                 "SELECT COALESCE(MAX(version), 0) FROM schema_version",
                 [],
                 |r| r.get(0),
-            )
-            .unwrap_or(0);
+            )?;
 
         if version < 1 {
             conn.execute_batch(
@@ -135,7 +157,7 @@ impl Database {
                     filter TEXT NOT NULL DEFAULT 'all',
                     searched_at TEXT NOT NULL DEFAULT (datetime('now'))
                 );
-                INSERT INTO schema_version (version) VALUES (1);",
+                INSERT OR IGNORE INTO schema_version (version) VALUES (1);",
             )?;
         }
 
@@ -148,7 +170,7 @@ impl Database {
                     cached_at TEXT NOT NULL DEFAULT (datetime('now')),
                     expires_at TEXT
                 );
-                INSERT INTO schema_version (version) VALUES (2);",
+                INSERT OR IGNORE INTO schema_version (version) VALUES (2);",
             )?;
         }
 
@@ -167,7 +189,7 @@ impl Database {
                     parent_playlist_title TEXT,
                     parent_playlist_thumbnail_url TEXT
                 );
-                INSERT INTO schema_version (version) VALUES (3);",
+                INSERT OR IGNORE INTO schema_version (version) VALUES (3);",
             )?;
         }
 
@@ -184,7 +206,7 @@ impl Database {
                     expires_at TEXT,
                     UNIQUE(track_artist, track_title)
                 );
-                INSERT INTO schema_version (version) VALUES (4);",
+                INSERT OR IGNORE INTO schema_version (version) VALUES (4);",
             )?;
         }
 
@@ -267,7 +289,7 @@ impl Database {
                     episode_count INTEGER NOT NULL DEFAULT 0,
                     added_at TEXT NOT NULL DEFAULT (datetime('now'))
                  );
-                 INSERT INTO schema_version (version) VALUES (8);",
+                 INSERT OR IGNORE INTO schema_version (version) VALUES (8);",
             )?;
         }
 
@@ -295,7 +317,7 @@ impl Database {
                     added_at TEXT NOT NULL DEFAULT (datetime('now')),
                     FOREIGN KEY (show_id) REFERENCES cached_shows(id) ON DELETE CASCADE
                  );
-                 INSERT INTO schema_version (version) VALUES (9);",
+                 INSERT OR IGNORE INTO schema_version (version) VALUES (9);",
             )?;
         }
 
@@ -341,11 +363,36 @@ impl Database {
                 log::info!("Ensuring downloads table columns are correct...");
                 Self::add_column_if_missing(conn, "downloads", "parent_playlist_id", "TEXT")?;
                 Self::add_column_if_missing(conn, "downloads", "parent_playlist_title", "TEXT")?;
-                Self::add_column_if_missing(conn, "downloads", "parent_playlist_thumbnail_url", "TEXT")?;
-                Self::add_column_if_missing(conn, "downloads", "status", "TEXT NOT NULL DEFAULT 'completed'")?;
-                Self::add_column_if_missing(conn, "downloads", "progress", "REAL NOT NULL DEFAULT 100.0")?;
-                Self::add_column_if_missing(conn, "downloads", "error", "TEXT NOT NULL DEFAULT ''")?;
-                Self::add_column_if_missing(conn, "downloads", "cancelled", "INTEGER NOT NULL DEFAULT 0")?;
+                Self::add_column_if_missing(
+                    conn,
+                    "downloads",
+                    "parent_playlist_thumbnail_url",
+                    "TEXT",
+                )?;
+                Self::add_column_if_missing(
+                    conn,
+                    "downloads",
+                    "status",
+                    "TEXT NOT NULL DEFAULT 'completed'",
+                )?;
+                Self::add_column_if_missing(
+                    conn,
+                    "downloads",
+                    "progress",
+                    "REAL NOT NULL DEFAULT 100.0",
+                )?;
+                Self::add_column_if_missing(
+                    conn,
+                    "downloads",
+                    "error",
+                    "TEXT NOT NULL DEFAULT ''",
+                )?;
+                Self::add_column_if_missing(
+                    conn,
+                    "downloads",
+                    "cancelled",
+                    "INTEGER NOT NULL DEFAULT 0",
+                )?;
             }
             conn.execute(
                 "INSERT OR IGNORE INTO schema_version (version) VALUES (10)",

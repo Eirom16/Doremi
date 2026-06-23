@@ -32,6 +32,7 @@ class StatsView : public QWidget {
 public:
     explicit StatsView(QWidget *parent = nullptr);
     void setStatsData(const StatsData &stats);
+    void update_theme();
 
 signals:
     void play_requested(Track track);

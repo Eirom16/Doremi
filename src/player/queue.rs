@@ -271,7 +271,11 @@ impl PlaybackQueue {
             } else if self.repeat_mode == RepeatMode::All {
                 self.shuffle_position = self.shuffled.len() - 1;
             }
-            self.current_index = self.shuffled[self.shuffle_position];
+            // BF2.10: use .get() to avoid a panic when shuffled is empty or
+            // shuffle_position is out of bounds.
+            if let Some(&track_index) = self.shuffled.get(self.shuffle_position) {
+                self.current_index = track_index;
+            }
             return self.current();
         }
         if self.current_index > 0 {

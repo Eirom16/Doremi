@@ -57,6 +57,7 @@ public:
     bool discord_rpc_enabled() const;
     bool lastfm_enabled() const;
 
+    void update_theme();
 signals:
     void setting_changed(const std::string &key, const std::string &value);
     void lastfm_auth_requested(const std::string &apiKey, const std::string &apiSecret, const std::string &username, const std::string &password);
@@ -90,6 +91,8 @@ private:
     QLineEdit *lastfm_username_input_;
     QLineEdit *lastfm_password_input_;
     RippleButton *lastfm_auth_btn_;
+    // BF3.1: use a state flag rather than comparing button text (text is translated).
+    bool lastfm_connected_ = false;
     QLabel *lastfm_status_lbl_;
 
     // Subtitles

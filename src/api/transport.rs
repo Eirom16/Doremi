@@ -12,10 +12,12 @@ const MAX_CONCURRENT_REQUESTS: usize = 4;
 const MIN_REQUEST_INTERVAL: Duration = Duration::from_millis(100);
 
 static CLIENT: Lazy<reqwest::Client> = Lazy::new(|| {
+    // BF1.4: use expect() so a misconfigured builder is caught at startup, not silently
+    // dropped, which would remove the timeout.
     reqwest::Client::builder()
         .timeout(Duration::from_secs(10))
         .build()
-        .unwrap_or_default()
+        .expect("HTTP client is misconfigured")
 });
 static REQUEST_LIMIT: Lazy<Semaphore> = Lazy::new(|| Semaphore::new(MAX_CONCURRENT_REQUESTS));
 static LAST_REQUEST: Lazy<Mutex<Option<Instant>>> = Lazy::new(|| Mutex::new(None));
@@ -40,6 +42,7 @@ fn retryable(status: StatusCode) -> bool {
 fn revokes_session(status: StatusCode) -> bool {
     status == StatusCode::UNAUTHORIZED
         || status == StatusCode::FORBIDDEN
+        || status == StatusCode::BAD_REQUEST
 }
 
 fn retry_delay(attempt: usize, retry_after: Option<&str>) -> Duration {
@@ -62,26 +65,13 @@ pub async fn post(endpoint: &str, body: Value) -> Result<Value, String> {
     for attempt in 0..MAX_ATTEMPTS {
         wait_for_rate_limit().await;
         let headers = super::auth::request_headers();
-        for (k, v) in headers.iter() {
-            let v_str = v.to_str().unwrap_or("[invalid]");
-            let v_len = v_str.len();
-            let redacted = if k == "cookie" || k == "authorization" {
-                if v_str.len() > 20 {
-                    format!("{}... (len={})", &v_str[..20], v_len)
-                } else {
-                    format!("(len={})", v_len)
-                }
-            } else {
-                v_str.to_string()
-            };
-            println!("[HEADERS_DEBUG] Request header: {} = {}", k, redacted);
+        // BF0.2: log only header *names* at trace level; never log values (they contain
+        // session cookies and authorization tokens).
+        if log::log_enabled!(log::Level::Trace) {
+            let names: Vec<&str> = headers.keys().map(|k| k.as_str()).collect();
+            log::trace!("Innertube request headers present: {:?}", names);
         }
-        let response = CLIENT
-            .post(&url)
-            .headers(headers)
-            .json(&body)
-            .send()
-            .await;
+        let response = CLIENT.post(&url).headers(headers).json(&body).send().await;
 
         let response = match response {
             Ok(response) => response,
@@ -110,7 +100,9 @@ pub async fn post(endpoint: &str, body: Value) -> Result<Value, String> {
             });
         }
 
-        last_error = Some(format!("Innertube endpoint {endpoint} returned {status}"));
+        last_error = Some(format!(
+            "Innertube endpoint {endpoint} returned {status}: {text}"
+        ));
         if revokes_session(status) && was_authenticated {
             super::auth::handle_session_revoked();
             break;

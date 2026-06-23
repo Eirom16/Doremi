@@ -21,6 +21,7 @@ public:
                const QString &duration, Episode episode,
                QWidget *parent = nullptr);
 
+    void update_theme();
 signals:
     void play_requested(Episode episode);
 
@@ -42,6 +43,7 @@ public:
     void set_show_info(const Show &show);
     void set_episodes(const std::vector<Episode> &episodes);
     void clear();
+    void update_theme();
 
 signals:
     void back_requested();

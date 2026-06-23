@@ -3,8 +3,10 @@ use crate::bridge::bridge::*;
 pub fn load_mock_data_for_view(view: &str) {
     match view {
         "home" => {
+            // Show loading skeleton first for a brief moment before data arrives
+            set_home_state("loading", "");
             clear_home_sections();
-            
+
             // Short title song
             let song_short = HomeCard {
                 id: "song_short".to_string(),
@@ -41,12 +43,10 @@ pub fn load_mock_data_for_view(view: &str) {
                 item_type: "album".to_string(),
             };
 
-            add_home_section("Casos Especiales de UI", vec![
-                song_short,
-                song_long,
-                artist_no_img,
-                album_no_img,
-            ]);
+            add_home_section(
+                "Casos Especiales de UI",
+                vec![song_short, song_long, artist_no_img, album_no_img],
+            );
 
             // Add standard mock sections
             let mut rec_items = Vec::new();
@@ -70,7 +70,7 @@ pub fn load_mock_data_for_view(view: &str) {
                 item_type: "playlist".to_string(),
             };
             add_home_section("Listas de reproducción", vec![playlist_empty]);
-            
+
             // Set success state
             set_home_state("success", "");
         }
@@ -184,7 +184,7 @@ pub fn load_mock_data_for_view(view: &str) {
                 thumbnail: "".to_string(),
             };
             set_current_track(track);
-            
+
             // Set playback queue with some items
             let queue = vec![
                 Track {
@@ -209,13 +209,33 @@ pub fn load_mock_data_for_view(view: &str) {
         }
         "downloads" => {
             // Download at 37%
-            let titles = vec!["Canción Descargando".to_string(), "Canción Completada".to_string()];
-            let artists = vec!["Artista Descarga".to_string(), "Artista Completado".to_string()];
-            let thumbnails = vec!["".to_string(), "".to_string()];
-            let video_ids = vec!["vid_dl_1".to_string(), "vid_dl_2".to_string()];
-            let statuses = vec!["downloading".to_string(), "completed".to_string()];
-            let progresses = vec![0.37, 1.0];
-            set_downloads_list(titles, artists, thumbnails, video_ids, statuses, progresses);
+            let items = vec![
+                crate::bridge::bridge::DownloadItem {
+                    video_id: "vid_dl_1".to_string(),
+                    title: "Canción Descargando".to_string(),
+                    artist: "Artista Descarga".to_string(),
+                    album: String::new(),
+                    thumbnail_url: String::new(),
+                    parent_playlist_id: String::new(),
+                    parent_playlist_title: String::new(),
+                    parent_playlist_thumbnail_url: String::new(),
+                    status: "downloading".to_string(),
+                    progress: 37.0,
+                },
+                crate::bridge::bridge::DownloadItem {
+                    video_id: "vid_dl_2".to_string(),
+                    title: "Canción Completada".to_string(),
+                    artist: "Artista Completado".to_string(),
+                    album: String::new(),
+                    thumbnail_url: String::new(),
+                    parent_playlist_id: String::new(),
+                    parent_playlist_title: String::new(),
+                    parent_playlist_thumbnail_url: String::new(),
+                    status: "completed".to_string(),
+                    progress: 100.0,
+                },
+            ];
+            set_downloads_list(items);
         }
         "loading" => {
             // Loading state
@@ -224,6 +244,163 @@ pub fn load_mock_data_for_view(view: &str) {
         "error" => {
             // Error state
             set_home_state("error", "Error de conexión de red. Inténtalo de nuevo.");
+        }
+        "history" => {
+            let mut tracks = Vec::new();
+            let mut played_at = Vec::new();
+
+            // Item 1: Hoy
+            tracks.push(Track {
+                id: "song_short".to_string(),
+                title: "Doremi".to_string(),
+                artist: "Short Artist".to_string(),
+                album: "Doremi EP".to_string(),
+                duration_ms: 180000,
+                thumbnail: "".to_string(),
+            });
+            played_at.push(chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string());
+
+            // Item 2: Ayer
+            tracks.push(Track {
+                id: "song_long".to_string(),
+                title: "This is a super extremely long song title that is designed to test how the UI handles overflow and wrapping in the player bar and song card".to_string(),
+                artist: "Extremely Long Artist Name Studio Group Orchestra".to_string(),
+                album: "The Longest Album in the History of Recorded Music Volume 1".to_string(),
+                duration_ms: 600000,
+                thumbnail: "".to_string(),
+            });
+            played_at.push(
+                (chrono::Local::now() - chrono::Duration::days(1))
+                    .format("%Y-%m-%d %H:%M:%S")
+                    .to_string(),
+            );
+
+            // Item 3: Esta semana
+            tracks.push(Track {
+                id: "song_fav_1".to_string(),
+                title: "Canción de la semana".to_string(),
+                artist: "Artista Semanal".to_string(),
+                album: "Álbum Semanal".to_string(),
+                duration_ms: 240000,
+                thumbnail: "".to_string(),
+            });
+            played_at.push(
+                (chrono::Local::now() - chrono::Duration::days(3))
+                    .format("%Y-%m-%d %H:%M:%S")
+                    .to_string(),
+            );
+
+            // Item 4: Anterior
+            tracks.push(Track {
+                id: "song_fav_2".to_string(),
+                title: "Canción Antigua".to_string(),
+                artist: "Artista Clásico".to_string(),
+                album: "Álbum Antiguo".to_string(),
+                duration_ms: 320000,
+                thumbnail: "".to_string(),
+            });
+            played_at.push(
+                (chrono::Local::now() - chrono::Duration::days(10))
+                    .format("%Y-%m-%d %H:%M:%S")
+                    .to_string(),
+            );
+
+            let tokens = vec![String::new(); tracks.len()];
+            set_history_data(tracks, played_at, tokens);
+        }
+        "stats" => {
+            let mut top_tracks = Vec::new();
+            top_tracks.push(Track {
+                id: "song_short".to_string(),
+                title: "Doremi".to_string(),
+                artist: "Short Artist".to_string(),
+                album: "Doremi EP".to_string(),
+                duration_ms: 180000,
+                thumbnail: "".to_string(),
+            });
+            top_tracks.push(Track {
+                id: "song_fav_1".to_string(),
+                title: "Canción de la semana".to_string(),
+                artist: "Artista Semanal".to_string(),
+                album: "Álbum Semanal".to_string(),
+                duration_ms: 240000,
+                thumbnail: "".to_string(),
+            });
+
+            let stats = StatsData {
+                total_play_time: "15h 24m".to_string(),
+                total_plays: 284,
+                unique_artists: 42,
+                weekly_activity: vec![10, 25, 18, 30, 45, 12, 5],
+                top_tracks,
+                top_tracks_plays: vec![84, 45],
+            };
+            set_stats_data(stats);
+        }
+        "trending" => {
+            set_trending_state("loading", "");
+            let mut items = Vec::new();
+            let genres = [
+                "Pop",
+                "Rock",
+                "Hip-Hop",
+                "Latin",
+                "R&B",
+                "Electronic",
+                "Jazz",
+                "Classical",
+            ];
+            let artists = [
+                "Bad Bunny",
+                "Taylor Swift",
+                "The Weeknd",
+                "Rauw Alejandro",
+                "SZA",
+                "Daft Punk",
+                "Miles Davis",
+                "Ludwig van Beethoven",
+            ];
+            for i in 1..=12usize {
+                items.push(HomeCard {
+                    id: format!("trend_{i}"),
+                    title: format!("#{i} — Canción Trending {i}"),
+                    subtitle: format!(
+                        "{} · {}",
+                        artists[(i - 1) % artists.len()],
+                        genres[(i - 1) % genres.len()]
+                    ),
+                    thumbnail: "".to_string(),
+                    item_type: "song".to_string(),
+                });
+            }
+            set_trending_items(items);
+            set_trending_state("content", "");
+        }
+        "settings" => {
+            // Settings view initializes itself from design tokens, no mock data needed.
+            // This case just exists so --ui-test settings navigates correctly.
+        }
+        "album" | "album_detail" => {
+            let album = Album {
+                id: "mock_album_1".to_string(),
+                title: "Mock Album de Prueba".to_string(),
+                artist: "Artista de Prueba".to_string(),
+                year: "2024".to_string(),
+                thumbnail: "".to_string(),
+                track_count: 10,
+                artist_id: "mock_artist_1".to_string(),
+            };
+            let tracks: Vec<Track> = (1..=10)
+                .map(|i| Track {
+                    id: format!("album_track_{i}"),
+                    title: format!("Pista {i}: Canción de Ejemplo"),
+                    artist: "Artista de Prueba".to_string(),
+                    album: "Mock Album de Prueba".to_string(),
+                    duration_ms: 180000 + i * 10000,
+                    thumbnail: "".to_string(),
+                })
+                .collect();
+            set_album_detail(album, tracks);
         }
         _ => {}
     }

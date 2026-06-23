@@ -17,7 +17,10 @@ fn find_qt_binary(bin_name: &str) -> String {
 
     // 3. Query qtpaths or qtpaths6
     for qtpaths_cmd in &["qtpaths6", "qtpaths"] {
-        if let Ok(output) = std::process::Command::new(qtpaths_cmd).arg("--binaries-dir").output() {
+        if let Ok(output) = std::process::Command::new(qtpaths_cmd)
+            .arg("--binaries-dir")
+            .output()
+        {
             if output.status.success() {
                 let bin_dir = String::from_utf8_lossy(&output.stdout).trim().to_string();
                 let path = std::path::Path::new(&bin_dir).join(bin_name);
@@ -157,7 +160,7 @@ fn main() {
     let out_dir = std::path::PathBuf::from(std::env::var("OUT_DIR").expect("OUT_DIR"));
 
     let mut build = cxx_build::bridge("src/bridge.rs");
-    
+
     let cpp_sources = [
         "main_window.cpp",
         "title_bar.cpp",
@@ -226,7 +229,7 @@ fn main() {
         .flag_if_supported("-std=c++17")
         .flag_if_supported("-fPIC")
         .include("src/cpp");
-        
+
     for flag in &qt_flags {
         build.flag(flag);
     }
@@ -287,11 +290,11 @@ fn main() {
         "session_cookie_manager.h",
         "theme_controller.h",
     ];
-    
+
     for hdr in &moc_headers {
         qt_moc_headers(&mut build, hdr, &out_dir);
     }
-    
+
     qt_resources(&mut build, "assets/resources.qrc", &out_dir);
 
     build.compile("doremi-qt");
@@ -299,7 +302,7 @@ fn main() {
     println!("cargo:rerun-if-changed=assets/resources.qrc");
     println!("cargo:rerun-if-changed=assets/fonts/MaterialSymbolsRounded.ttf");
     println!("cargo:rerun-if-changed=src/bridge.rs");
-    
+
     // Automatically watch all source files in src/cpp
     rerun_if_changed_dir(std::path::Path::new("src/cpp"));
 }

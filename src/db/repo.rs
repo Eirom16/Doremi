@@ -437,7 +437,8 @@ impl PlaylistRepo {
     }
 
     pub fn move_track(playlist_id: &str, from: i32, to: i32) -> SqlResult<()> {
-        with_db(|conn| {
+        // BF2.2: use with_db_mut so conn.transaction() has the &mut Connection it needs.
+        crate::db::with_db_mut(|conn| {
             let mut tracks = {
                 let mut stmt = conn.prepare(
                     "SELECT playlist_id, track_id, position, title, artist, album, duration_ms, thumbnail, added_at
@@ -466,25 +467,18 @@ impl PlaylistRepo {
             let moved = tracks.remove(from as usize);
             tracks.insert(to as usize, moved);
 
-            conn.execute("BEGIN IMMEDIATE", [])?;
-            let result = (|| -> SqlResult<()> {
-                for (position, track) in tracks.iter().enumerate() {
-                    conn.execute(
-                        "UPDATE playlist_tracks SET position = ?1
-                         WHERE playlist_id = ?2 AND track_id = ?3",
-                        params![position as i32, playlist_id, track.track_id],
-                    )?;
-                }
-                Ok(())
-            })();
-
-            match result {
-                Ok(()) => conn.execute("COMMIT", []).map(|_| ()),
-                Err(e) => {
-                    let _ = conn.execute("ROLLBACK", []);
-                    Err(e)
-                }
+            // BF2.2: use rusqlite's transaction() for RAII rollback on panic or error,
+            // instead of manual BEGIN IMMEDIATE/COMMIT/ROLLBACK which can leave an open
+            // transaction if a panic occurs inside the block.
+            let tx = conn.transaction()?;
+            for (position, track) in tracks.iter().enumerate() {
+                tx.execute(
+                    "UPDATE playlist_tracks SET position = ?1
+                     WHERE playlist_id = ?2 AND track_id = ?3",
+                    params![position as i32, playlist_id, track.track_id],
+                )?;
             }
+            tx.commit()
         })
     }
 
@@ -549,7 +543,8 @@ impl PlayHistoryRepo {
                      skipped = 0
                  WHERE track_id = ?1",
                 params![track_id],
-            ).map(|_| ())
+            )
+            .map(|_| ())
         })
     }
 
@@ -558,7 +553,8 @@ impl PlayHistoryRepo {
             conn.execute(
                 "UPDATE recently_played SET progress_ms = ?2 WHERE track_id = ?1",
                 params![track_id, progress_ms],
-            ).map(|_| ())
+            )
+            .map(|_| ())
         })
     }
 
@@ -706,7 +702,7 @@ impl PlayHistoryRepo {
                      ORDER BY play_count DESC LIMIT ?2",
                 )?
             };
-            
+
             let map_row = |r: &rusqlite::Row| {
                 Ok(RecentTrack {
                     id: r.get(0)?,
@@ -1122,14 +1118,11 @@ mod tests {
     use super::*;
     use crate::db::Database;
 
-    static TEST_MUTEX: once_cell::sync::Lazy<std::sync::Mutex<()>> =
-        once_cell::sync::Lazy::new(|| std::sync::Mutex::new(()));
-
     fn with_test_conn<F, R>(f: F) -> R
     where
         F: FnOnce() -> R,
     {
-        let _guard = TEST_MUTEX.lock().unwrap();
+        let _guard = crate::db::TEST_MUTEX.lock().unwrap();
         use crate::db::{init_connection, take_connection};
         let conn = rusqlite::Connection::open_in_memory().unwrap();
         Database::run_migrations(&conn).unwrap();
@@ -1273,17 +1266,27 @@ mod tests {
                     .query_map([], |row| row.get::<_, String>(1))?
                     .collect::<SqlResult<Vec<_>>>()?;
 
-                assert!(indexes.iter().any(|idx| idx == "idx_recently_played_track_id"));
-                assert!(indexes.iter().any(|idx| idx == "idx_recently_played_played_at"));
-                assert!(indexes.iter().any(|idx| idx == "idx_recently_played_play_count"));
-                assert!(indexes.iter().any(|idx| idx == "idx_recently_played_played_at_artist"));
+                assert!(indexes
+                    .iter()
+                    .any(|idx| idx == "idx_recently_played_track_id"));
+                assert!(indexes
+                    .iter()
+                    .any(|idx| idx == "idx_recently_played_played_at"));
+                assert!(indexes
+                    .iter()
+                    .any(|idx| idx == "idx_recently_played_play_count"));
+                assert!(indexes
+                    .iter()
+                    .any(|idx| idx == "idx_recently_played_played_at_artist"));
 
                 let mut stmt = conn.prepare("PRAGMA index_list('search_history')")?;
                 let search_indexes = stmt
                     .query_map([], |row| row.get::<_, String>(1))?
                     .collect::<SqlResult<Vec<_>>>()?;
 
-                assert!(search_indexes.iter().any(|idx| idx == "idx_search_history_searched_at"));
+                assert!(search_indexes
+                    .iter()
+                    .any(|idx| idx == "idx_search_history_searched_at"));
                 Ok(())
             })
             .unwrap();
