@@ -80,6 +80,9 @@ void NavigationController::navigate_to_internal(const std::string &route, bool r
     }
     
     current_route_ = route;
+    if (window_->player_shell_) {
+        window_->player_shell_->setVisible(route != "welcome");
+    }
     restore_route_view_state(route);
 }
 

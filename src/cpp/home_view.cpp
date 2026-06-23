@@ -75,12 +75,12 @@ QWidget *HomeView::add_section_widget(const std::string &title,
             track.thumbnail = thumbnailValue;
             emit play_requested(track);
         };
-        auto openTypedItem = [this, id, itemType]() {
+        auto openTypedItem = [this, id, itemType, titleValue, subtitleValue, thumbnailValue]() {
             if (id.empty()) return;
             if (itemType == "album") emit album_requested(id);
             else if (itemType == "artist") emit artist_requested(id);
             else if (itemType == "show") emit show_requested(id);
-            else emit playlist_requested(id);
+            else emit playlist_requested(id, titleValue, subtitleValue, thumbnailValue);
         };
 
         if (itemType == "song") {

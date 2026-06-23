@@ -16,6 +16,9 @@ static ColorScheme g_dark_colors = {
     QColor("#0D0D1A"), // bg_surface
     QColor("#14142B"), // bg_elevated
     QColor(7, 7, 15, 217), // bg_overlay (rgba 0.85)
+    QColor("#0B0B16"), // surface
+    QColor("#17172B"), // surface_raised
+    QColor(139, 92, 246, 31), // surface_selected
     QColor("#8B5CF6"), // accent
     QColor("#A78BFA"), // accent_bright
     QColor(139, 92, 246, 38), // accent_dim (rgba 0.15)
@@ -27,7 +30,13 @@ static ColorScheme g_dark_colors = {
     QColor(139, 92, 246, 76), // border_accent (rgba 0.30)
     QColor("#34D399"), // success
     QColor("#FBBF24"), // warning
-    QColor("#F87171")  // error
+    QColor("#F87171"), // error
+    QColor(248, 113, 113, 24), // danger_surface
+    QColor(251, 191, 36, 24), // warning_surface
+    QColor("#60A5FA"), // type_album
+    QColor("#2DD4BF"), // type_playlist
+    QColor("#FBBF24"), // type_mix
+    QColor("#FB7185")  // type_podcast
 };
 
 static ColorScheme g_light_colors = {
@@ -35,6 +44,9 @@ static ColorScheme g_light_colors = {
     QColor("#FFFFFF"), // bg_surface
     QColor("#F0EFFF"), // bg_elevated
     QColor(248, 247, 255, 217), // bg_overlay (rgba 0.85)
+    QColor("#FFFFFF"), // surface
+    QColor("#F3F1FF"), // surface_raised
+    QColor(124, 58, 237, 25), // surface_selected
     QColor("#7C3AED"), // accent
     QColor("#8B5CF6"), // accent_bright
     QColor(124, 58, 237, 25), // accent_dim (rgba 0.10)
@@ -46,7 +58,13 @@ static ColorScheme g_light_colors = {
     QColor(124, 58, 237, 64), // border_accent (rgba 0.25)
     QColor("#059669"), // success
     QColor("#D97706"), // warning
-    QColor("#DC2626")  // error
+    QColor("#DC2626"), // error
+    QColor(220, 38, 38, 20), // danger_surface
+    QColor(217, 119, 6, 20), // warning_surface
+    QColor("#2563EB"), // type_album
+    QColor("#0F766E"), // type_playlist
+    QColor("#D97706"), // type_mix
+    QColor("#E11D48")  // type_podcast
 };
 
 static const SpacingTokens g_spacing = {

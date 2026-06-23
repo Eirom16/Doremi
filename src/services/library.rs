@@ -62,6 +62,7 @@ impl LibraryService {
                 track_count: p.track_count.unwrap_or_default(),
                 owner: p.owner.unwrap_or_default(),
                 privacy: String::new(),
+                editable: false,
             })
             .collect();
 
@@ -90,6 +91,7 @@ impl LibraryService {
                     track_count: p.track_count,
                     owner: p.owner.clone(),
                     privacy: p.privacy.clone(),
+                    editable: p.editable,
                 })
                 .collect(),
         );
@@ -98,7 +100,27 @@ impl LibraryService {
 
     /// Cargar álbumes de la biblioteca remota
     pub async fn load_albums(&self) {
-        let remote_albums = self.api.library_albums().await;
+        let remote_albums = match crate::api::innertube::library_albums().await {
+            Ok(albums) => albums,
+            Err(error) => {
+                log::error!(
+                    "Library albums API failed ({}): {error}",
+                    crate::api::client::classify_error(&error).as_str()
+                );
+                let friendly = crate::api::client::friendly_error("library_albums", &error);
+                crate::bridge::bridge::show_notification(&friendly, "error");
+                if let Ok(cache) = GLOBAL_LIBRARY_CACHE.read() {
+                    if let Some(data) = cache.get("albums") {
+                        if !data.albums.is_empty() {
+                            crate::bridge::bridge::set_library_albums(data.albums);
+                            return;
+                        }
+                    }
+                }
+                crate::bridge::bridge::set_library_state("error", &friendly);
+                return;
+            }
+        };
         let albums: Vec<crate::bridge::bridge::Album> = remote_albums
             .into_iter()
             .map(|a| crate::bridge::bridge::Album {

@@ -549,10 +549,20 @@ void PlaylistDetailView::rebuild_tracks() {
 
     if (tracks_.empty()) {
         const auto &c = DesignTokens::current();
-        auto *empty = new QLabel("Esta playlist está vacía.", tracks_widget_);
+        QString message = "Esta playlist está vacía.";
+        const QString title = title_label_ ? title_label_->text() : QString();
+        if (title.contains("Cargando", Qt::CaseInsensitive)) {
+            message = "Cargando canciones...";
+        } else if (title.contains("No se pudo", Qt::CaseInsensitive)) {
+            message = desc_label_ && desc_label_->isVisible()
+                ? desc_label_->text()
+                : "No se pudo cargar esta playlist.";
+        }
+        auto *empty = new QLabel(message, tracks_widget_);
         empty->setAlignment(Qt::AlignCenter);
         empty->setFont(DesignTokens::getFont("caption", 12));
         empty->setStyleSheet(QString("color: %1; padding: 30px;").arg(c.text_muted.name()));
+        empty->setWordWrap(true);
         tracks_layout_->addWidget(empty);
     }
 }

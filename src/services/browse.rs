@@ -129,20 +129,62 @@ pub async fn load_artist(browse_id: &str) {
     }
 }
 
+#[derive(Clone, Debug, Default)]
+pub struct PlaylistPreview {
+    pub title: String,
+    pub subtitle: String,
+    pub thumbnail: String,
+}
+
 pub async fn load_playlist(playlist_id: &str) {
+    load_playlist_with_preview(playlist_id, None).await;
+}
+
+pub async fn load_playlist_with_preview(playlist_id: &str, preview: Option<PlaylistPreview>) {
+    let preview_title = preview
+        .as_ref()
+        .map(|value| value.title.trim())
+        .filter(|value| !value.is_empty())
+        .unwrap_or("Cargando playlist...");
+    let preview_subtitle = preview
+        .as_ref()
+        .map(|value| value.subtitle.trim())
+        .filter(|value| !value.is_empty())
+        .unwrap_or("Estamos preparando esta pantalla.");
+    let preview_thumbnail = preview
+        .as_ref()
+        .map(|value| value.thumbnail.clone())
+        .unwrap_or_default();
+    let loading_playlist = crate::bridge::bridge::Playlist {
+        id: playlist_id.trim_start_matches("VL").to_string(),
+        name: preview_title.to_string(),
+        description: preview_subtitle.to_string(),
+        thumbnail: preview_thumbnail.clone(),
+        track_count: 0,
+        owner: String::new(),
+        privacy: String::new(),
+        editable: false,
+    };
+    crate::bridge::bridge::set_playlist_detail(loading_playlist, Vec::new());
+
     match crate::api::innertube::playlist_detail(playlist_id).await {
         Ok(detail) => {
             let playlist = crate::bridge::bridge::Playlist {
                 id: detail.playlist.id,
                 name: detail.playlist.title,
                 description: detail.playlist.description.unwrap_or_default(),
-                thumbnail: detail.playlist.thumbnail,
+                thumbnail: if detail.playlist.thumbnail.is_empty() {
+                    preview_thumbnail
+                } else {
+                    detail.playlist.thumbnail
+                },
                 track_count: detail
                     .playlist
                     .track_count
                     .unwrap_or(detail.tracks.len() as i32),
                 owner: detail.playlist.owner.clone().unwrap_or_default(),
                 privacy: detail.privacy.clone(),
+                editable: false,
             };
             let tracks = detail
                 .tracks
@@ -192,6 +234,7 @@ pub async fn load_playlist(playlist_id: &str) {
                         track_count: playlist_downloads.len() as i32,
                         owner: String::new(),
                         privacy: String::new(),
+                        editable: true,
                     };
                     let tracks = playlist_downloads
                         .into_iter()
@@ -209,9 +252,20 @@ pub async fn load_playlist(playlist_id: &str) {
                 }
             }
             crate::bridge::bridge::show_notification(
-                &format!("No se pudo cargar la playlist: {error}"),
+                &crate::api::client::friendly_error("playlist", &error),
                 "error",
             );
+            let failed_playlist = crate::bridge::bridge::Playlist {
+                id: playlist_id.trim_start_matches("VL").to_string(),
+                name: preview_title.to_string(),
+                description: crate::api::client::friendly_error("playlist", &error),
+                thumbnail: preview_thumbnail,
+                track_count: 0,
+                owner: String::new(),
+                privacy: String::new(),
+                editable: false,
+            };
+            crate::bridge::bridge::set_playlist_detail(failed_playlist, Vec::new());
         }
     }
 }

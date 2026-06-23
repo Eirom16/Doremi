@@ -421,28 +421,68 @@ void LibraryView::set_search_results(
 
 void LibraryView::set_library_state(const std::string &state, const std::string &message) {
     clear_list();
-    
-    auto *placeholder = new QLabel(QString::fromStdString(message), this);
+
     const auto &c = DesignTokens::current();
-    placeholder->setFont(DesignTokens::getFont("body", 14));
-    placeholder->setStyleSheet(QString("color: %1; padding: 24px;").arg(c.text_muted.name()));
+
+    auto *state_panel = new QWidget(this);
+    state_panel->setObjectName("libraryStatePanel");
+    state_panel->setStyleSheet(QString(
+        "QWidget#libraryStatePanel {"
+        "    background: %1;"
+        "    border: 1px solid %2;"
+        "    border-radius: 12px;"
+        "}")
+        .arg(state == "error" ? DesignTokens::rgba(c.danger_surface) : DesignTokens::rgba(c.surface_selected))
+        .arg(state == "error" ? DesignTokens::rgba(c.error) : DesignTokens::rgba(c.border_accent)));
+    auto *panel_lay = new QVBoxLayout(state_panel);
+    panel_lay->setContentsMargins(28, 28, 28, 28);
+    panel_lay->setSpacing(10);
+    panel_lay->setAlignment(Qt::AlignCenter);
+
+    QString iconName = state == "error" ? "error" :
+                       state == "not_authenticated" ? "login" : "library_music";
+    QColor iconColor = state == "error" ? c.error : c.accent;
+    auto *icon = IconProvider::createIconLabel(iconName, 36, iconColor, true, state_panel);
+    icon->setAlignment(Qt::AlignCenter);
+    panel_lay->addWidget(icon, 0, Qt::AlignHCenter);
+
+    QString title = state == "error" ? "No se pudo cargar esta sección" :
+                    state == "not_authenticated" ? tr_q("login_yt_music") :
+                    tr_q("library_empty_title");
+    auto *title_lbl = new QLabel(title, state_panel);
+    title_lbl->setFont(DesignTokens::getFont("heading_sm", 16));
+    title_lbl->setStyleSheet(QString("color: %1; background: transparent; font-weight: 600;").arg(c.text_primary.name()));
+    title_lbl->setAlignment(Qt::AlignCenter);
+    panel_lay->addWidget(title_lbl);
+
+    auto *placeholder = new QLabel(QString::fromStdString(message), state_panel);
+    placeholder->setFont(DesignTokens::getFont("body", 13));
+    placeholder->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
     placeholder->setAlignment(Qt::AlignCenter);
     placeholder->setWordWrap(true);
-    
-    list_->addWidget(placeholder);
-    
-    // Show action button if not authenticated
+    placeholder->setMaximumWidth(460);
+    panel_lay->addWidget(placeholder);
+
     if (state == "not_authenticated") {
-        auto *login_btn = new QPushButton(tr_q("login_yt_music"), this);
+        auto *login_btn = new QPushButton(tr_q("login_yt_music"), state_panel);
         login_btn->setCursor(Qt::PointingHandCursor);
-        login_btn->setStyleSheet(QString(
-            "QPushButton { background: %1; color: white; border: none; border-radius: 8px; padding: 10px 20px; font-size: 14px; font-weight: 600; }"
-            "QPushButton:hover { background: %2; }"
-        ).arg(c.accent.name()).arg(c.accent_bright.name()));
+        login_btn->setMinimumHeight(38);
+        login_btn->setStyleSheet(DesignTokens::primaryButtonStyle(8));
         connect(login_btn, &QPushButton::clicked, this, &LibraryView::login_requested);
-        list_->addWidget(login_btn);
+        panel_lay->addWidget(login_btn, 0, Qt::AlignHCenter);
+    } else if (state == "error") {
+        auto *retry_btn = new QPushButton("Reintentar", state_panel);
+        retry_btn->setCursor(Qt::PointingHandCursor);
+        retry_btn->setMinimumHeight(38);
+        retry_btn->setStyleSheet(DesignTokens::primaryButtonStyle(8));
+        connect(retry_btn, &QPushButton::clicked, this, [this]() {
+            emit tab_changed(active_tab_.empty() ? "playlists" : active_tab_);
+        });
+        panel_lay->addWidget(retry_btn, 0, Qt::AlignHCenter);
     }
-    
+
+    list_->addStretch(1);
+    list_->addWidget(state_panel);
     list_->addStretch(1);
 }
 

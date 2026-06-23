@@ -20,7 +20,10 @@ signals:
     void play_requested(Track track);
     void album_requested(const std::string &browse_id);
     void artist_requested(const std::string &browse_id);
-    void playlist_requested(const std::string &playlist_id);
+    void playlist_requested(const std::string &playlist_id,
+                            const std::string &title,
+                            const std::string &subtitle,
+                            const std::string &thumbnail);
     void show_requested(const std::string &browse_id);
     void retry_requested();
     void load_more_requested();

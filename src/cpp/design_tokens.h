@@ -40,6 +40,9 @@ struct ColorScheme {
     QColor bg_surface;
     QColor bg_elevated;
     QColor bg_overlay;
+    QColor surface;
+    QColor surface_raised;
+    QColor surface_selected;
     QColor accent;
     QColor accent_bright;
     QColor accent_dim;
@@ -52,6 +55,12 @@ struct ColorScheme {
     QColor success;
     QColor warning;
     QColor error;
+    QColor danger_surface;
+    QColor warning_surface;
+    QColor type_album;
+    QColor type_playlist;
+    QColor type_mix;
+    QColor type_podcast;
 };
 
 class DesignTokens {

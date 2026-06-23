@@ -112,6 +112,7 @@ pub mod bridge {
         track_count: i32,
         owner: String,
         privacy: String,
+        editable: bool,
     }
 
     #[derive(Clone)]
@@ -215,6 +216,12 @@ pub mod bridge {
         fn on_album_requested(browse_id: &str);
         fn on_artist_requested(browse_id: &str);
         fn on_playlist_requested(playlist_id: &str);
+        fn on_playlist_requested_with_context(
+            playlist_id: &str,
+            title: &str,
+            subtitle: &str,
+            thumbnail: &str,
+        );
         fn on_show_requested(browse_id: &str);
         fn on_volume_change(delta: i32);
         fn on_volume_set(volume: i32);
@@ -325,6 +332,7 @@ pub mod bridge {
         fn set_context_playlists(playlists: Vec<Playlist>);
         fn set_library_albums(albums: Vec<Album>);
         fn set_library_artists(artists: Vec<Artist>);
+        fn set_library_state(state: &str, message: &str);
         fn set_search_history(queries: Vec<String>);
         fn set_search_suggestions(query: &str, suggestions: Vec<String>);
         fn apply_settings_to_ui();
@@ -573,6 +581,23 @@ pub fn on_playlist_requested(playlist_id: &str) {
     });
 }
 
+pub fn on_playlist_requested_with_context(
+    playlist_id: &str,
+    title: &str,
+    subtitle: &str,
+    thumbnail: &str,
+) {
+    let playlist_id = playlist_id.to_string();
+    let preview = crate::services::browse::PlaylistPreview {
+        title: title.to_string(),
+        subtitle: subtitle.to_string(),
+        thumbnail: thumbnail.to_string(),
+    };
+    tokio::spawn(async move {
+        crate::services::browse::load_playlist_with_preview(&playlist_id, Some(preview)).await;
+    });
+}
+
 pub fn on_volume_change(delta: i32) {
     with_player(|p| p.adjust_volume(delta));
 }
@@ -783,6 +808,7 @@ fn load_local_library_tab(tab: LibraryTab) {
                             track_count: count,
                             owner: String::new(),
                             privacy: String::new(),
+                            editable: true,
                         }
                     })
                     .collect();
@@ -1383,6 +1409,7 @@ fn load_local_playlist_detail(
         track_count: count,
         owner: String::new(),
         privacy: String::new(),
+        editable: true,
     };
     let btracks: Vec<crate::bridge::bridge::Track> = tracks
         .into_iter()
@@ -1415,6 +1442,7 @@ fn push_context_and_library_playlists() {
                     track_count: count,
                     owner: String::new(),
                     privacy: String::new(),
+                    editable: true,
                 }
             })
             .collect();
@@ -1429,6 +1457,7 @@ fn push_context_and_library_playlists() {
                     track_count: p.track_count,
                     owner: String::new(),
                     privacy: String::new(),
+                    editable: p.editable,
                 })
                 .collect(),
         );
@@ -2487,6 +2516,7 @@ fn load_downloaded_library_tab(tab: LibraryTab) {
                                         track_count: 0,
                                         owner: String::new(),
                                         privacy: String::new(),
+                                        editable: false,
                                     });
                                 }
                             }
@@ -2728,6 +2758,7 @@ pub fn on_library_search(tab: &str, query: &str, sort_by: &str) {
                                     track_count: count,
                                     owner: String::new(),
                                     privacy: String::new(),
+                                    editable: true,
                                 });
                             }
                         }
@@ -2758,6 +2789,7 @@ pub fn on_library_search(tab: &str, query: &str, sort_by: &str) {
                                                 track_count: 0,
                                                 owner: String::new(),
                                                 privacy: String::new(),
+                                                editable: false,
                                             });
                                         }
                                     }

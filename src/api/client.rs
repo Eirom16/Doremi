@@ -1,14 +1,62 @@
 use super::models::*;
 
-fn library_error_kind(error: &str) -> &'static str {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ApiErrorKind {
+    AuthExpired,
+    InvalidRequest,
+    SchemaChanged,
+    Network,
+    Empty,
+    Unknown,
+}
+
+impl ApiErrorKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::AuthExpired => "not_authenticated",
+            Self::InvalidRequest => "invalid_request",
+            Self::SchemaChanged => "schema_changed",
+            Self::Network => "network",
+            Self::Empty => "empty",
+            Self::Unknown => "request_failed",
+        }
+    }
+}
+
+pub fn classify_error(error: &str) -> ApiErrorKind {
     if error.contains("401 Unauthorized") || error.contains("403 Forbidden") {
-        "not_authenticated"
+        ApiErrorKind::AuthExpired
     } else if error.contains("400 Bad Request") || error.contains("INVALID_ARGUMENT") {
-        "invalid_request"
+        ApiErrorKind::InvalidRequest
     } else if error.contains("schema changed") {
-        "schema_changed"
+        ApiErrorKind::SchemaChanged
+    } else if error.contains("transport error") || error.contains("timed out") {
+        ApiErrorKind::Network
+    } else if error.contains("empty") || error.contains("no header") {
+        ApiErrorKind::Empty
     } else {
-        "request_failed"
+        ApiErrorKind::Unknown
+    }
+}
+
+pub fn friendly_error(context: &str, error: &str) -> String {
+    match classify_error(error) {
+        ApiErrorKind::AuthExpired => "Tu sesión de YouTube Music expiró.".to_string(),
+        ApiErrorKind::InvalidRequest if context == "library_albums" => {
+            "No se pudieron cargar los álbumes de tu biblioteca. YouTube Music rechazó la solicitud.".to_string()
+        }
+        ApiErrorKind::InvalidRequest => {
+            "No se pudo cargar este contenido. YouTube Music rechazó la solicitud.".to_string()
+        }
+        ApiErrorKind::SchemaChanged if context == "playlist" => {
+            "No se pudo abrir la playlist. El formato de YouTube Music cambió.".to_string()
+        }
+        ApiErrorKind::SchemaChanged => {
+            "No se pudo cargar este contenido. El formato de YouTube Music cambió.".to_string()
+        }
+        ApiErrorKind::Network => "No hay conexión estable con YouTube Music.".to_string(),
+        ApiErrorKind::Empty => "No hay contenido disponible para mostrar.".to_string(),
+        ApiErrorKind::Unknown => "No se pudo completar la solicitud a YouTube Music.".to_string(),
     }
 }
 
@@ -98,10 +146,10 @@ impl ApiClient {
             Err(e) => {
                 log::error!(
                     "Library playlists API failed ({}): {e}",
-                    library_error_kind(&e)
+                    classify_error(&e).as_str()
                 );
                 crate::bridge::bridge::show_notification(
-                    &format!("Error al cargar playlists de biblioteca: {e}"),
+                    &friendly_error("library_playlists", &e),
                     "error",
                 );
                 Vec::new()
@@ -113,9 +161,12 @@ impl ApiClient {
         match super::innertube::library_songs(None).await {
             Ok(songs) => songs,
             Err(e) => {
-                log::error!("Library songs API failed ({}): {e}", library_error_kind(&e));
+                log::error!(
+                    "Library songs API failed ({}): {e}",
+                    classify_error(&e).as_str()
+                );
                 crate::bridge::bridge::show_notification(
-                    &format!("Error al cargar canciones de biblioteca: {e}"),
+                    &friendly_error("library_songs", &e),
                     "error",
                 );
                 Vec::new()
@@ -129,10 +180,10 @@ impl ApiClient {
             Err(e) => {
                 log::error!(
                     "Library albums API failed ({}): {e}",
-                    library_error_kind(&e)
+                    classify_error(&e).as_str()
                 );
                 crate::bridge::bridge::show_notification(
-                    &format!("Error al cargar álbumes de biblioteca: {e}"),
+                    &friendly_error("library_albums", &e),
                     "error",
                 );
                 Vec::new()
@@ -146,10 +197,10 @@ impl ApiClient {
             Err(e) => {
                 log::error!(
                     "Library artists API failed ({}): {e}",
-                    library_error_kind(&e)
+                    classify_error(&e).as_str()
                 );
                 crate::bridge::bridge::show_notification(
-                    &format!("Error al cargar artistas de biblioteca: {e}"),
+                    &friendly_error("library_artists", &e),
                     "error",
                 );
                 Vec::new()
@@ -187,6 +238,22 @@ impl Default for ApiClient {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn classifies_library_request_errors() {
+        let invalid = "Innertube endpoint browse returned 400 Bad Request: INVALID_ARGUMENT";
+        assert_eq!(classify_error(invalid), ApiErrorKind::InvalidRequest);
+        assert_eq!(
+            friendly_error("library_albums", invalid),
+            "No se pudieron cargar los álbumes de tu biblioteca. YouTube Music rechazó la solicitud."
+        );
+        let schema = "Innertube browse/playlist schema changed: expected header";
+        assert_eq!(classify_error(schema), ApiErrorKind::SchemaChanged);
+        assert_eq!(
+            friendly_error("playlist", schema),
+            "No se pudo abrir la playlist. El formato de YouTube Music cambió."
+        );
+    }
 
     /// Integration test — requires valid YouTube Music credentials and internet.
     /// Run explicitly with: cargo test -- --ignored test_real_search --nocapture

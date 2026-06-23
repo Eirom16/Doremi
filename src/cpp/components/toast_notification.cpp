@@ -90,6 +90,7 @@ ToastNotification::ToastNotification(QWidget *parent,
     }
 
     setLayout(lay);
+    setMinimumHeight(64);
 }
 
 ToastNotification::~ToastNotification() {
@@ -162,12 +163,13 @@ void ToastNotification::showOrQueue(QWidget *parent,
     ToastNotification *toast = new ToastNotification(parent, message, type, actionLabel, std::move(action));
     s_activeToasts.insert(s_activeToasts.begin(), toast);
 
-    toast->resize(actionLabel.isEmpty() ? 320 : 420, 56);
+    const int width = actionLabel.isEmpty() ? 360 : 460;
+    toast->resize(width, std::max(64, toast->sizeHint().height() + 8));
     
     int parentWidth = parent->width();
     int parentHeight = parent->height();
     int targetX = parentWidth - toast->width() - 20;
-    int targetY = parentHeight - 84 - static_cast<int>(s_activeToasts.size()) * (toast->height() + 10);
+    int targetY = parentHeight - 122 - static_cast<int>(s_activeToasts.size()) * (toast->height() + 10);
 
     toast->move(targetX, targetY + 20); // start slightly lower
     toast->show();
@@ -265,15 +267,14 @@ void ToastNotification::updateStackPositions() {
 
     int parentWidth = parent->width();
     int parentHeight = parent->height();
-    int bottomMargin = 84;
+    int bottomMargin = 122;
     int rightMargin = 20;
-    int toastHeight = 56;
     int spacing = 10;
 
     for (size_t i = 0; i < s_activeToasts.size(); ++i) {
         ToastNotification *toast = s_activeToasts[i];
         int targetX = parentWidth - toast->width() - rightMargin;
-        int targetY = parentHeight - bottomMargin - (static_cast<int>(i) + 1) * (toastHeight + spacing);
+        int targetY = parentHeight - bottomMargin - (static_cast<int>(i) + 1) * (toast->height() + spacing);
 
         QPropertyAnimation *anim = new QPropertyAnimation(toast, "pos");
         anim->setDuration(DesignTokens::duration(250));

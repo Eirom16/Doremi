@@ -242,6 +242,7 @@ impl DoremiApp {
                                         1 => "PRIVATE".to_string(),
                                         _ => "UNLISTED".to_string(),
                                     },
+                                    editable: true,
                                 }
                             })
                             .collect();
@@ -256,6 +257,7 @@ impl DoremiApp {
                                     track_count: p.track_count,
                                     owner: p.owner.clone(),
                                     privacy: p.privacy.clone(),
+                                    editable: p.editable,
                                 })
                                 .collect(),
                         );

@@ -72,9 +72,13 @@ WelcomeView::WelcomeView(QWidget *parent)
 
     // Card Glass Panel container
     card_ = new GlassPanel(this);
+    card_->setObjectName("welcomeCard");
+    card_->setMaximumWidth(380);
+    card_->setMinimumWidth(340);
+    card_->setMaximumHeight(300);
     auto *card_layout = new QVBoxLayout(card_);
-    card_layout->setSpacing(20);
-    card_layout->setContentsMargins(32, 32, 32, 32);
+    card_layout->setSpacing(16);
+    card_layout->setContentsMargins(32, 28, 32, 28);
     card_layout->setAlignment(Qt::AlignCenter);
 
     welcome_text_ = new QLabel(tr_q("welcome_title"), card_);
@@ -99,15 +103,16 @@ WelcomeView::WelcomeView(QWidget *parent)
     status_label_->setFont(DesignTokens::getFont("body", 13));
     status_label_->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
     status_label_->setAlignment(Qt::AlignCenter);
+    status_label_->setVisible(false);
     card_layout->addWidget(status_label_);
 
     progress_ = new QLabel("", card_);
     progress_->setFont(DesignTokens::getFont("body", 12));
     progress_->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_muted.name()));
     progress_->setAlignment(Qt::AlignCenter);
+    progress_->setVisible(false);
     card_layout->addWidget(progress_);
 
-    card_layout->addStretch();
     layout->addWidget(card_);
     layout->addStretch();
 
@@ -130,11 +135,11 @@ void WelcomeView::update_theme() {
         }
     }
 
-    card_->setStyleSheet(QString(
-        "background-color: %1;"
-        "border-radius: 16px;"
-        "border: 1px solid %2;"
-    ).arg(c.bg_elevated.name()).arg(c.border.name()));
+    card_->setStyleSheet(
+        "GlassPanel#welcomeCard {"
+        "    background-color: transparent;"
+        "    border: none;"
+        "}");
 
     welcome_text_->setStyleSheet(QString("color: %1; background: transparent; font-weight: bold;").arg(c.text_primary.name()));
     desc_text_->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
@@ -146,6 +151,9 @@ void WelcomeView::on_login_clicked() {
     login_btn_->setEnabled(false);
     login_btn_->setText(tr_q("welcome_btn_logging_in"));
     status_label_->setText(tr_q("welcome_status_opening"));
+    status_label_->setVisible(true);
+    progress_->clear();
+    progress_->setVisible(false);
 
     auto *dialog = new WebLoginDialog(this);
     connect(dialog, &WebLoginDialog::login_successful, this, &WelcomeView::handle_login_success);
@@ -158,6 +166,7 @@ void WelcomeView::on_login_clicked() {
         login_btn_->setEnabled(true);
         login_btn_->setText(tr_q("welcome_btn_login"));
         status_label_->setText("");
+        status_label_->setVisible(false);
     }
 }
 
@@ -166,6 +175,8 @@ void WelcomeView::handle_login_success(const QString &avatar_url, const QString 
     Q_UNUSED(user_name);
     status_label_->setText(tr_q("welcome_status_success"));
     progress_->setText(tr_q("welcome_status_loading"));
+    status_label_->setVisible(true);
+    progress_->setVisible(true);
     
     QTimer::singleShot(1000, this, []() {
         // Trigger navigating to home

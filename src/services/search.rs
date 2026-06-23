@@ -80,6 +80,7 @@ impl SearchService {
                 track_count: playlist.track_count.unwrap_or_default(),
                 owner: playlist.owner.clone().unwrap_or_default(),
                 privacy: String::new(),
+                editable: false,
             })
             .collect();
 

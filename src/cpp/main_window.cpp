@@ -78,6 +78,26 @@ void mutate_main_window(const char *operation, Callback callback) {
         }
     });
 }
+
+QString user_facing_notification(QString message) {
+    const QString lower = message.toLower();
+    if (lower.contains("playlist") && lower.contains("schema changed")) {
+        return "No se pudo abrir la playlist. El formato de YouTube Music cambió.";
+    }
+    if (lower.contains("álbum") && (lower.contains("400 bad request") || lower.contains("invalid_argument"))) {
+        return "No se pudieron cargar los álbumes de tu biblioteca. YouTube Music rechazó la solicitud.";
+    }
+    if (lower.contains("schema changed")) {
+        return "No se pudo cargar este contenido. El formato de YouTube Music cambió.";
+    }
+    if (lower.contains("400 bad request") || lower.contains("invalid_argument")) {
+        return "No se pudo cargar el contenido. YouTube Music rechazó la solicitud.";
+    }
+    if (lower.contains("innertube endpoint") || lower.contains("{\n")) {
+        return "No se pudo completar la solicitud a YouTube Music.";
+    }
+    return message;
+}
 }
 
 DoremiMainWindow::DoremiMainWindow(QWidget *parent)
@@ -405,9 +425,12 @@ void DoremiMainWindow::connect_signals() {
             on_artist_requested(id);
         });
     QObject::connect(home_view_, &HomeView::playlist_requested, this,
-        [this](const std::string &id) {
+        [this](const std::string &id,
+               const std::string &title,
+               const std::string &subtitle,
+               const std::string &thumbnail) {
             if (!ensure_online_action("abrir detalles de playlist")) return;
-            on_playlist_requested(id);
+            on_playlist_requested_with_context(id, title, subtitle, thumbnail);
         });
     QObject::connect(home_view_, &HomeView::show_requested, this,
         [this](const std::string &id) {
@@ -659,7 +682,8 @@ void DoremiMainWindow::closeEvent(QCloseEvent *event) {
 }
 
 void DoremiMainWindow::show_notif(const std::string &message, const std::string &kind) {
-    const QString qMessage = QString::fromStdString(message);
+    const QString rawMessage = QString::fromStdString(message);
+    const QString qMessage = user_facing_notification(rawMessage);
     ToastNotification::Type toastType = ToastNotification::Type::Info;
     if (kind == "success") {
         toastType = ToastNotification::Type::Success;
@@ -1085,6 +1109,14 @@ void set_library_artists(rust::Vec<Artist> artists) {
     for (const auto &x : artists) a.push_back(x);
     mutate_main_window("set_library_artists", [a = std::move(a)](DoremiMainWindow &window) {
         if (window.library_view()) window.library_view()->set_artists(a);
+    });
+}
+
+void set_library_state(rust::Str state, rust::Str message) {
+    const std::string state_copy = Ffi::to_std_string(state);
+    const std::string message_copy = Ffi::to_std_string(message);
+    mutate_main_window("set_library_state", [state_copy, message_copy](DoremiMainWindow &window) {
+        if (window.library_view()) window.library_view()->set_library_state(state_copy, message_copy);
     });
 }
 

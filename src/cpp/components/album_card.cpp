@@ -81,28 +81,28 @@ void AlbumCard::paintEvent(QPaintEvent *) {
     const QString type = m_contentType.toLower();
     QString badgeText = "Álbum";
     QString iconName = "album";
-    QColor badgeColor = c.accent;
+    QColor badgeColor = c.type_album;
     if (type == "playlist") {
         badgeText = "Playlist";
         iconName = "queue_music";
-        badgeColor = QColor("#00A8A8");
+        badgeColor = c.type_playlist;
     } else if (type == "mix") {
         badgeText = "Mix";
         iconName = "auto_awesome";
-        badgeColor = QColor("#FFB000");
+        badgeColor = c.type_mix;
     } else if (type == "show") {
         badgeText = "Podcast";
         iconName = "podcasts";
-        badgeColor = QColor("#E85D75");
+        badgeColor = c.type_podcast;
     } else if (type == "episode") {
         badgeText = "Episodio";
         iconName = "graphic_eq";
-        badgeColor = QColor("#E85D75");
+        badgeColor = c.type_podcast;
     }
     
     // 1. Draw card background (fade in on hover)
     if (m_hoverProgress > 0.0) {
-        QColor bg = c.accent_dim;
+        QColor bg = c.surface_selected;
         bg.setAlphaF(bg.alphaF() * m_hoverProgress);
         painter.setBrush(bg);
         painter.setPen(Qt::NoPen);
@@ -129,17 +129,17 @@ void AlbumCard::paintEvent(QPaintEvent *) {
     
     painter.drawPixmap(artRect.topLeft(), m_artPixmap);
 
-    QRect badgeRect(20, 22, std::min(112, 50 + painter.fontMetrics().horizontalAdvance(badgeText)), 24);
+    QRect badgeRect(20, 22, std::min(124, 56 + painter.fontMetrics().horizontalAdvance(badgeText)), 26);
     QColor badgeBg = badgeColor;
     badgeBg.setAlpha(220);
     painter.setPen(Qt::NoPen);
     painter.setBrush(badgeBg);
     painter.drawRoundedRect(badgeRect, 12, 12);
     QIcon badgeIcon = IconProvider::getIcon(iconName, Qt::white, 14);
-    painter.drawPixmap(badgeRect.left() + 8, badgeRect.top() + 5, badgeIcon.pixmap(14, 14));
+    painter.drawPixmap(badgeRect.left() + 9, badgeRect.top() + 6, badgeIcon.pixmap(14, 14));
     painter.setFont(DesignTokens::getFont("caption", 9));
     painter.setPen(Qt::white);
-    painter.drawText(badgeRect.adjusted(26, 0, -8, 0), Qt::AlignVCenter | Qt::AlignLeft, badgeText);
+    painter.drawText(badgeRect.adjusted(29, 0, -9, 0), Qt::AlignVCenter | Qt::AlignLeft, badgeText);
     
     // 3. Draw play overlay on hover
     if (m_hoverProgress > 0.0) {
