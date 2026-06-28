@@ -20,7 +20,7 @@ SettingsView::SettingsView(QWidget *parent)
     const auto &c = DesignTokens::current();
 
     auto *root = new QHBoxLayout(this);
-    root->setContentsMargins(24, 24, 24, 24);
+    root->setContentsMargins(DesignTokens::pagePadding());
     root->setSpacing(20);
 
     auto *sidebar = new QWidget(this);
@@ -30,16 +30,16 @@ SettingsView::SettingsView(QWidget *parent)
         "QWidget {"
         "    background-color: %1;"
         "    border: 1px solid %2;"
-        "    border-radius: 16px;"
+        "    border-radius: %3px;"
         "}"
-    ).arg(c.bg_surface.name()).arg(DesignTokens::rgba(c.border)));
+    ).arg(c.bg_surface.name(), DesignTokens::rgba(c.border), QString::number(DesignTokens::radius().xl)));
 
     auto *sidebar_layout = new QVBoxLayout(sidebar);
     sidebar_layout->setContentsMargins(14, 16, 14, 16);
     sidebar_layout->setSpacing(8);
 
     auto *title = new QLabel(tr_q("settings_title"), sidebar);
-    title->setFont(DesignTokens::getFont("display", 24));
+    title->setFont(DesignTokens::getFont("heading_lg"));
     title->setStyleSheet(QString("font-weight: bold; color: %1; background: transparent;").arg(c.text_primary.name()));
     sidebar_layout->addWidget(title);
     sidebar_layout->addSpacing(8);
@@ -53,7 +53,7 @@ SettingsView::SettingsView(QWidget *parent)
         "QPushButton {"
         "    background: transparent;"
         "    border: 1px solid transparent;"
-        "    border-radius: 10px;"
+        "    border-radius: %6px;"
         "    color: %1;"
         "    padding: 10px 12px;"
         "    text-align: left;"
@@ -76,7 +76,8 @@ SettingsView::SettingsView(QWidget *parent)
         .arg(DesignTokens::rgba(c.accent_dim))
         .arg(c.text_primary.name())
         .arg(DesignTokens::rgba(c.border_accent))
-        .arg(c.accent.name());
+        .arg(c.accent.name())
+        .arg(DesignTokens::radius().md);
 
     auto add_page = [&](const QString &label, const QString &iconName) {
         auto *page = new QWidget(pages);
@@ -129,7 +130,7 @@ SettingsView::SettingsView(QWidget *parent)
         "QComboBox {\n"
         "    background-color: %1;\n"
         "    border: 1px solid %2;\n"
-        "    border-radius: 6px;\n"
+        "    border-radius: %7px;\n"
         "    padding: 6px 32px 6px 12px;\n"
         "    color: %3;\n"
         "    font-size: 13px;\n"
@@ -145,16 +146,18 @@ SettingsView::SettingsView(QWidget *parent)
         "    background-color: %1;\n"
         "    color: %3;\n"
         "    selection-background-color: %5;\n"
-        "    selection-color: #FFFFFF;\n"
+        "    selection-color: %6;\n"
         "    border: 1px solid %2;\n"
-        "    border-radius: 6px;\n"
+        "    border-radius: %7px;\n"
         "}\n"
     )
     .arg(c.bg_elevated.name())
     .arg(c.border.name())
     .arg(c.text_primary.name())
     .arg(c.accent.name())
-    .arg(c.accent_dim.name());
+    .arg(c.accent_dim.name())
+    .arg(c.text_on_accent.name())
+    .arg(DesignTokens::radius().sm);
 
     // Appearance section
     content->addWidget(section_header(std::string(doremi_tr("settings_appearance"))));
@@ -166,7 +169,7 @@ SettingsView::SettingsView(QWidget *parent)
     content->addWidget(combo_row(std::string(doremi_tr("theme")), theme_cmb_));
 
     accent_cmb_ = new QComboBox(this);
-    accent_cmb_->addItems({"#7C4DFF", "#A78BFA", "#22D3EE", "#F472B6", "#34D399"});
+    accent_cmb_->addItems(DesignTokens::accentPalette());
     accent_cmb_->setStyleSheet(comboStyle);
     content->addWidget(combo_row(std::string(doremi_tr("accent_color")), accent_cmb_));
 
@@ -300,11 +303,10 @@ SettingsView::SettingsView(QWidget *parent)
         "QWidget {\n"
         "    background-color: %1;\n"
         "    border: 1px solid %2;\n"
-        "    border-radius: 8px;\n"
+        "    border-radius: %3px;\n"
         "}\n"
     )
-    .arg(c.bg_surface.name())
-    .arg(c.border.name()));
+    .arg(c.bg_surface.name(), c.border.name(), QString::number(DesignTokens::radius().md)));
 
     lastfm_status_lbl_ = new QLabel(tr_q("lastfm_status_disconnected"), lastfm_auth_widget_);
     lastfm_status_lbl_->setFont(DesignTokens::getFont("body", 12));
@@ -315,7 +317,7 @@ SettingsView::SettingsView(QWidget *parent)
         "QLineEdit {\n"
         "    background-color: %1;\n"
         "    border: 1px solid %2;\n"
-        "    border-radius: 6px;\n"
+        "    border-radius: %5px;\n"
         "    padding: 6px 12px;\n"
         "    color: %3;\n"
         "    font-size: 13px;\n"
@@ -327,7 +329,8 @@ SettingsView::SettingsView(QWidget *parent)
     .arg(c.bg_base.name())
     .arg(c.border.name())
     .arg(c.text_primary.name())
-    .arg(c.accent.name());
+    .arg(c.accent.name())
+    .arg(DesignTokens::radius().sm);
     
     lastfm_api_key_input_ = new QLineEdit(lastfm_auth_widget_);
     lastfm_api_key_input_->setPlaceholderText("API Key");
@@ -414,7 +417,7 @@ SettingsView::SettingsView(QWidget *parent)
     auto *loc_lay = new QHBoxLayout(loc_widget);
     loc_lay->setContentsMargins(0, 0, 0, 0);
     auto *loc_lbl = new QLabel(tr_q("download_location"), loc_widget);
-    loc_lbl->setFont(DesignTokens::getFont("body", 13));
+    loc_lbl->setFont(DesignTokens::getFont("body_sm"));
     loc_lbl->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
     loc_lay->addWidget(loc_lbl);
     loc_lay->addStretch(1);
@@ -424,7 +427,7 @@ SettingsView::SettingsView(QWidget *parent)
         "QLineEdit {"
         "    background-color: %1;"
         "    border: 1px solid %2;"
-        "    border-radius: 6px;"
+        "    border-radius: %5px;"
         "    padding: 6px 12px;"
         "    color: %3;"
         "    font-size: 13px;"
@@ -432,7 +435,7 @@ SettingsView::SettingsView(QWidget *parent)
         "QLineEdit:focus {"
         "    border-color: %4;"
         "}"
-    ).arg(c.bg_elevated.name()).arg(c.border.name()).arg(c.text_primary.name()).arg(c.accent.name()));
+    ).arg(c.bg_elevated.name(), c.border.name(), c.text_primary.name(), c.accent.name(), QString::number(DesignTokens::radius().sm)));
     download_location_input_->setFixedWidth(200);
     loc_lay->addWidget(download_location_input_);
 
@@ -468,13 +471,13 @@ SettingsView::SettingsView(QWidget *parent)
 
     db_size_lbl_ = new QLabel("0.00 MB", this);
     db_size_lbl_->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
-    db_size_lbl_->setFont(DesignTokens::getFont("body", 13));
+    db_size_lbl_->setFont(DesignTokens::getFont("body_sm"));
     auto *db_widget = new QWidget(this);
     db_widget->setFixedHeight(36);
     auto *db_lay = new QHBoxLayout(db_widget);
     db_lay->setContentsMargins(0, 0, 0, 0);
     auto *db_title_lbl = new QLabel(tr_q("db_size"), db_widget);
-    db_title_lbl->setFont(DesignTokens::getFont("body", 13));
+    db_title_lbl->setFont(DesignTokens::getFont("body_sm"));
     db_title_lbl->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
     db_lay->addWidget(db_title_lbl);
     db_lay->addStretch(1);
@@ -483,7 +486,7 @@ SettingsView::SettingsView(QWidget *parent)
 
     cache_size_lbl_ = new QLabel("0.00 MB", this);
     cache_size_lbl_->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
-    cache_size_lbl_->setFont(DesignTokens::getFont("body", 13));
+    cache_size_lbl_->setFont(DesignTokens::getFont("body_sm"));
     clean_cache_btn_ = new RippleButton(tr_q("clean_cache"), this, RippleButton::Variant::Secondary);
     clean_cache_btn_->setFixedWidth(140);
     clean_cache_btn_->setFixedHeight(28);
@@ -491,7 +494,7 @@ SettingsView::SettingsView(QWidget *parent)
 
     downloads_size_lbl_ = new QLabel("0.00 MB", this);
     downloads_size_lbl_->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
-    downloads_size_lbl_->setFont(DesignTokens::getFont("body", 13));
+    downloads_size_lbl_->setFont(DesignTokens::getFont("body_sm"));
     clear_downloads_btn_ = new RippleButton(tr_q("clear_downloads"), this, RippleButton::Variant::Danger);
     clear_downloads_btn_->setFixedWidth(140);
     clear_downloads_btn_->setFixedHeight(28);
@@ -504,7 +507,7 @@ SettingsView::SettingsView(QWidget *parent)
     backup_lay->setSpacing(12);
 
     export_backup_btn_ = new RippleButton(tr_q("export_backup"), backup_widget, RippleButton::Variant::Primary);
-    export_backup_btn_->setIcon(IconProvider::getIcon("save", QColor("#FFFFFF"), 16));
+    export_backup_btn_->setIcon(IconProvider::getIcon("save", c.text_on_accent, 16));
     export_backup_btn_->setFixedHeight(36);
     backup_lay->addWidget(export_backup_btn_, 1);
 
@@ -553,7 +556,7 @@ SettingsView::SettingsView(QWidget *parent)
     content->addWidget(about_logo);
 
     auto *about_name = new QLabel("Doremi", this);
-    about_name->setFont(DesignTokens::getFont("display", 20));
+    about_name->setFont(DesignTokens::getFont("heading_lg"));
     about_name->setStyleSheet(QString("font-weight: bold; color: %1; background: transparent;").arg(c.accent.name()));
     about_name->setAlignment(Qt::AlignCenter);
     content->addWidget(about_name);
@@ -568,7 +571,7 @@ SettingsView::SettingsView(QWidget *parent)
         tr_q("about_desc"),
         this
     );
-    about_desc->setFont(DesignTokens::getFont("body", 13));
+    about_desc->setFont(DesignTokens::getFont("body_sm"));
     about_desc->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
     about_desc->setAlignment(Qt::AlignCenter);
     about_desc->setWordWrap(true);
@@ -580,10 +583,10 @@ SettingsView::SettingsView(QWidget *parent)
         "QFrame {"
         "    background-color: %1;"
         "    border: 1px solid %2;"
-        "    border-radius: 12px;"
+        "    border-radius: %3px;"
         "    padding: 16px;"
         "}"
-    ).arg(c.bg_surface.name()).arg(c.border.name()));
+    ).arg(c.bg_surface.name(), c.border.name(), QString::number(DesignTokens::radius().lg)));
     
     auto *cl_layout = new QVBoxLayout(changelog_card);
     cl_layout->setSpacing(10);
@@ -882,7 +885,7 @@ QWidget *SettingsView::combo_row(const std::string &label, QComboBox *cmb) {
     l->setContentsMargins(0, 0, 0, 0);
     
     auto *lb = new QLabel(QString::fromStdString(label), w);
-    lb->setFont(DesignTokens::getFont("body", 13));
+    lb->setFont(DesignTokens::getFont("body_sm"));
     lb->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
     
     l->addWidget(lb);
@@ -899,7 +902,7 @@ QWidget *SettingsView::check_row(const std::string &label, AnimatedToggle *cb) {
     l->setContentsMargins(0, 0, 0, 0);
     
     auto *lb = new QLabel(QString::fromStdString(label), w);
-    lb->setFont(DesignTokens::getFont("body", 13));
+    lb->setFont(DesignTokens::getFont("body_sm"));
     lb->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
     
     l->addWidget(lb);
@@ -1170,7 +1173,7 @@ QWidget *SettingsView::storage_row(const std::string &label, QLabel *val_lbl, Ri
     l->setContentsMargins(0, 0, 0, 0);
     
     auto *lb = new QLabel(QString::fromStdString(label), w);
-    lb->setFont(DesignTokens::getFont("body", 13));
+    lb->setFont(DesignTokens::getFont("body_sm"));
     lb->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
     l->addWidget(lb);
     

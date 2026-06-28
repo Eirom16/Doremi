@@ -53,16 +53,17 @@ void SudoPasswordDialog::build_ui() {
     panel_->setStyleSheet(QString(
         "#sudoPanel {"
         "    background-color: %1;"
-        "    border-radius: 20px;"
+        "    border-radius: %5px;"
         "    border: 1px solid rgba(%2, %3, %4, 0.25);"
         "}"
     ).arg(c.bg_elevated.name())
-     .arg(c.accent.red()).arg(c.accent.green()).arg(c.accent.blue()));
+     .arg(c.accent.red()).arg(c.accent.green()).arg(c.accent.blue())
+     .arg(DesignTokens::radius().xl));
 
     auto *shadow = new QGraphicsDropShadowEffect(panel_);
     shadow->setBlurRadius(48);
     shadow->setOffset(0, 12);
-    shadow->setColor(QColor(0, 0, 0, 120));
+    shadow->setColor(DesignTokens::elevation().medium);
     panel_->setGraphicsEffect(shadow);
 
     auto *layout = new QVBoxLayout(panel_);
@@ -78,7 +79,7 @@ void SudoPasswordDialog::build_ui() {
     title_col->setSpacing(2);
     
     title_lbl_ = new QLabel(tr_q("sudo_title"), panel_);
-    title_lbl_->setFont(DesignTokens::getFont("heading", 16));
+    title_lbl_->setFont(DesignTokens::getFont("heading_sm"));
     title_lbl_->setStyleSheet(QString("color: %1; background: transparent; font-weight: bold;").arg(c.text_primary.name()));
     
     subtitle_lbl_ = new QLabel(tr_q("sudo_subtitle"), panel_);
@@ -112,7 +113,7 @@ void SudoPasswordDialog::build_ui() {
     // Prompt Label
     prompt_lbl_ = new QLabel(tr_q("sudo_prompt"), panel_);
     prompt_lbl_->setWordWrap(true);
-    prompt_lbl_->setFont(DesignTokens::getFont("body", 13));
+    prompt_lbl_->setFont(DesignTokens::getFont("body_sm"));
     prompt_lbl_->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
     layout->addWidget(prompt_lbl_);
 
@@ -130,7 +131,7 @@ void SudoPasswordDialog::build_ui() {
         "QLineEdit {"
         "    background-color: %1;"
         "    border: 1px solid rgba(%2, %3, %4, 0.15);"
-        "    border-radius: 12px;"
+        "    border-radius: %7px;"
         "    padding: 6px 14px;"
         "    color: %5;"
         "    font-size: 14px;"
@@ -141,7 +142,8 @@ void SudoPasswordDialog::build_ui() {
     ).arg(c.bg_surface.name())
      .arg(c.accent.red()).arg(c.accent.green()).arg(c.accent.blue())
      .arg(c.text_primary.name())
-     .arg(c.accent.name()));
+     .arg(c.accent.name())
+     .arg(DesignTokens::radius().lg));
     
     connect(password_input_, &QLineEdit::returnPressed, this, &SudoPasswordDialog::on_accept);
     input_layout->addWidget(password_input_);

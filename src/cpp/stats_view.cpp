@@ -55,8 +55,8 @@ TopTrackRow::TopTrackRow(int rank, const Track &track,
 
     auto *thumb_lbl = new QLabel(this);
     thumb_lbl->setFixedSize(40, 40);
-    thumb_lbl->setStyleSheet(QString("background-color: %1; border-radius: 4px;")
-        .arg(c.bg_elevated.name()));
+    thumb_lbl->setStyleSheet(QString("background-color: %1; border-radius: %2px;")
+        .arg(c.bg_elevated.name()).arg(DesignTokens::radius().sm));
 
     if (!track.thumbnail.empty()) {
         QPointer<QLabel> label_ptr(thumb_lbl);
@@ -84,11 +84,11 @@ TopTrackRow::TopTrackRow(int rank, const Track &track,
     text_layout->setSpacing(2);
 
     auto *title_lbl = new QLabel(QString::fromStdString(static_cast<std::string>(track.title)), this);
-    title_lbl->setFont(DesignTokens::getFont("body", 13));
+    title_lbl->setFont(DesignTokens::getFont("body_sm"));
     title_lbl->setStyleSheet(QString("color: %1; font-weight: bold;").arg(c.text_primary.name()));
 
     auto *artist_lbl = new QLabel(QString::fromStdString(static_cast<std::string>(track.artist)), this);
-    artist_lbl->setFont(DesignTokens::getFont("caption", 11));
+    artist_lbl->setFont(DesignTokens::getFont("caption_sm"));
     artist_lbl->setStyleSheet(QString("color: %1;").arg(c.text_secondary.name()));
 
     text_layout->addWidget(title_lbl);
@@ -110,7 +110,7 @@ TopTrackRow::TopTrackRow(int rank, const Track &track,
     bar->setFixedHeight(4);
     int target_w = max_plays > 0 ? (plays * 80 / max_plays) : 0;
     bar->setFixedWidth(qMax(4, target_w));
-    bar->setStyleSheet(QString("background-color: %1; border-radius: 2px;").arg(c.accent.name()));
+    bar->setStyleSheet(QString("background-color: %1; border-radius: %2px;").arg(c.accent.name()).arg(DesignTokens::radius().xs));
 
     auto *bar_container = new QWidget(this);
     bar_container->setFixedHeight(4);
@@ -126,7 +126,7 @@ TopTrackRow::TopTrackRow(int rank, const Track &track,
     setLayout(layout);
 
     setObjectName("TopTrackRow");
-    setStyleSheet("QWidget#TopTrackRow { background-color: transparent; border-radius: 6px; }");
+    setStyleSheet(QString("QWidget#TopTrackRow { background-color: transparent; border-radius: %1px; }").arg(DesignTokens::radius().sm));
 }
 
 void TopTrackRow::mousePressEvent(QMouseEvent *event) {
@@ -163,7 +163,7 @@ void StatsView::setupLayout() {
     main_vbox->setSpacing(0);
 
     main_layout_ = new QVBoxLayout();
-    main_layout_->setContentsMargins(24, 24, 24, 24);
+    main_layout_->setContentsMargins(DesignTokens::pagePadding());
     main_layout_->setSpacing(24);
     main_layout_->setAlignment(Qt::AlignTop);
 
@@ -172,13 +172,13 @@ void StatsView::setupLayout() {
 
     auto *title = new QLabel(tr_q("listening_stats"), this);
     title->setObjectName("statsTitle");
-    title->setFont(DesignTokens::getFont("display", 22));
+    title->setFont(DesignTokens::getFont("heading_lg"));
     title->setStyleSheet(QString("color: %1; font-weight: bold;").arg(c.text_primary.name()));
     header_layout->addWidget(title);
     header_layout->addStretch();
 
     auto button_style = QString(
-        "QPushButton { background: %1; border: 1px solid %2; border-radius: 6px; padding: 7px 12px; color: %3; font-size: 12px; }"
+        "QPushButton { background: %1; border: 1px solid %2; border-radius: %8px; padding: 7px 12px; color: %3; font-size: 12px; }"
         "QPushButton:hover { background: rgba(%4, %5, %6, 0.08); }"
         "QPushButton:disabled { color: %7; border-color: %2; }")
         .arg(c.bg_surface.name())
@@ -187,7 +187,8 @@ void StatsView::setupLayout() {
         .arg(c.text_primary.red())
         .arg(c.text_primary.green())
         .arg(c.text_primary.blue())
-        .arg(c.text_muted.name());
+        .arg(c.text_muted.name())
+        .arg(DesignTokens::radius().sm);
 
     auto *export_json = new QPushButton("JSON", this);
     export_json->setObjectName("statsExportBtn");
@@ -225,12 +226,13 @@ void StatsView::setupLayout() {
         btn->setFixedHeight(30);
         btn->setCursor(Qt::PointingHandCursor);
         btn->setStyleSheet(QString(
-            "QPushButton { background: transparent; border: 1px solid %1; border-radius: 15px; padding: 0 16px; color: %2; font-size: 12px; }"
+            "QPushButton { background: transparent; border: 1px solid %1; border-radius: %7px; padding: 0 16px; color: %2; font-size: 12px; }"
             "QPushButton:hover { background: rgba(%3, %4, %5, 0.08); }"
             "QPushButton:checked { background: %1; color: %6; }")
             .arg(c.border.name()).arg(c.text_secondary.name())
             .arg(c.text_primary.red()).arg(c.text_primary.green()).arg(c.text_primary.blue())
-            .arg(c.bg_surface.name()));
+            .arg(c.bg_surface.name())
+            .arg(DesignTokens::radius().pill));
         range_group->addButton(btn, opt.days);
         range_layout->addWidget(btn);
     }
@@ -486,7 +488,7 @@ void StatsView::update_theme() {
     }
     // Update export buttons
     auto button_style = QString(
-        "QPushButton { background: %1; border: 1px solid %2; border-radius: 6px; padding: 7px 12px; color: %3; font-size: 12px; }"
+        "QPushButton { background: %1; border: 1px solid %2; border-radius: %8px; padding: 7px 12px; color: %3; font-size: 12px; }"
         "QPushButton:hover { background: rgba(%4, %5, %6, 0.08); }"
         "QPushButton:disabled { color: %7; border-color: %2; }")
         .arg(c.bg_surface.name())
@@ -495,19 +497,21 @@ void StatsView::update_theme() {
         .arg(c.text_primary.red())
         .arg(c.text_primary.green())
         .arg(c.text_primary.blue())
-        .arg(c.text_muted.name());
+        .arg(c.text_muted.name())
+        .arg(DesignTokens::radius().sm);
     for (auto *btn : findChildren<QPushButton*>("statsExportBtn")) {
         btn->setStyleSheet(button_style);
     }
     // Update range buttons
     for (auto *btn : findChildren<QPushButton*>("statsRangeBtn")) {
         btn->setStyleSheet(QString(
-            "QPushButton { background: transparent; border: 1px solid %1; border-radius: 15px; padding: 0 16px; color: %2; font-size: 12px; }"
+            "QPushButton { background: transparent; border: 1px solid %1; border-radius: %7px; padding: 0 16px; color: %2; font-size: 12px; }"
             "QPushButton:hover { background: rgba(%3, %4, %5, 0.08); }"
             "QPushButton:checked { background: %1; color: %6; }")
             .arg(c.border.name()).arg(c.text_secondary.name())
             .arg(c.text_primary.red()).arg(c.text_primary.green()).arg(c.text_primary.blue())
-            .arg(c.bg_surface.name()));
+            .arg(c.bg_surface.name())
+            .arg(DesignTokens::radius().pill));
     }
     if (auto *cp = findChild<QWidget*>("chart_panel")) {
         cp->setStyleSheet(DesignTokens::panelStyle("surface", 12));

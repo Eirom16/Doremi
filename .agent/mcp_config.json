@@ -1,0 +1,22 @@
+{
+  "mcpServers": {
+    "rust-analyzer": {
+      "command": "rust-analyzer-mcp"
+    },
+    "clangd": {
+      "command": "/home/eirom/.local/bin/clangd-mcp-server"
+    },
+    "qt-docs": {
+      "url": "https://qt-docs-mcp.qt.io/mcp"
+    },
+    "context7": {
+      "url": "https://mcp.context7.com/mcp",
+      "bearer_token_env_var": "CONTEXT7_API_KEY"
+    },
+    "sqlite": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-sqlite", "--db-path", "{env:DOREMI_DB_PATH:-/tmp/test.db}"],
+      "disabled": true
+    }
+  }
+}

@@ -43,8 +43,8 @@ QueueRow::QueueRow(int index, const Track &track,
 
     auto *thumb_label = new QLabel(this);
     thumb_label->setFixedSize(38, 38);
-    thumb_label->setStyleSheet(QString("background-color: %1; border-radius: 4px;")
-        .arg(c.bg_elevated.name()));
+    thumb_label->setStyleSheet(QString("background-color: %1; border-radius: %2px;")
+        .arg(c.bg_elevated.name()).arg(DesignTokens::radius().sm));
 
     if (!track.thumbnail.empty()) {
         QPointer<QLabel> label_ptr(thumb_label);
@@ -64,10 +64,10 @@ QueueRow::QueueRow(int index, const Track &track,
     text_layout->setSpacing(2);
 
     auto *title_lbl = new QLabel(QString::fromStdString(static_cast<std::string>(track.title)), this);
-    title_lbl->setFont(DesignTokens::getFont("body", 13));
+    title_lbl->setFont(DesignTokens::getFont("body_sm"));
 
     auto *artist_lbl = new QLabel(QString::fromStdString(static_cast<std::string>(track.artist)), this);
-    artist_lbl->setFont(DesignTokens::getFont("caption", 11));
+    artist_lbl->setFont(DesignTokens::getFont("caption_sm"));
 
     if (is_current_) {
         title_lbl->setStyleSheet(QString("color: %1; font-weight: bold;").arg(c.accent.name()));
@@ -123,8 +123,8 @@ QueueRow::QueueRow(int index, const Track &track,
         QString("rgba(%1, %2, %3, 0.12)").arg(c.accent.red()).arg(c.accent.green()).arg(c.accent.blue()) :
         "transparent";
 
-    setStyleSheet(QString("QWidget#QueueRow { background-color: %1; border-radius: 6px; }")
-        .arg(bg_color));
+    setStyleSheet(QString("QWidget#QueueRow { background-color: %1; border-radius: %2px; }")
+        .arg(bg_color).arg(DesignTokens::radius().sm));
 
     setObjectName("QueueRow");
 }
@@ -174,7 +174,7 @@ void QueueRow::enterEvent(QEnterEvent *event) {
         bg_color = QString("rgba(%1, %2, %3, 0.08)").arg(c.text_primary.red()).arg(c.text_primary.green()).arg(c.text_primary.blue());
     }
 
-    setStyleSheet(QString("QWidget#QueueRow { background-color: %1; border-radius: 6px; }").arg(bg_color));
+    setStyleSheet(QString("QWidget#QueueRow { background-color: %1; border-radius: %2px; }").arg(bg_color).arg(DesignTokens::radius().sm));
 }
 
 void QueueRow::leaveEvent(QEvent *event) {
@@ -186,7 +186,7 @@ void QueueRow::leaveEvent(QEvent *event) {
         QString("rgba(%1, %2, %3, 0.12)").arg(c.accent.red()).arg(c.accent.green()).arg(c.accent.blue()) :
         "transparent";
 
-    setStyleSheet(QString("QWidget#QueueRow { background-color: %1; border-radius: 6px; }").arg(bg_color));
+    setStyleSheet(QString("QWidget#QueueRow { background-color: %1; border-radius: %2px; }").arg(bg_color).arg(DesignTokens::radius().sm));
 }
 
 void QueueRow::contextMenuEvent(QContextMenuEvent *event) {

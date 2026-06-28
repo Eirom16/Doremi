@@ -5,8 +5,6 @@
 #include <QVBoxLayout>
 #include <QLabel>
 #include <QHBoxLayout>
-#include <QMouseEvent>
-#include <QContextMenuEvent>
 #include <QPushButton>
 #include <QInputDialog>
 #include <QMessageBox>
@@ -14,39 +12,8 @@
 #include <QFrame>
 #include <vector>
 #include <string>
+#include "components/track_row.h"
 #include "doremi/src/bridge.rs.h"
-
-// Internal track row widget for playlist tracks
-class PlaylistTrackRow : public QWidget {
-    Q_OBJECT
-public:
-    PlaylistTrackRow(int num, const QString &title, const QString &artist,
-                     const QString &duration, Track track,
-                     QWidget *parent = nullptr);
-    void setPlaylistId(const std::string &playlist_id) { playlist_id_ = playlist_id; }
-    int index() const { return index_; }
-
-    void update_theme();
-signals:
-    void play_requested(Track track);
-    void remove_requested(const std::string &playlist_id, const std::string &track_id);
-    void move_requested(int from, int to);
-
-protected:
-    void mousePressEvent(QMouseEvent *event) override;
-    void mouseMoveEvent(QMouseEvent *event) override;
-    void mouseReleaseEvent(QMouseEvent *event) override;
-    void contextMenuEvent(QContextMenuEvent *event) override;
-    void enterEvent(QEnterEvent *event) override;
-    void leaveEvent(QEvent *event) override;
-
-private:
-    int index_;
-    Track track_;
-    std::string playlist_id_;
-    bool dragging_ = false;
-    QPoint drag_start_position_;
-};
 
 class PlaylistDetailView : public QWidget {
     Q_OBJECT

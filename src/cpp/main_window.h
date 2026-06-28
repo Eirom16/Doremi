@@ -135,6 +135,16 @@ public:
     void navigate_back_from_detail();
     void navigate_forward();
 
+    template<typename Sender, typename Signal, typename Handler>
+    QMetaObject::Connection guardOnline(Sender *sender, Signal signal,
+        const QString &action_desc, Handler &&handler) {
+        return QObject::connect(sender, signal, this,
+            [this, action_desc, handler = std::forward<Handler>(handler)](auto &&...args) {
+                if (!ensure_online_action(action_desc)) return;
+                handler(std::forward<decltype(args)>(args)...);
+            });
+    }
+
 signals:
     void play_pause_triggered();
     void next_triggered();

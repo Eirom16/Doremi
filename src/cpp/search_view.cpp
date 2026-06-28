@@ -9,11 +9,11 @@ SearchView::SearchView(QWidget *parent)
     const auto &c = DesignTokens::current();
 
     auto *root = new QVBoxLayout(this);
-    root->setContentsMargins(24, 24, 24, 24);
+    root->setContentsMargins(DesignTokens::pagePadding());
     root->setSpacing(16);
 
     header_ = new QLabel(tr_q("results"), this);
-    header_->setFont(DesignTokens::getFont("heading_lg", 20));
+    header_->setFont(DesignTokens::getFont("heading_lg"));
     header_->setStyleSheet(QString("color: %1; font-weight: bold; background: transparent;").arg(c.text_primary.name()));
     root->addWidget(header_);
 
@@ -38,7 +38,7 @@ SearchView::SearchView(QWidget *parent)
             "QPushButton {\n"
             "    background-color: %1;\n"
             "    border: 1px solid %2;\n"
-            "    border-radius: 16px;\n"
+            "    border-radius: %7px;\n"
             "    padding: 0 16px;\n"
             "    color: %3;\n"
             "}\n"
@@ -49,7 +49,7 @@ SearchView::SearchView(QWidget *parent)
             "QPushButton:checked {\n"
             "    background-color: %6;\n"
             "    border-color: %6;\n"
-            "    color: #FFFFFF;\n"
+            "    color: %8;\n"
             "    font-weight: 500;\n"
             "}\n"
         )
@@ -58,7 +58,9 @@ SearchView::SearchView(QWidget *parent)
         .arg(c.text_secondary.name())
         .arg(QString("rgba(%1, %2, %3, %4)").arg(c.accent_dim.red()).arg(c.accent_dim.green()).arg(c.accent_dim.blue()).arg(c.accent_dim.alpha() / 255.0))
         .arg(c.text_primary.name())
-        .arg(c.accent.name());
+        .arg(c.accent.name())
+        .arg(DesignTokens::radius().xl)
+        .arg(c.text_on_accent.name());
 
         btn->setStyleSheet(btnStyle);
         filters_->addWidget(btn);
@@ -509,7 +511,7 @@ void SearchView::show_recent_searches(const std::vector<std::string> &queries) {
 
         auto *history_icon = IconProvider::createIconLabel("history", 16, c.text_secondary, true, btn);
         auto *text_label = new QLabel(QString::fromStdString(q), btn);
-        text_label->setFont(DesignTokens::getFont("body", 13));
+        text_label->setFont(DesignTokens::getFont("body_sm"));
         text_label->setStyleSheet("color: inherit; background: transparent;");
 
         btn_layout->addWidget(history_icon);
@@ -521,7 +523,7 @@ void SearchView::show_recent_searches(const std::vector<std::string> &queries) {
             "QPushButton {\n"
             "    background: transparent;\n"
             "    border: none;\n"
-            "    border-radius: 6px;\n"
+            "    border-radius: %4px;\n"
             "    color: %1;\n"
             "}\n"
             "QPushButton:hover {\n"
@@ -535,7 +537,8 @@ void SearchView::show_recent_searches(const std::vector<std::string> &queries) {
         )
         .arg(c.text_secondary.name())
         .arg(QString("rgba(%1, %2, %3, %4)").arg(c.accent_dim.red()).arg(c.accent_dim.green()).arg(c.accent_dim.blue()).arg(c.accent_dim.alpha() / 255.0))
-        .arg(c.text_primary.name());
+        .arg(c.text_primary.name())
+        .arg(DesignTokens::radius().sm);
         btn->setStyleSheet(btnStyle);
 
         connect(btn, &QPushButton::clicked, this, [this, q]() {
@@ -550,10 +553,10 @@ void SearchView::show_recent_searches(const std::vector<std::string> &queries) {
         del->setFocusPolicy(Qt::StrongFocus);
         del->setAccessibleName(QString::fromStdString("Eliminar " + q + " del historial"));
         del->setStyleSheet(QString(
-            "QPushButton { background: transparent; border: none; border-radius: 14px; color: %1; font-size: 12px; }\n"
+            "QPushButton { background: transparent; border: none; border-radius: %3px; color: %1; font-size: 12px; }\n"
             "QPushButton:hover { background-color: rgba(239, 68, 68, 0.12); color: %2; }\n"
             "QPushButton:focus { background-color: rgba(239, 68, 68, 0.12); color: %2; }\n"
-        ).arg(c.text_muted.name()).arg(c.error.name()));
+        ).arg(c.text_muted.name()).arg(c.error.name()).arg(DesignTokens::radius().pill));
         connect(del, &QPushButton::clicked, this, [this, q]() {
             emit search_history_delete_requested(q);
         });
@@ -596,7 +599,7 @@ void SearchView::update_theme() {
             "QPushButton {\n"
             "    background-color: %1;\n"
             "    border: 1px solid %2;\n"
-            "    border-radius: 16px;\n"
+            "    border-radius: %7px;\n"
             "    padding: 0 16px;\n"
             "    color: %3;\n"
             "}\n"
@@ -607,7 +610,7 @@ void SearchView::update_theme() {
             "QPushButton:checked {\n"
             "    background-color: %6;\n"
             "    border-color: %6;\n"
-            "    color: #FFFFFF;\n"
+            "    color: %8;\n"
             "    font-weight: 500;\n"
             "}\n"
         )
@@ -616,7 +619,9 @@ void SearchView::update_theme() {
         .arg(c.text_secondary.name())
         .arg(QString("rgba(%1, %2, %3, %4)").arg(c.accent_dim.red()).arg(c.accent_dim.green()).arg(c.accent_dim.blue()).arg(c.accent_dim.alpha() / 255.0))
         .arg(c.text_primary.name())
-        .arg(c.accent.name());
+        .arg(c.accent.name())
+        .arg(DesignTokens::radius().xl)
+        .arg(c.text_on_accent.name());
         btn->setStyleSheet(btnStyle);
     }
 }

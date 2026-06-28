@@ -5,130 +5,10 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <QPushButton>
-#include <QMenu>
 #include <QPointer>
 #include "components/album_card.h"
 #include "components/horizontal_carousel.h"
 #include "doremi/src/bridge.rs.h"
-
-// ─────────────────────────────────────────────────────────────────────────────
-// ArtistTrackRow
-// ─────────────────────────────────────────────────────────────────────────────
-
-ArtistTrackRow::ArtistTrackRow(const QString &title, const QString &album,
-                               const QString &duration, Track track,
-                               QWidget *parent)
-    : QWidget(parent), track_(std::move(track))
-{
-    const auto &c = DesignTokens::current();
-    setFixedHeight(52);
-    setCursor(Qt::PointingHandCursor);
-
-    auto *layout = new QHBoxLayout(this);
-    layout->setContentsMargins(16, 4, 16, 4);
-    layout->setSpacing(14);
-
-    // Play icon
-    auto *play = IconProvider::createIconLabel("play_arrow", 16, c.text_muted, false, this);
-    play->setObjectName("playIcon");
-    layout->addWidget(play);
-
-    // Title
-    auto *t_lbl = new QLabel(title, this);
-    t_lbl->setObjectName("titleLabel");
-    t_lbl->setFont(DesignTokens::getFont("body", 13));
-    t_lbl->setStyleSheet(QString("color: %1; font-weight: 600;").arg(c.text_primary.name()));
-    layout->addWidget(t_lbl, 2);
-
-    // Album
-    if (!album.isEmpty()) {
-        auto *a_lbl = new QLabel(album, this);
-    a_lbl->setObjectName("albumLabel");
-        a_lbl->setFont(DesignTokens::getFont("caption", 11));
-        a_lbl->setStyleSheet(QString("color: %1;").arg(c.text_secondary.name()));
-        a_lbl->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        layout->addWidget(a_lbl, 1);
-    }
-
-    // Duration
-    if (!duration.isEmpty()) {
-        auto *dur = new QLabel(duration, this);
-    dur->setObjectName("durationLabel");
-        dur->setFont(DesignTokens::getFont("caption", 11));
-        dur->setStyleSheet(QString("color: %1;").arg(c.text_muted.name()));
-        dur->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        layout->addWidget(dur);
-    }
-
-    // Favorite button
-    auto *fav_btn = new QPushButton(this);
-    fav_btn->setObjectName("favBtn");
-    fav_btn->setFixedSize(28, 28);
-    fav_btn->setCursor(Qt::PointingHandCursor);
-    bool is_fav = get_track_favorite_state(static_cast<std::string>(track_.id));
-    fav_btn->setIcon(IconProvider::getIcon(
-        is_fav ? "favorite" : "favorite_border",
-        is_fav ? c.accent : c.text_muted, 16));
-    fav_btn->setStyleSheet("QPushButton { background: transparent; border: none; }");
-    connect(fav_btn, &QPushButton::clicked, this, [this, fav_btn, is_fav]() {
-        if (is_fav) {
-            on_remove_favorite(static_cast<std::string>(track_.id));
-        } else {
-            on_add_favorite(track_);
-        }
-    });
-    layout->addWidget(fav_btn);
-
-    setObjectName("ArtistTrackRow");
-    setStyleSheet("QWidget#ArtistTrackRow { background-color: transparent; border-radius: 6px; }");
-}
-
-void ArtistTrackRow::mousePressEvent(QMouseEvent *event) {
-    QWidget::mousePressEvent(event);
-    if (event->button() == Qt::LeftButton) emit play_requested(track_);
-}
-
-void ArtistTrackRow::contextMenuEvent(QContextMenuEvent *event) {
-    QMenu menu;
-    QAction *play = menu.addAction("Reproducir");
-    
-    bool is_fav = get_track_favorite_state(static_cast<std::string>(track_.id));
-    QAction *fav = menu.addAction(is_fav ? "Quitar de favoritos" : "Agregar a favoritos");
-    
-    QAction *dl = menu.addAction("Descargar");
-    menu.addSeparator();
-    QAction *next = menu.addAction("Reproducir siguiente");
-    QAction *end = menu.addAction("Agregar a la cola");
-
-    QAction *chosen = menu.exec(event->globalPos());
-    if (chosen == play) {
-        emit play_requested(track_);
-    } else if (chosen == fav) {
-        if (is_fav) {
-            on_remove_favorite(static_cast<std::string>(track_.id));
-        } else {
-            on_add_favorite(track_);
-        }
-    } else if (chosen == dl) {
-        on_download_requested(track_);
-    } else if (chosen == next) {
-        on_add_to_queue_next(track_);
-    } else if (chosen == end) {
-        on_add_to_queue_end(track_);
-    }
-}
-
-void ArtistTrackRow::enterEvent(QEnterEvent *event) {
-    QWidget::enterEvent(event);
-    const auto &c = DesignTokens::current();
-    setStyleSheet(QString("QWidget#ArtistTrackRow { background-color: rgba(%1, %2, %3, 0.06); border-radius: 6px; }")
-        .arg(c.text_primary.red()).arg(c.text_primary.green()).arg(c.text_primary.blue()));
-}
-
-void ArtistTrackRow::leaveEvent(QEvent *event) {
-    QWidget::leaveEvent(event);
-    setStyleSheet("QWidget#ArtistTrackRow { background-color: transparent; border-radius: 6px; }");
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ArtistDetailView
@@ -148,7 +28,7 @@ void ArtistDetailView::setupLayout() {
     main_vbox->setSpacing(0);
 
     content_layout_ = new QVBoxLayout();
-    content_layout_->setContentsMargins(24, 16, 24, 24);
+    content_layout_->setContentsMargins(DesignTokens::pagePaddingNarrow());
     content_layout_->setSpacing(8);
     content_layout_->setAlignment(Qt::AlignTop);
 
@@ -169,9 +49,9 @@ void ArtistDetailView::setupLayout() {
     back_btn->setFixedHeight(32);
     back_btn->setCursor(Qt::PointingHandCursor);
     back_btn->setStyleSheet(QString(
-        "QPushButton { background: transparent; border: none; border-radius: 6px; }"
+        "QPushButton { background: transparent; border: none; border-radius: %4px; }"
         "QPushButton:hover { background: rgba(%1, %2, %3, 0.08); }")
-        .arg(c.text_primary.red()).arg(c.text_primary.green()).arg(c.text_primary.blue()));
+        .arg(c.text_primary.red()).arg(c.text_primary.green()).arg(c.text_primary.blue()).arg(DesignTokens::radius().sm));
     connect(back_btn, &QPushButton::clicked, this, &ArtistDetailView::back_requested);
     content_layout_->addWidget(back_btn, 0, Qt::AlignLeft);
 
@@ -181,7 +61,7 @@ void ArtistDetailView::setupLayout() {
 
     avatar_label_ = new QLabel(this);
     avatar_label_->setFixedSize(140, 140);
-    avatar_label_->setStyleSheet(QString("background-color: %1; border-radius: 70px;").arg(c.bg_elevated.name()));
+    avatar_label_->setStyleSheet(QString("background-color: %1; border-radius: %2px;").arg(c.bg_elevated.name()).arg(DesignTokens::radius().pill));
     avatar_label_->setAlignment(Qt::AlignCenter);
     header->addWidget(avatar_label_);
 
@@ -195,7 +75,7 @@ void ArtistDetailView::setupLayout() {
     info->addWidget(type_lbl);
 
     name_label_ = new QLabel("Artista", this);
-    name_label_->setFont(DesignTokens::getFont("display", 28));
+    name_label_->setFont(DesignTokens::getFont("heading_lg"));
     name_label_->setStyleSheet(QString("color: %1; font-weight: bold;").arg(c.text_primary.name()));
     name_label_->setWordWrap(true);
     info->addWidget(name_label_);
@@ -206,7 +86,7 @@ void ArtistDetailView::setupLayout() {
     info->addWidget(meta_label_);
 
     desc_label_ = new QLabel("", this);
-    desc_label_->setFont(DesignTokens::getFont("caption", 11));
+    desc_label_->setFont(DesignTokens::getFont("caption_sm"));
     desc_label_->setStyleSheet(QString("color: %1;").arg(c.text_secondary.name()));
     desc_label_->setWordWrap(true);
     desc_label_->setMaximumWidth(500);
@@ -422,7 +302,7 @@ void ArtistDetailView::clear() {
 void ArtistDetailView::update_theme() {
     const auto &c = DesignTokens::current();
     if (avatar_label_) {
-        avatar_label_->setStyleSheet(QString("background-color: %1; border-radius: 70px;").arg(c.bg_elevated.name()));
+        avatar_label_->setStyleSheet(QString("background-color: %1; border-radius: %2px;").arg(c.bg_elevated.name()).arg(DesignTokens::radius().pill));
     }
     if (name_label_) {
         name_label_->setStyleSheet(QString("color: %1; font-weight: bold;").arg(c.text_primary.name()));
@@ -435,9 +315,9 @@ void ArtistDetailView::update_theme() {
     }
     if (auto *back_btn = findChild<QPushButton*>("backBtn")) {
         back_btn->setStyleSheet(QString(
-            "QPushButton { background: transparent; border: none; border-radius: 6px; }\n"
+            "QPushButton { background: transparent; border: none; border-radius: %4px; }\n"
             "QPushButton:hover { background: rgba(%1, %2, %3, 0.08); }")
-            .arg(c.text_primary.red()).arg(c.text_primary.green()).arg(c.text_primary.blue()));
+            .arg(c.text_primary.red()).arg(c.text_primary.green()).arg(c.text_primary.blue()).arg(DesignTokens::radius().sm));
     }
     if (auto *back_text = findChild<QLabel*>("backText")) {
         back_text->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
@@ -459,24 +339,4 @@ void ArtistDetailView::update_theme() {
     }
 }
 
-void ArtistTrackRow::update_theme() {
-    const auto &c = DesignTokens::current();
-    if (auto *play = findChild<QLabel*>("playIcon")) {
-        IconProvider::setupIconLabel(play, "play_arrow", 16, c.text_muted, false);
-    }
-    if (auto *t_lbl = findChild<QLabel*>("titleLabel")) {
-        t_lbl->setStyleSheet(QString("color: %1; font-weight: 600;").arg(c.text_primary.name()));
-    }
-    if (auto *a_lbl = findChild<QLabel*>("albumLabel")) {
-        a_lbl->setStyleSheet(QString("color: %1;").arg(c.text_secondary.name()));
-    }
-    if (auto *dur = findChild<QLabel*>("durationLabel")) {
-        dur->setStyleSheet(QString("color: %1;").arg(c.text_muted.name()));
-    }
-    if (auto *fav_btn = findChild<QPushButton*>("favBtn")) {
-        bool is_fav = get_track_favorite_state(static_cast<std::string>(track_.id));
-        fav_btn->setIcon(IconProvider::getIcon(
-            is_fav ? "favorite" : "favorite_border",
-            is_fav ? c.accent : c.text_muted, 16));
-    }
-}
+

@@ -352,9 +352,9 @@ Archivo: `src/cpp/design_tokens.cpp` (definiciones) vs. resto de la UI (0 call-s
 Distribucion: 127 ocurrencias en 28 archivos; ~40 con valores fuera de la escala (2,3,4,10,14,18,20,
 28,70). Tokens oficiales: sm=6, md=8, lg=12, xl=16, pill=999.
 
-- [ ] Reemplazar todo `border-radius: Npx` literal por el token correspondiente (`radius().sm/md/lg/xl`)
-      o por `panelStyle(..., radius)`. Decidir un mapeo para los valores fuera de escala (acercarlos al
-      token mas cercano o añadir un token nuevo justificado).
+- [x] Reemplazar todo `border-radius: Npx` literal por el token correspondiente (`radius().xs/sm/md/lg/xl`)
+      o por `panelStyle(..., radius)`. Mapeo: 2-3px→xs, 4-5px→sm, 10px→md, 18-20px→xl.
+      Añadido `xs=2` a `RadiusTokens` para progress bars.
 - [ ] Añadir un lint en CI que falle ante `border-radius:\s*\d+px` fuera de `design_tokens.cpp`.
 
 ### BF4.4 Unificar las filas de track duplicadas — ALTO
@@ -369,16 +369,15 @@ Clases redundantes: `PlaylistTrackRow` (`playlist_detail_view.cpp:27`, 48px),
 
 ### BF4.5 Escala tipografica consistente — ALTO
 
-- [ ] Unificar los titulos de pagina (hoy 28/24/22/20px en distintas vistas:
+- [x] Unificar los titulos de pagina (hoy 28/24/22/20px en distintas vistas:
       `artist_detail_view.cpp:187`, `playlist_detail_view.cpp:255`, `stats_view.cpp:169`,
-      `search_view.cpp:16`) en un unico nivel del token (`display` esta en 32px y no se usa a su
-      tamaño).
-- [ ] Corregir llamadas a `getFont` con niveles inexistentes que caen a 14px:
-      `update_dialog.cpp:104` y `sudo_dialog.cpp:81` (`"heading"`), `offline_banner.cpp:38`
-      (`"label"`). Usar niveles validos (`display, heading_lg, heading_sm, body, caption, micro, icon`).
-- [ ] Reducir el override numerico de tamaño en `getFont(level, size)` (45+ usos de 13px crean una
-      escala paralela). Definir el tamaño en el nivel; si 13/11px son intencionales, añadirlos como
-      niveles oficiales.
+      `search_view.cpp:16`) en `heading_lg` (22px default).
+- [x] Corregir llamadas a `getFont` con niveles inexistentes que caen a 14px:
+      `update_dialog.cpp:104` y `sudo_dialog.cpp:81` (`"heading"`→`heading_lg`/`heading_sm`),
+      `offline_banner.cpp:38` (`"label"`→`micro`). Usar niveles validos.
+- [x] Añadidos niveles oficiales `body_sm` (13px) y `caption_sm` (11px). Migrados ~44 usos de
+      `getFont("body",13)`→`("body_sm")` y ~14 usos de `getFont("caption",11)`→`("caption_sm")`.
+      Eliminados overrides redundantes `getFont("heading_sm",16)`→`getFont("heading_sm")`.
 
 ### BF4.6 Eliminar colores hex hardcodeados — MEDIO
 
@@ -386,12 +385,14 @@ Clases redundantes: `PlaylistTrackRow` (`playlist_detail_view.cpp:27`, 48px),
 
 - [ ] Añadir un token `text_on_accent` (= blanco) y reemplazar los `#FFFFFF`/`color: white` repetidos
       (`player_bar.cpp:114,309`, `now_playing_view.cpp:163,466`, `library_view.cpp:255,403,452`, ...).
-- [ ] Mover la paleta de acentos hardcodeada de `settings_view.cpp:169`
-      (`{"#7C4DFF","#A78BFA","#22D3EE","#F472B6","#34D399"}`) al design system.
-- [ ] Sustituir los `QColor(...)` de sombras/overlays por `ElevationTokens` (definido en
-      `design_tokens.h:25`, hoy sin uso).
-- [ ] Revisar colores de marca sueltos: `main_window.cpp:195-199`, `tray_controller.cpp:15`,
-      `nebula_bg.cpp:27-30`, `vinyl_disc.cpp` (uno duplica `bg_base` a mano).
+- [x] Mover la paleta de acentos hardcodeada de `settings_view.cpp:169`
+      (`{"#7C4DFF","#A78BFA","#22D3EE","#F472B6","#34D399"}`) al design system
+      (`DesignTokens::accentPalette()`).
+- [x] Sustituir los `QColor(...)` de sombras/overlays por `ElevationTokens` (definido en
+      `design_tokens.h:25`, hoy sin uso). Aplicado a `update_dialog.cpp` y `sudo_dialog.cpp`.
+- [x] Revisar colores de marca sueltos: `main_window.cpp:195-199` (ya limpio),
+      `tray_controller.cpp:15` (ya usa token), `nebula_bg.cpp:27-30` (colores artisticos validos),
+      `vinyl_disc.cpp` (`QColor("#07070F")` → `c.bg_base`).
 
 ### BF4.7 Estados de carga y vacio consistentes — BAJO
 

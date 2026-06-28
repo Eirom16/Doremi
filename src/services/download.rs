@@ -601,17 +601,15 @@ impl DownloadManager {
 
         // BF1.3: Drain stderr in a concurrent task so that the pipe buffer cannot fill
         // up and block the yt-dlp process while we are waiting on stdout.
-        let stderr_handle = if let Some(stderr) = child.stderr.take() {
-            Some(tokio::spawn(async move {
+        let stderr_handle = child.stderr.take().map(|stderr| {
+            tokio::spawn(async move {
                 use tokio::io::AsyncReadExt;
                 let mut buf = String::new();
                 let mut reader = tokio::io::BufReader::new(stderr);
                 let _ = reader.read_to_string(&mut buf).await;
                 buf
-            }))
-        } else {
-            None
-        };
+            })
+        });
 
         let output = child
             .wait()

@@ -1,0 +1,12 @@
+[mcp_servers.rust-analyzer]
+command = "rust-analyzer-mcp"
+
+[mcp_servers.clangd]
+command = "/home/eirom/.local/bin/clangd-mcp-server"
+
+# Nota: Codex solo soporta MCP STDIO local.
+# Context7 y qt-docs son remotos (HTTP) y no funcionan en Codex.
+# Para activar SQLite, descomenta y configura DOREMI_DB_PATH:
+# [mcp_servers.sqlite]
+# command = "npx"
+# args = ["-y", "@modelcontextprotocol/server-sqlite", "--db-path", "{env:DOREMI_DB_PATH}"]

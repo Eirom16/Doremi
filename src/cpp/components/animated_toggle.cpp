@@ -46,6 +46,7 @@ void AnimatedToggle::nextCheckState() {
 }
 
 void AnimatedToggle::paintEvent(QPaintEvent *) {
+    const auto &c = DesignTokens::current();
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing);
     
@@ -71,6 +72,6 @@ void AnimatedToggle::paintEvent(QPaintEvent *) {
     painter.drawEllipse(QRectF(thumbX, thumbY + 1.0, thumbDiam, thumbDiam));
     
     // Draw thumb
-    painter.setBrush(QColor("#FFFFFF"));
+    painter.setBrush(c.text_on_accent);
     painter.drawEllipse(QRectF(thumbX, thumbY, thumbDiam, thumbDiam));
 }

@@ -4,11 +4,16 @@
     "anthropic": {
       "options": {
         "baseURL": "https://cc.freemodel.dev",
-        "apiKey": "fe_oa_7ad709a716b35f73002688054a48a0d233294c3ea28975db"
+        "apiKey": "{env:ANTHROPIC_API_KEY}"
       }
     }
   },
   "model": "anthropic/claude-sonnet-4-20250514",
+  "lsp": true,
+  "instructions": [
+    "AGENTS.md",
+    "planes/implementation_plan.md"
+  ],
   "mcp": {
     "rust-analyzer": {
       "type": "local",
@@ -24,6 +29,41 @@
       "type": "remote",
       "url": "https://qt-docs-mcp.qt.io/mcp",
       "enabled": true
+    },
+    "context7": {
+      "type": "remote",
+      "url": "https://mcp.context7.com/mcp",
+      "enabled": true,
+      "headers": {
+        "Authorization": "Bearer {env:CONTEXT7_API_KEY}"
+      }
+    },
+    "sqlite": {
+      "type": "local",
+      "command": ["npx", "-y", "@modelcontextprotocol/server-sqlite", "--db-path", "{env:DOREMI_DB_PATH}"],
+      "enabled": false
+    }
+  },
+  "command": {
+    "build": {
+      "template": "Ejecuta `cargo build --release 2>&1` en Doremi/. Si hay errores, léelos y sugiere correcciones.",
+      "description": "Build Doremi release"
+    },
+    "check": {
+      "template": "Ejecuta `cargo check --all-targets 2>&1` en Doremi/. Reporta errores de compilación.",
+      "description": "Check compilation"
+    },
+    "test": {
+      "template": "Ejecuta `cargo test 2>&1` en Doremi/. Muestra resumen de tests pasados/fallidos.",
+      "description": "Run Rust tests"
+    },
+    "lint": {
+      "template": "Ejecuta `cargo clippy --all-targets 2>&1` en Doremi/. Revisa warnings y errores.",
+      "description": "Run Clippy lints"
+    },
+    "bridge": {
+      "template": "Lista las funciones del bridge Rust/C++ en src/bridge.rs. Muestra un resumen de los contratos actuales mayor={CONTRACT_MAJOR} minor={CONTRACT_MINOR}.",
+      "description": "Show bridge contract status"
     }
   }
 }

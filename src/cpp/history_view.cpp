@@ -5,207 +5,11 @@
 #include "components/artwork_loader.h"
 #include <QHBoxLayout>
 #include <QMouseEvent>
-#include <QPainter>
-#include <QPainterPath>
 #include <QDateTime>
 #include <QTimeZone>
 #include <QPushButton>
 #include <QMessageBox>
-#include <QMenu>
-#include <QContextMenuEvent>
-#include <QPointer>
 #include "doremi/src/bridge.rs.h"
-
-HistoryRow::HistoryRow(const Track &track,
-                       const std::string &played_at,
-                       const std::string &feedback_token,
-                       QWidget *parent)
-    : QWidget(parent), track_(track), title_(QString::fromStdString(static_cast<std::string>(track.title))), artist_(QString::fromStdString(static_cast<std::string>(track.artist))), feedback_token_(feedback_token)
-{
-    const auto &c = DesignTokens::current();
-    setFixedHeight(64);
-    setCursor(Qt::PointingHandCursor);
-
-    auto *layout = new QHBoxLayout(this);
-    layout->setContentsMargins(16, 8, 16, 8);
-    layout->setSpacing(14);
-
-    auto *thumb_lbl = new QLabel(this);
-    thumb_lbl->setObjectName("thumbLabel");
-    thumb_lbl->setFixedSize(48, 48);
-    thumb_lbl->setStyleSheet(QString("background-color: %1; border-radius: 6px;")
-        .arg(c.bg_elevated.name()));
-
-    if (!track.thumbnail.empty()) {
-        QPointer<QLabel> label_ptr(thumb_lbl);
-        ArtworkLoader::load(QString::fromStdString(static_cast<std::string>(track.thumbnail)), QSize(48, 48), [label_ptr](const QPixmap &pixmap) {
-            if (!label_ptr) return;
-            QPixmap dest(pixmap.size());
-            dest.fill(Qt::transparent);
-            QPainter painter(&dest);
-            painter.setRenderHint(QPainter::Antialiasing);
-            QPainterPath path;
-            path.addRoundedRect(pixmap.rect(), 6, 6);
-            painter.setClipPath(path);
-            painter.drawPixmap(0, 0, pixmap);
-            label_ptr->setPixmap(dest.scaled(48, 48, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation));
-        });
-    } else {
-        QPixmap default_art = IconProvider::getIcon("music_note", c.text_secondary, 24).pixmap(48, 48);
-        thumb_lbl->setPixmap(default_art);
-        thumb_lbl->setAlignment(Qt::AlignCenter);
-    }
-    layout->addWidget(thumb_lbl);
-
-    auto *text_container = new QWidget(this);
-    auto *text_layout = new QVBoxLayout(text_container);
-    text_layout->setContentsMargins(0, 0, 0, 0);
-    text_layout->setSpacing(2);
-
-    auto *title_lbl = new QLabel(title_, this);
-    title_lbl->setObjectName("titleLabel");
-    title_lbl->setFont(DesignTokens::getFont("body", 13));
-    title_lbl->setStyleSheet(QString("color: %1; font-weight: 600;").arg(c.text_primary.name()));
-    title_lbl->setMaximumWidth(400);
-
-    auto *artist_lbl = new QLabel(artist_, this);
-    artist_lbl->setObjectName("artistLabel");
-    artist_lbl->setFont(DesignTokens::getFont("caption", 11));
-    artist_lbl->setStyleSheet(QString("color: %1;").arg(c.text_secondary.name()));
-    artist_lbl->setMaximumWidth(400);
-
-    text_layout->addWidget(title_lbl);
-    text_layout->addWidget(artist_lbl);
-    layout->addWidget(text_container, 2);
-
-    // Duration
-    if (track.duration_ms > 0) {
-        int secs = static_cast<int>(track.duration_ms / 1000);
-        QString dur = QString("%1:%2").arg(secs / 60).arg(secs % 60, 2, 10, QChar('0'));
-        auto *dur_lbl = new QLabel(dur, this);
-        dur_lbl->setObjectName("durationLabel");
-        dur_lbl->setFont(DesignTokens::getFont("caption", 11));
-        dur_lbl->setStyleSheet(QString("color: %1;").arg(c.text_muted.name()));
-        dur_lbl->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        layout->addWidget(dur_lbl);
-    }
-
-    // Time-ago label
-    if (!played_at.empty()) {
-        QDateTime dt = QDateTime::fromString(QString::fromStdString(played_at), Qt::ISODate);
-        if (!dt.isValid()) {
-            dt = QDateTime::fromString(QString::fromStdString(played_at), "yyyy-MM-dd HH:mm:ss");
-        }
-        QString ago;
-        if (dt.isValid()) {
-            qint64 secs_ago = dt.secsTo(QDateTime::currentDateTime());
-            if (secs_ago < 60) ago = tr_q("now");
-            else if (secs_ago < 3600) ago = QString("%1 min").arg(secs_ago / 60);
-            else if (secs_ago < 86400) ago = QString("%1 h").arg(secs_ago / 3600);
-            else ago = QString("%1 d").arg(secs_ago / 86400);
-        }
-        if (!ago.isEmpty()) {
-            auto *ago_lbl = new QLabel(ago, this);
-            ago_lbl->setObjectName("agoLabel");
-            ago_lbl->setFont(DesignTokens::getFont("caption", 10));
-            ago_lbl->setStyleSheet(QString("color: %1;").arg(c.text_muted.name()));
-            ago_lbl->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-            ago_lbl->setFixedWidth(50);
-            layout->addWidget(ago_lbl);
-        }
-    }
-
-    auto *delete_btn = new QPushButton(this);
-    delete_btn->setObjectName("deleteBtn");
-    delete_btn->setFixedSize(28, 28);
-    delete_btn->setCursor(Qt::PointingHandCursor);
-    delete_btn->setFlat(true);
-    delete_btn->setStyleSheet(QString(
-        "QPushButton { background: transparent; border: none; border-radius: 4px; }"
-        "QPushButton:hover { background: rgba(%1, %2, %3, 0.1); }"
-    ).arg(c.text_primary.red()).arg(c.text_primary.green()).arg(c.text_primary.blue()));
-    delete_btn->setIcon(IconProvider::getIcon("delete", c.text_muted, 18));
-    delete_btn->setToolTip(tr_q("remove_from_history"));
-    connect(delete_btn, &QPushButton::clicked, this, [this]() {
-        auto reply = QMessageBox::question(
-            this,
-            tr_q("remove_from_history"),
-            tr_q("confirm_remove_from_history"),
-            QMessageBox::Yes | QMessageBox::No,
-            QMessageBox::No);
-        if (reply == QMessageBox::Yes) {
-            emit delete_requested(static_cast<std::string>(track_.id), feedback_token_);
-        }
-    });
-    layout->addWidget(delete_btn);
-
-    setLayout(layout);
-    setObjectName("HistoryRow");
-    setStyleSheet("QWidget#HistoryRow { background-color: transparent; border-radius: 8px; }");
-}
-
-void HistoryRow::mousePressEvent(QMouseEvent *event) {
-    QWidget::mousePressEvent(event);
-    if (event->button() == Qt::LeftButton) {
-        emit play_requested(track_);
-    }
-}
-
-void HistoryRow::contextMenuEvent(QContextMenuEvent *event) {
-    QMenu menu;
-    QAction *play = menu.addAction(tr_q("play"));
-    
-    bool is_fav = get_track_favorite_state(static_cast<std::string>(track_.id));
-    QAction *fav = menu.addAction(is_fav 
-        ? tr_q("remove_favorite")
-        : tr_q("add_favorite"));
-    
-    QAction *dl = menu.addAction(tr_q("download"));
-    menu.addSeparator();
-    QAction *next = menu.addAction(tr_q("play_next"));
-    QAction *end = menu.addAction(tr_q("add_to_queue"));
-    menu.addSeparator();
-    QAction *remove = menu.addAction(tr_q("remove_from_history"));
-
-    QAction *chosen = menu.exec(event->globalPos());
-    if (chosen == play) {
-        emit play_requested(track_);
-    } else if (chosen == fav) {
-        if (is_fav) {
-            on_remove_favorite(static_cast<std::string>(track_.id));
-        } else {
-            on_add_favorite(track_);
-        }
-    } else if (chosen == dl) {
-        on_download_requested(track_);
-    } else if (chosen == next) {
-        on_add_to_queue_next(track_);
-    } else if (chosen == end) {
-        on_add_to_queue_end(track_);
-    } else if (chosen == remove) {
-        auto reply = QMessageBox::question(
-            this,
-            tr_q("remove_from_history"),
-            tr_q("confirm_remove_from_history"),
-            QMessageBox::Yes | QMessageBox::No,
-            QMessageBox::No);
-        if (reply == QMessageBox::Yes) {
-            emit delete_requested(static_cast<std::string>(track_.id), feedback_token_);
-        }
-    }
-}
-
-void HistoryRow::enterEvent(QEnterEvent *event) {
-    QWidget::enterEvent(event);
-    const auto &c = DesignTokens::current();
-    setStyleSheet(QString("QWidget#HistoryRow { background-color: rgba(%1, %2, %3, 0.06); border-radius: 8px; }")
-        .arg(c.text_primary.red()).arg(c.text_primary.green()).arg(c.text_primary.blue()));
-}
-
-void HistoryRow::leaveEvent(QEvent *event) {
-    QWidget::leaveEvent(event);
-    setStyleSheet("QWidget#HistoryRow { background-color: transparent; border-radius: 8px; }");
-}
 
 HistoryView::HistoryView(QWidget *parent)
     : QWidget(parent)
@@ -221,24 +25,25 @@ void HistoryView::setupLayout() {
     main_vbox->setSpacing(0);
 
     content_layout_ = new QVBoxLayout();
-    content_layout_->setContentsMargins(24, 24, 24, 24);
+    content_layout_->setContentsMargins(DesignTokens::pagePadding());
     content_layout_->setSpacing(4);
     content_layout_->setAlignment(Qt::AlignTop);
 
     auto *header_layout = new QHBoxLayout();
     auto *title = new QLabel(tr_q("history"), this);
     title->setObjectName("historyTitle");
-    title->setFont(DesignTokens::getFont("display", 22));
+    title->setFont(DesignTokens::getFont("heading_lg"));
     title->setStyleSheet(QString("color: %1; font-weight: bold;").arg(c.text_primary.name()));
 
     auto *clear_btn = new QPushButton(tr_q("clear_history"), this);
     clear_btn->setObjectName("historyClearBtn");
     clear_btn->setCursor(Qt::PointingHandCursor);
     clear_btn->setStyleSheet(QString(
-        "QPushButton { background: transparent; border: 1px solid %1; border-radius: 15px; padding: 0 16px; color: %2; font-size: 12px; }"
+        "QPushButton { background: transparent; border: 1px solid %1; border-radius: %6px; padding: 0 16px; color: %2; font-size: 12px; }"
         "QPushButton:hover { background: rgba(%3, %4, %5, 0.08); }")
         .arg(c.border.name()).arg(c.text_secondary.name())
-        .arg(c.text_primary.red()).arg(c.text_primary.green()).arg(c.text_primary.blue()));
+        .arg(c.text_primary.red()).arg(c.text_primary.green()).arg(c.text_primary.blue())
+        .arg(DesignTokens::radius().pill));
     connect(clear_btn, &QPushButton::clicked, this, [this]() {
         auto reply = QMessageBox::question(this, tr_q("clear_history"),
             tr_q("confirm_clear_history"),
@@ -262,7 +67,7 @@ void HistoryView::setupLayout() {
     empty_label_ = new QLabel(tr_q("history_empty_desc"), this);
     empty_label_->setObjectName("historyEmptyLabel");
     empty_label_->setAlignment(Qt::AlignCenter);
-    empty_label_->setFont(DesignTokens::getFont("body", 13));
+    empty_label_->setFont(DesignTokens::getFont("body_sm"));
     empty_label_->setStyleSheet(QString("color: %1; padding: 60px 0;").arg(c.text_muted.name()));
     empty_label_->setWordWrap(true);
     empty_label_->hide();
@@ -315,7 +120,7 @@ void HistoryView::set_history(const std::vector<Track> &tracks,
     if (tracks.empty()) {
         empty_label_ = new QLabel(tr_q("history_empty_desc"), this);
         empty_label_->setAlignment(Qt::AlignCenter);
-        empty_label_->setFont(DesignTokens::getFont("body", 13));
+        empty_label_->setFont(DesignTokens::getFont("body_sm"));
         empty_label_->setStyleSheet(QString("color: %1; padding: 60px 0;").arg(c.text_muted.name()));
         empty_label_->setWordWrap(true);
         content_layout_->addWidget(empty_label_);
@@ -351,32 +156,6 @@ void HistoryView::set_history(const std::vector<Track> &tracks,
     content_layout_->addStretch();
 }
 
-void HistoryRow::update_theme() {
-    const auto &c = DesignTokens::current();
-    if (auto *title_lbl = findChild<QLabel*>("titleLabel")) {
-        title_lbl->setStyleSheet(QString("color: %1; font-weight: bold;").arg(c.text_primary.name()));
-    }
-    if (auto *artist_lbl = findChild<QLabel*>("artistLabel")) {
-        artist_lbl->setStyleSheet(QString("color: %1;").arg(c.text_secondary.name()));
-    }
-    if (auto *dur_lbl = findChild<QLabel*>("durationLabel")) {
-        dur_lbl->setStyleSheet(QString("color: %1;").arg(c.text_muted.name()));
-    }
-    if (auto *ago_lbl = findChild<QLabel*>("agoLabel")) {
-        ago_lbl->setStyleSheet(QString("color: %1;").arg(c.text_muted.name()));
-    }
-    if (auto *delete_btn = findChild<QPushButton*>("deleteBtn")) {
-        delete_btn->setStyleSheet(QString(
-            "QPushButton { background: transparent; border: none; border-radius: 4px; }"
-            "QPushButton:hover { background: rgba(%1, %2, %3, 0.1); }"
-        ).arg(c.text_primary.red()).arg(c.text_primary.green()).arg(c.text_primary.blue()));
-        delete_btn->setIcon(IconProvider::getIcon("delete", c.text_muted, 18));
-    }
-    if (auto *thumb_lbl = findChild<QLabel*>("thumbLabel")) {
-        thumb_lbl->setStyleSheet(QString("background-color: %1; border-radius: 6px;").arg(c.bg_elevated.name()));
-    }
-}
-
 void HistoryView::update_theme() {
     const auto &c = DesignTokens::current();
     if (auto *title = findChild<QLabel*>("historyTitle")) {
@@ -384,10 +163,11 @@ void HistoryView::update_theme() {
     }
     if (auto *clear_btn = findChild<QPushButton*>("historyClearBtn")) {
         clear_btn->setStyleSheet(QString(
-            "QPushButton { background: transparent; border: 1px solid %1; border-radius: 15px; padding: 0 16px; color: %2; font-size: 12px; }"
+            "QPushButton { background: transparent; border: 1px solid %1; border-radius: %6px; padding: 0 16px; color: %2; font-size: 12px; }"
             "QPushButton:hover { background: rgba(%3, %4, %5, 0.08); }")
             .arg(c.border.name()).arg(c.text_secondary.name())
-            .arg(c.text_primary.red()).arg(c.text_primary.green()).arg(c.text_primary.blue()));
+            .arg(c.text_primary.red()).arg(c.text_primary.green()).arg(c.text_primary.blue())
+            .arg(DesignTokens::radius().pill));
     }
     if (auto *subtitle = findChild<QLabel*>("historySubtitle")) {
         subtitle->setStyleSheet(QString("color: %1; margin-bottom: 12px;").arg(c.text_secondary.name()));

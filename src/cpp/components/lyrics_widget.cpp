@@ -108,9 +108,9 @@ LyricsWidget::LyricsWidget(QWidget *parent)
         "QWidget#syncControlBar {"
         "    background-color: %1;"
         "    border: 1px solid %2;"
-        "    border-radius: 20px;"
+        "    border-radius: %3px;"
         "}"
-    ).arg(DesignTokens::rgba(c.bg_elevated)).arg(c.border.name());
+    ).arg(DesignTokens::rgba(c.bg_elevated)).arg(c.border.name()).arg(DesignTokens::radius().xl);
     sync_control_bar_->setStyleSheet(barStyle);
 
     auto *bar_layout = new QHBoxLayout(sync_control_bar_);
@@ -134,7 +134,7 @@ LyricsWidget::LyricsWidget(QWidget *parent)
         "    border: none;"
         "    color: %1;"
         "    padding: 4px;"
-        "    border-radius: 12px;"
+        "    border-radius: %3px;"
         "    min-width: 24px;"
         "    min-height: 24px;"
         "}"

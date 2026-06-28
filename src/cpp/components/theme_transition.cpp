@@ -56,9 +56,9 @@ void ThemeTransitionOverlay::update_styles() {
         "QFrame#transitionCard {"
         "    background-color: %1;"
         "    border: 1.5px solid %2;"
-        "    border-radius: 20px;"
+        "    border-radius: %3px;"
         "}"
-    ).arg(c.bg_surface.name()).arg(QString("rgba(%1, %2, %3, %4)").arg(c.border.red()).arg(c.border.green()).arg(c.border.blue()).arg(c.border.alpha() / 255.0)));
+    ).arg(c.bg_surface.name()).arg(QString("rgba(%1, %2, %3, %4)").arg(c.border.red()).arg(c.border.green()).arg(c.border.blue()).arg(c.border.alpha() / 255.0)).arg(DesignTokens::radius().xl));
     
     status_lbl_->setStyleSheet(QString("color: %1; background: transparent; border: none;").arg(c.text_primary.name()));
     percent_lbl_->setStyleSheet(QString("color: %1; background: transparent; border: none;").arg(c.text_secondary.name()));
@@ -66,14 +66,14 @@ void ThemeTransitionOverlay::update_styles() {
     progress_bar_->setStyleSheet(QString(
         "QProgressBar {"
         "    background-color: %1;"
-        "    border-radius: 3px;"
+        "    border-radius: %3px;"
         "    border: none;"
         "}"
         "QProgressBar::chunk {"
         "    background-color: %2;"
-        "    border-radius: 3px;"
+        "    border-radius: %3px;"
         "}"
-    ).arg(c.bg_elevated.name()).arg(c.accent.name()));
+    ).arg(c.bg_elevated.name(), c.accent.name(), QString::number(DesignTokens::radius().xs)));
 }
 
 void ThemeTransitionOverlay::paintEvent(QPaintEvent *event) {

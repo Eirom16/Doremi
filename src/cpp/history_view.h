@@ -6,33 +6,8 @@
 #include <QLabel>
 #include <vector>
 #include <string>
+#include "components/track_row.h"
 #include "doremi/src/bridge.rs.h"
-
-class HistoryRow : public QWidget {
-    Q_OBJECT
-public:
-    HistoryRow(const Track &track,
-               const std::string &played_at,
-               const std::string &feedback_token,
-               QWidget *parent = nullptr);
-
-    void update_theme();
-signals:
-    void play_requested(Track track);
-    void delete_requested(const std::string &track_id, const std::string &feedback_token);
-
-protected:
-    void mousePressEvent(QMouseEvent *event) override;
-    void contextMenuEvent(QContextMenuEvent *event) override;
-    void enterEvent(QEnterEvent *event) override;
-    void leaveEvent(QEvent *event) override;
-
-private:
-    Track track_;
-    QString title_;
-    QString artist_;
-    std::string feedback_token_;
-};
 
 class HistoryView : public QWidget {
     Q_OBJECT

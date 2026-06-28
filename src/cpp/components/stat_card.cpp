@@ -33,7 +33,7 @@ StatCard::StatCard(const QString &title, const QString &icon_name, QWidget *pare
 
     // Large value label
     value_lbl_ = new QLabel("0", this);
-    value_lbl_->setFont(DesignTokens::getFont("display", 24));
+    value_lbl_->setFont(DesignTokens::getFont("heading_lg"));
     value_lbl_->setStyleSheet(QString("color: %1; font-weight: bold;").arg(c.text_primary.name()));
     card_layout->addWidget(value_lbl_);
 

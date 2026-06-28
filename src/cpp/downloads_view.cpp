@@ -36,11 +36,11 @@ DownloadsView::DownloadsView(QWidget *parent)
     root->setSpacing(0);
 
     list_ = new QVBoxLayout();
-    list_->setContentsMargins(24, 24, 24, 24);
+    list_->setContentsMargins(DesignTokens::pagePadding());
     list_->setSpacing(6);
 
     auto *header = new QLabel(tr_q("downloads"), this);
-    header->setFont(DesignTokens::getFont("display", 24));
+    header->setFont(DesignTokens::getFont("heading_lg"));
     header->setStyleSheet(QString("color: %1; font-weight: bold; background: transparent;").arg(c.text_primary.name()));
     list_->addWidget(header);
 
@@ -75,7 +75,7 @@ DownloadsView::DownloadsView(QWidget *parent)
         btn->setCheckable(true);
         btn->setFixedHeight(43);
         btn->setCursor(Qt::PointingHandCursor);
-        btn->setFont(DesignTokens::getFont("body", 13));
+        btn->setFont(DesignTokens::getFont("body_sm"));
         
         QString btnStyle = QString(
             "QPushButton {\n"
@@ -149,13 +149,14 @@ QWidget *DownloadsView::make_download_row(const std::string &video_id, const std
     QString rowStyle = QString(
         "QWidget#DownloadRow {\n"
         "    background-color: transparent;\n"
-        "    border-radius: 8px;\n"
+        "    border-radius: %5px;\n"
         "}\n"
         "QWidget#DownloadRow:hover {\n"
         "    background-color: %1;\n"
         "}\n"
     )
-    .arg(QString("rgba(%1, %2, %3, %4)").arg(c.accent_dim.red()).arg(c.accent_dim.green()).arg(c.accent_dim.blue()).arg(c.accent_dim.alpha() / 255.0));
+    .arg(QString("rgba(%1, %2, %3, %4)").arg(c.accent_dim.red()).arg(c.accent_dim.green()).arg(c.accent_dim.blue()).arg(c.accent_dim.alpha() / 255.0))
+    .arg(DesignTokens::radius().md);
     row->setStyleSheet(rowStyle);
 
     auto *lay = new QVBoxLayout(row);
@@ -169,7 +170,7 @@ QWidget *DownloadsView::make_download_row(const std::string &video_id, const std
     thumb->setObjectName("downloadRowThumb");
     thumb->setFixedSize(36, 36);
     thumb->setAlignment(Qt::AlignCenter);
-    thumb->setStyleSheet(QString("background: %1; border-radius: 4px;").arg(c.bg_elevated.name()));
+    thumb->setStyleSheet(QString("background: %1; border-radius: %2px;").arg(c.bg_elevated.name()).arg(DesignTokens::radius().sm));
 
     bool thumbLoaded = false;
     if (!thumbnail_path.empty() && QFile::exists(QString::fromStdString(thumbnail_path))) {
@@ -193,7 +194,7 @@ QWidget *DownloadsView::make_download_row(const std::string &video_id, const std
 
     auto *t = new QLabel(QString::fromStdString(title), row);
     t->setObjectName("downloadRowTitle");
-    t->setFont(DesignTokens::getFont("body", 13));
+    t->setFont(DesignTokens::getFont("body_sm"));
     QString titleColor = is_cancelled ? c.text_muted.name() : c.text_primary.name();
     t->setStyleSheet(QString("color: %1; font-weight: bold; background: transparent;").arg(titleColor));
     if (is_cancelled) {
@@ -205,7 +206,7 @@ QWidget *DownloadsView::make_download_row(const std::string &video_id, const std
 
     auto *a = new QLabel(QString::fromStdString(artist), row);
     a->setObjectName("downloadRowArtist");
-    a->setFont(DesignTokens::getFont("caption", 11));
+    a->setFont(DesignTokens::getFont("caption_sm"));
     a->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
     vl->addWidget(a);
 
@@ -238,9 +239,9 @@ QWidget *DownloadsView::make_download_row(const std::string &video_id, const std
         cancel_btn->setIcon(IconProvider::getIcon("close", c.text_secondary, 14));
         cancel_btn->setIconSize(QSize(14, 14));
         cancel_btn->setStyleSheet(QString(
-            "QPushButton { background: transparent; border: none; border-radius: 14px; }"
+            "QPushButton { background: transparent; border: none; border-radius: %2px; }"
             "QPushButton:hover { background: %1; }"
-        ).arg(c.bg_elevated.name()));
+        ).arg(c.bg_elevated.name()).arg(DesignTokens::radius().pill));
         std::string vid = video_id;
         connect(cancel_btn, &QPushButton::clicked, this, [vid]() {
             on_download_cancel_requested(vid);
@@ -251,12 +252,12 @@ QWidget *DownloadsView::make_download_row(const std::string &video_id, const std
         play_btn->setObjectName("downloadRowPlay");
         play_btn->setFixedSize(28, 28);
         play_btn->setCursor(Qt::PointingHandCursor);
-        play_btn->setIcon(IconProvider::getIcon("play_arrow", QColor("#FFFFFF"), 14));
+        play_btn->setIcon(IconProvider::getIcon("play_arrow", c.text_on_accent, 14));
         play_btn->setIconSize(QSize(14, 14));
         play_btn->setStyleSheet(QString(
-            "QPushButton { background-color: %1; border: none; border-radius: 14px; }"
+            "QPushButton { background-color: %1; border: none; border-radius: %3px; }"
             "QPushButton:hover { background-color: %2; }"
-        ).arg(c.accent.name()).arg(c.accent_bright.name()));
+        ).arg(c.accent.name()).arg(c.accent_bright.name()).arg(DesignTokens::radius().pill));
         Track track_data;
         track_data.id = rust::String(video_id);
         track_data.title = rust::String(title);
@@ -274,9 +275,9 @@ QWidget *DownloadsView::make_download_row(const std::string &video_id, const std
         retry_btn->setIcon(IconProvider::getIcon("refresh", c.accent, 14));
         retry_btn->setIconSize(QSize(14, 14));
         retry_btn->setStyleSheet(QString(
-            "QPushButton { background: transparent; border: none; border-radius: 14px; }"
+            "QPushButton { background: transparent; border: none; border-radius: %2px; }"
             "QPushButton:hover { background: %1; }"
-        ).arg(c.bg_elevated.name()));
+        ).arg(c.bg_elevated.name()).arg(DesignTokens::radius().pill));
         Track track_data;
         track_data.id = rust::String(video_id);
         track_data.title = rust::String(title);
@@ -297,9 +298,9 @@ QWidget *DownloadsView::make_download_row(const std::string &video_id, const std
         progress_bar->setRange(0, 100);
         progress_bar->setValue(static_cast<int>(progress));
         progress_bar->setStyleSheet(QString(
-            "QProgressBar { background: %1; border: none; border-radius: 2px; }"
-            "QProgressBar::chunk { background: %2; border-radius: 2px; }"
-        ).arg(c.bg_elevated.name()).arg(c.accent.name()));
+            "QProgressBar { background: %1; border: none; border-radius: %3px; }"
+            "QProgressBar::chunk { background: %2; border-radius: %3px; }"
+        ).arg(c.bg_elevated.name(), c.accent.name(), QString::number(DesignTokens::radius().xs)));
         lay->addWidget(progress_bar);
     }
 
@@ -445,7 +446,7 @@ QWidget *DownloadsView::make_batch_row(const std::string &/*parent_id*/, const s
 
     auto *title_lbl = new QLabel(QString::fromStdString(parent_title), row);
     title_lbl->setObjectName("batch_title");
-    title_lbl->setFont(DesignTokens::getFont("body", 13));
+    title_lbl->setFont(DesignTokens::getFont("body_sm"));
     title_lbl->setStyleSheet(QString("color: %1; font-weight: bold; background: transparent;").arg(c.text_primary.name()));
     vl->addWidget(title_lbl);
 
@@ -453,7 +454,7 @@ QWidget *DownloadsView::make_batch_row(const std::string &/*parent_id*/, const s
         QString("Descargando lote… %1/%2 (%3%)")
             .arg(completed).arg(total).arg(static_cast<int>(percent)), row);
     count_lbl->setObjectName("batch_count");
-    count_lbl->setFont(DesignTokens::getFont("caption", 11));
+    count_lbl->setFont(DesignTokens::getFont("caption_sm"));
     count_lbl->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
     vl->addWidget(count_lbl);
 
@@ -467,10 +468,10 @@ QWidget *DownloadsView::make_batch_row(const std::string &/*parent_id*/, const s
     progress_bar->setRange(0, 100);
     progress_bar->setValue(static_cast<int>(percent));
     progress_bar->setStyleSheet(QString(
-        "QProgressBar { background: %1; border: none; border-radius: 3px; }"
+        "QProgressBar { background: %1; border: none; border-radius: %4px; }"
         "QProgressBar::chunk { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, "
-        "    stop:0 %2, stop:1 %3); border-radius: 3px; }"
-    ).arg(c.bg_overlay.name()).arg(c.accent.name()).arg(c.accent_bright.name()));
+        "    stop:0 %2, stop:1 %3); border-radius: %4px; }"
+    ).arg(c.bg_overlay.name(), c.accent.name(), c.accent_bright.name(), QString::number(DesignTokens::radius().xs)));
     lay->addWidget(progress_bar);
 
     return row;
@@ -701,23 +702,24 @@ void DownloadsView::update_theme() {
     }
     for (auto *pb : findChildren<QProgressBar*>("batch_progress")) {
         pb->setStyleSheet(QString(
-            "QProgressBar { background: %1; border: none; border-radius: 3px; }"
+            "QProgressBar { background: %1; border: none; border-radius: %4px; }"
             "QProgressBar::chunk { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, "
-            "    stop:0 %2, stop:1 %3); border-radius: 3px; }"
-        ).arg(c.bg_overlay.name()).arg(c.accent.name()).arg(c.accent_bright.name()));
+            "    stop:0 %2, stop:1 %3); border-radius: %4px; }"
+        ).arg(c.bg_overlay.name(), c.accent.name(), c.accent_bright.name(), QString::number(DesignTokens::radius().xs)));
     }
     // Update individual download rows
     for (auto *row : findChildren<QWidget*>("DownloadRow")) {
         QString rowStyle = QString(
             "QWidget#DownloadRow {\n"
             "    background-color: transparent;\n"
-            "    border-radius: 8px;\n"
+            "    border-radius: %5px;\n"
             "}\n"
             "QWidget#DownloadRow:hover {\n"
             "    background-color: %1;\n"
             "}\n"
         )
-        .arg(QString("rgba(%1, %2, %3, %4)").arg(c.accent_dim.red()).arg(c.accent_dim.green()).arg(c.accent_dim.blue()).arg(c.accent_dim.alpha() / 255.0));
+        .arg(QString("rgba(%1, %2, %3, %4)").arg(c.accent_dim.red()).arg(c.accent_dim.green()).arg(c.accent_dim.blue()).arg(c.accent_dim.alpha() / 255.0))
+        .arg(DesignTokens::radius().md);
         row->setStyleSheet(rowStyle);
     }
     for (auto *lbl : findChildren<QLabel*>("downloadRowTitle")) {
@@ -738,28 +740,28 @@ void DownloadsView::update_theme() {
     }
     for (auto *pb : findChildren<QProgressBar*>("progress_bar")) {
         pb->setStyleSheet(QString(
-            "QProgressBar { background: %1; border: none; border-radius: 2px; }"
-            "QProgressBar::chunk { background: %2; border-radius: 2px; }"
-        ).arg(c.bg_elevated.name()).arg(c.accent.name()));
+            "QProgressBar { background: %1; border: none; border-radius: %3px; }"
+            "QProgressBar::chunk { background: %2; border-radius: %3px; }"
+        ).arg(c.bg_elevated.name(), c.accent.name(), QString::number(DesignTokens::radius().xs)));
     }
     for (auto *btn : findChildren<QPushButton*>("downloadRowCancel")) {
         btn->setStyleSheet(QString(
-            "QPushButton { background: transparent; border: none; border-radius: 14px; }"
+            "QPushButton { background: transparent; border: none; border-radius: %2px; }"
             "QPushButton:hover { background: %1; }"
-        ).arg(c.bg_elevated.name()));
+        ).arg(c.bg_elevated.name()).arg(DesignTokens::radius().pill));
         btn->setIcon(IconProvider::getIcon("close", c.text_secondary, 14));
     }
     for (auto *btn : findChildren<QPushButton*>("downloadRowPlay")) {
         btn->setStyleSheet(QString(
-            "QPushButton { background-color: %1; border: none; border-radius: 14px; }"
+            "QPushButton { background-color: %1; border: none; border-radius: %3px; }"
             "QPushButton:hover { background-color: %2; }"
-        ).arg(c.accent.name()).arg(c.accent_bright.name()));
+        ).arg(c.accent.name()).arg(c.accent_bright.name()).arg(DesignTokens::radius().pill));
     }
     for (auto *btn : findChildren<QPushButton*>("downloadRowRetry")) {
         btn->setStyleSheet(QString(
-            "QPushButton { background: transparent; border: none; border-radius: 14px; }"
+            "QPushButton { background: transparent; border: none; border-radius: %2px; }"
             "QPushButton:hover { background: %1; }"
-        ).arg(c.bg_elevated.name()));
+        ).arg(c.bg_elevated.name()).arg(DesignTokens::radius().pill));
         btn->setIcon(IconProvider::getIcon("refresh", c.accent, 14));
     }
 }

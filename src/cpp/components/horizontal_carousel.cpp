@@ -55,7 +55,7 @@ void HorizontalCarousel::init() {
         "QPushButton {\n"
         "    background-color: %1;\n"
         "    border: 1px solid %2;\n"
-        "    border-radius: 18px;\n"
+        "    border-radius: %5px;\n"
         "}\n"
         "QPushButton:hover {\n"
         "    background-color: %3;\n"
@@ -65,7 +65,8 @@ void HorizontalCarousel::init() {
     .arg(c.bg_surface.name())
     .arg(c.border.name())
     .arg(c.accent.name())
-    .arg(c.accent_bright.name());
+    .arg(c.accent_bright.name())
+    .arg(DesignTokens::radius().xl);
 
     m_leftBtn->setStyleSheet(btnStyle);
     m_rightBtn->setStyleSheet(btnStyle);

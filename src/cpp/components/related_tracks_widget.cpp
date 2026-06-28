@@ -35,8 +35,8 @@ RelatedTrackRow::RelatedTrackRow(const Track &track, QWidget *parent)
 
     auto *thumb_label = new QLabel(this);
     thumb_label->setFixedSize(38, 38);
-    thumb_label->setStyleSheet(QString("background-color: %1; border-radius: 4px;")
-        .arg(c.bg_elevated.name()));
+    thumb_label->setStyleSheet(QString("background-color: %1; border-radius: %2px;")
+        .arg(c.bg_elevated.name()).arg(DesignTokens::radius().sm));
 
     if (!track.thumbnail.empty()) {
         QPointer<QLabel> label_ptr(thumb_label);
@@ -56,11 +56,11 @@ RelatedTrackRow::RelatedTrackRow(const Track &track, QWidget *parent)
     text_layout->setSpacing(2);
 
     auto *title_lbl = new QLabel(QString::fromStdString(static_cast<std::string>(track.title)), this);
-    title_lbl->setFont(DesignTokens::getFont("body", 13));
+    title_lbl->setFont(DesignTokens::getFont("body_sm"));
     title_lbl->setStyleSheet(QString("color: %1;").arg(c.text_primary.name()));
 
     auto *artist_lbl = new QLabel(QString::fromStdString(static_cast<std::string>(track.artist)), this);
-    artist_lbl->setFont(DesignTokens::getFont("caption", 11));
+    artist_lbl->setFont(DesignTokens::getFont("caption_sm"));
     artist_lbl->setStyleSheet(QString("color: %1;").arg(c.text_secondary.name()));
 
     text_layout->addWidget(title_lbl);
@@ -71,7 +71,7 @@ RelatedTrackRow::RelatedTrackRow(const Track &track, QWidget *parent)
     row_layout->addWidget(text_container, 1);
 
     setLayout(row_layout);
-    setStyleSheet("QWidget { background: transparent; border-radius: 6px; }");
+    setStyleSheet(QString("QWidget { background: transparent; border-radius: %1px; }").arg(DesignTokens::radius().sm));
 }
 
 void RelatedTrackRow::mousePressEvent(QMouseEvent *event) {
@@ -107,12 +107,12 @@ void RelatedTrackRow::enterEvent(QEnterEvent *event) {
     const auto &c = DesignTokens::current();
     QString bg = QString("rgba(%1, %2, %3, 0.08)")
         .arg(c.text_primary.red()).arg(c.text_primary.green()).arg(c.text_primary.blue());
-    setStyleSheet(QString("QWidget { background-color: %1; border-radius: 6px; }").arg(bg));
+    setStyleSheet(QString("QWidget { background-color: %1; border-radius: %2px; }").arg(bg).arg(DesignTokens::radius().sm));
 }
 
 void RelatedTrackRow::leaveEvent(QEvent *event) {
     QWidget::leaveEvent(event);
-    setStyleSheet("QWidget { background: transparent; border-radius: 6px; }");
+    setStyleSheet(QString("QWidget { background: transparent; border-radius: %1px; }").arg(DesignTokens::radius().sm));
 }
 
 RelatedTracksWidget::RelatedTracksWidget(QWidget *parent)

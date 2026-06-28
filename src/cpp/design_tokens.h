@@ -2,6 +2,7 @@
 
 #include <QColor>
 #include <QFont>
+#include <QMargins>
 #include <QString>
 #include <QWidget>
 
@@ -15,6 +16,7 @@ struct SpacingTokens {
 };
 
 struct RadiusTokens {
+    int xs;
     int sm;
     int md;
     int lg;
@@ -48,6 +50,7 @@ struct ColorScheme {
     QColor accent_dim;
     QColor accent_glow;
     QColor text_primary;
+    QColor text_on_accent;
     QColor text_secondary;
     QColor text_muted;
     QColor border;
@@ -82,6 +85,9 @@ public:
     static QString rgba(const QColor &color);
     static bool reducedMotion();
     static int duration(int milliseconds);
+    static const QStringList &accentPalette();
+    static QMargins pagePadding();
+    static QMargins pagePaddingNarrow();
     
     // QSS generators
     static QString getGlobalStyleSheet();
@@ -102,6 +108,8 @@ public:
     // Font registration and helpers
     static void loadFonts();
     static QFont getFont(const QString &level, int size = -1);
+    // Valid levels: display(32), heading_lg(22), heading_sm(16),
+    //   body(14), body_sm(13), caption(12), caption_sm(11), micro(10), icon
 };
 
 // Translation helper to avoid double conversion: rust::String -> std::string -> QString

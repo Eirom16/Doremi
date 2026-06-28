@@ -57,7 +57,7 @@ WelcomeView::WelcomeView(QWidget *parent)
     }
 
     title_ = new QLabel("Doremi", this);
-    title_->setFont(DesignTokens::getFont("display", 32));
+    title_->setFont(DesignTokens::getFont("heading_lg"));
     title_->setStyleSheet(QString("color: %1; background: transparent; font-weight: bold;").arg(c.accent.name()));
     title_->setAlignment(Qt::AlignCenter);
     layout->addWidget(title_);
@@ -82,13 +82,13 @@ WelcomeView::WelcomeView(QWidget *parent)
     card_layout->setAlignment(Qt::AlignCenter);
 
     welcome_text_ = new QLabel(tr_q("welcome_title"), card_);
-    welcome_text_->setFont(DesignTokens::getFont("display", 20));
+    welcome_text_->setFont(DesignTokens::getFont("heading_lg", 20));
     welcome_text_->setStyleSheet(QString("color: %1; background: transparent; font-weight: bold;").arg(c.text_primary.name()));
     welcome_text_->setAlignment(Qt::AlignCenter);
     card_layout->addWidget(welcome_text_);
 
     desc_text_ = new QLabel(tr_q("welcome_desc"), card_);
-    desc_text_->setFont(DesignTokens::getFont("body", 13));
+    desc_text_->setFont(DesignTokens::getFont("body_sm"));
     desc_text_->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
     desc_text_->setAlignment(Qt::AlignCenter);
     card_layout->addWidget(desc_text_);
@@ -100,7 +100,7 @@ WelcomeView::WelcomeView(QWidget *parent)
     card_layout->addWidget(login_btn_);
 
     status_label_ = new QLabel("", card_);
-    status_label_->setFont(DesignTokens::getFont("body", 13));
+    status_label_->setFont(DesignTokens::getFont("body_sm"));
     status_label_->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
     status_label_->setAlignment(Qt::AlignCenter);
     status_label_->setVisible(false);

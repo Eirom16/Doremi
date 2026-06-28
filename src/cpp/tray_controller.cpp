@@ -1,4 +1,5 @@
 #include "tray_controller.h"
+#include "design_tokens.h"
 #include "main_window.h"
 #include <QMenu>
 #include <QApplication>
@@ -12,7 +13,7 @@ TrayController::TrayController(DoremiMainWindow *window)
     px.fill(Qt::transparent);
     QPainter pt(&px);
     pt.setRenderHint(QPainter::Antialiasing);
-    pt.setBrush(QColor("#7C7CF0"));
+    pt.setBrush(DesignTokens::current().accent);
     pt.setPen(Qt::NoPen);
     pt.drawEllipse(1, 1, 14, 14);
     pt.end();

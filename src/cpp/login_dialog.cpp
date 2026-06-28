@@ -48,7 +48,7 @@ WebLoginDialog::WebLoginDialog(QWidget *parent)
         "    background-color: transparent;"
         "    color: %1;"
         "    border: none;"
-        "    border-radius: 12px;"
+        "    border-radius: %3px;"
         "    font-size: 14px;"
         "    font-weight: bold;"
         "}"
@@ -56,7 +56,7 @@ WebLoginDialog::WebLoginDialog(QWidget *parent)
         "    color: %2;"
         "    background-color: rgba(239, 68, 68, 0.1);"
         "}"
-    ).arg(c.text_secondary.name()).arg(c.error.name()));
+    ).arg(c.text_secondary.name()).arg(c.error.name()).arg(DesignTokens::radius().lg));
 
     connect(btn_close_, &QPushButton::clicked, this, &QDialog::reject);
     header_layout->addWidget(btn_close_);

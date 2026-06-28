@@ -78,6 +78,8 @@ void VinylDisc::paintEvent(QPaintEvent *) {
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing);
 
+    const auto &c = DesignTokens::current();
+
     int w = width();
     int h = height();
     int size = std::min(w, h);
@@ -141,7 +143,7 @@ void VinylDisc::paintEvent(QPaintEvent *) {
 
     // 6. Draw spindle center hole (with metallic ring)
     int spindle_d = 12;
-    painter.setBrush(QColor("#07070F")); // base background color
+    painter.setBrush(c.bg_base); // base background color
     painter.setPen(QPen(QColor("#8A8A8F"), 1.5));
     painter.drawEllipse(center, spindle_d / 2, spindle_d / 2);
 }

@@ -10,7 +10,7 @@ static QString searchBarInputStyle() {
         "QLineEdit {\n"
         "    background-color: %1;\n"
         "    border: 1px solid %2;\n"
-        "    border-radius: 8px;\n"
+        "    border-radius: %8px;\n"
         "    padding: 8px 12px 8px 36px;\n"
         "    color: %3;\n"
         "    selection-background-color: %4;\n"
@@ -29,7 +29,8 @@ static QString searchBarInputStyle() {
     .arg(DesignTokens::rgba(c.accent_dim))
     .arg(c.text_secondary.name())
     .arg(c.accent.name())
-    .arg(c.bg_elevated.name());
+    .arg(c.bg_elevated.name())
+    .arg(DesignTokens::radius().md);
 }
 
 TitleBar::TitleBar(QWidget *parent)
@@ -47,7 +48,7 @@ TitleBar::TitleBar(QWidget *parent)
     logo_layout->setSpacing(6);
     logo_icon_ = IconProvider::createIconLabel("music_note", 18, c.accent, true, logo_zone_);
     logo_label_ = new QLabel("Doremi", logo_zone_);
-    logo_label_->setFont(DesignTokens::getFont("heading_sm", 16));
+    logo_label_->setFont(DesignTokens::getFont("heading_sm"));
     logo_label_->setStyleSheet(QString("font-weight: bold; color: %1; background: transparent;").arg(c.accent.name()));
     logo_layout->addWidget(logo_icon_);
     logo_layout->addWidget(logo_label_);
@@ -61,7 +62,7 @@ TitleBar::TitleBar(QWidget *parent)
     search_input_->setMaximumWidth(800);
     search_input_->setFixedHeight(40);
     search_input_->setPlaceholderText("Buscar canciones, artistas, álbumes...");
-    search_input_->setFont(DesignTokens::getFont("body", 13));
+    search_input_->setFont(DesignTokens::getFont("body_sm"));
     search_input_->setFocusPolicy(Qt::StrongFocus);
     DesignTokens::applyAccessible(
         search_input_,

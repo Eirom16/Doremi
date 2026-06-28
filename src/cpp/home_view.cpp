@@ -7,7 +7,7 @@
 #include "components/album_card.h"
 #include "components/artist_card.h"
 #include "components/horizontal_carousel.h"
-#include "components/skeleton_loader.h"
+#include "components/loading_state.h"
 
 HomeView::HomeView(QWidget *parent)
     : QWidget(parent)
@@ -16,12 +16,12 @@ HomeView::HomeView(QWidget *parent)
 
     setStyleSheet("background: transparent;");
     content_ = new QVBoxLayout(this);
-    content_->setContentsMargins(24, 24, 24, 24);
+    content_->setContentsMargins(DesignTokens::pagePadding());
     content_->setSpacing(28);
 
     welcome_label_ = new QLabel("¡Bienvenido a Doremi!", this);
     welcome_label_->setObjectName("homeWelcome");
-    welcome_label_->setFont(DesignTokens::getFont("display", 24));
+    welcome_label_->setFont(DesignTokens::getFont("heading_lg"));
     welcome_label_->setStyleSheet(QString("font-weight: bold; color: %1; background: transparent;")
         .arg(c.text_primary.name()));
     content_->addWidget(welcome_label_);
@@ -50,7 +50,7 @@ QWidget *HomeView::add_section_widget(const std::string &title,
 
     auto *header = new QLabel(QString::fromStdString(title), section);
     header->setObjectName("sectionHeader");
-    header->setFont(DesignTokens::getFont("heading_sm", 16));
+    header->setFont(DesignTokens::getFont("heading_sm"));
     header->setStyleSheet(QString("color: %1; font-weight: bold; background: transparent;")
         .arg(c.text_primary.name()));
     lay->addWidget(header);
@@ -153,23 +153,14 @@ void HomeView::set_state(const std::string &state, const std::string &message) {
     layout->setSpacing(12);
 
     if (state == "loading") {
-        for (int row = 0; row < 2; ++row) {
-            auto *line = new QHBoxLayout();
-            line->setSpacing(12);
-            for (int column = 0; column < 5; ++column) {
-                auto *skeleton = new SkeletonLoader(state_widget_);
-                skeleton->setFixedSize(160, 210);
-                line->addWidget(skeleton);
-            }
-            line->addStretch();
-            layout->addLayout(line);
-        }
+        auto *loading = new LoadingState(LoadingState::GridCards, state_widget_);
+        layout->addWidget(loading);
     } else {
         auto *label = new QLabel(QString::fromStdString(message), state_widget_);
         label->setObjectName("stateMessage");
         label->setAlignment(Qt::AlignCenter);
         label->setWordWrap(true);
-        label->setFont(DesignTokens::getFont("body", 13));
+        label->setFont(DesignTokens::getFont("body_sm"));
         label->setStyleSheet(QString("color: %1; padding: 36px;").arg(c.text_muted.name()));
         layout->addWidget(label);
         if (state == "error") {
@@ -177,9 +168,9 @@ void HomeView::set_state(const std::string &state, const std::string &message) {
             retry->setCursor(Qt::PointingHandCursor);
             retry->setFixedWidth(140);
             retry->setStyleSheet(QString(
-                "QPushButton { background: %1; color: white; border: none; border-radius: 8px; padding: 10px; }"
+                "QPushButton { background: %1; color: white; border: none; border-radius: %3px; padding: 10px; }"
                 "QPushButton:hover { background: %2; }")
-                .arg(c.accent.name(), c.accent_bright.name()));
+                .arg(c.accent.name(), c.accent_bright.name(), QString::number(DesignTokens::radius().md)));
             connect(retry, &QPushButton::clicked, this, &HomeView::retry_requested);
             layout->addWidget(retry, 0, Qt::AlignHCenter);
         }

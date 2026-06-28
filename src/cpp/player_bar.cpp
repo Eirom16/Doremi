@@ -41,15 +41,15 @@ PlayerBar::PlayerBar(QWidget *parent)
     artwork_label_ = new QLabel(left_container_);
     artwork_label_->setFixedSize(44, 44);
     artwork_label_->setAlignment(Qt::AlignCenter);
-    artwork_label_->setStyleSheet(QString("background-color: %1; border-radius: 6px;")
-        .arg(c.bg_elevated.name()));
+    artwork_label_->setStyleSheet(QString("background-color: %1; border-radius: %2px;")
+        .arg(c.bg_elevated.name()).arg(DesignTokens::radius().sm));
     
     QPixmap default_art = IconProvider::getIcon("music_note", c.text_secondary, 22).pixmap(44, 44);
     artwork_label_->setPixmap(getRoundedPixmap(default_art, 6));
     artwork_label_->setAccessibleName(tr_q("artwork_accessible_name"));
 
     track_label_ = new QLabel(left_container_);
-    track_label_->setFont(DesignTokens::getFont("body", 13));
+    track_label_->setFont(DesignTokens::getFont("body_sm"));
     track_label_->setText("<b>" + tr_q("no_playback") + "</b><br><font color=\"" + c.text_muted.name() + "\">" + tr_q("no_track_selected") + "</font>");
     track_label_->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     track_label_->setStyleSheet("background: transparent;");
@@ -113,7 +113,7 @@ PlayerBar::PlayerBar(QWidget *parent)
     play_btn_->setFixedSize(40, 40);
     play_btn_->setCursor(Qt::PointingHandCursor);
     play_btn_->setFocusPolicy(Qt::StrongFocus);
-    play_btn_->setIcon(IconProvider::getIcon("play_arrow", QColor("#FFFFFF"), 24));
+    play_btn_->setIcon(IconProvider::getIcon("play_arrow", c.text_on_accent, 24));
     DesignTokens::applyAccessible(
         play_btn_,
         tr_q("play"),
@@ -175,7 +175,7 @@ PlayerBar::PlayerBar(QWidget *parent)
     progress_->setStyleSheet(DesignTokens::sliderStyle(true));
 
     time_label_ = new QLabel("0:00 / 0:00", this);
-    time_label_->setFont(DesignTokens::getFont("caption", 11));
+    time_label_->setFont(DesignTokens::getFont("caption_sm"));
     time_label_->setStyleSheet(QString("color: %1;").arg(c.text_muted.name()));
 
     progress_layout->addWidget(progress_, 1);
@@ -299,9 +299,10 @@ void PlayerBar::set_progress(int32_t pos_ms, int32_t dur_ms) {
 }
 
 void PlayerBar::set_playing(bool playing) {
+    const auto &c = DesignTokens::current();
     play_btn_->setIcon(IconProvider::getIcon(
         playing ? "pause" : "play_arrow",
-        QColor("#FFFFFF"),
+        c.text_on_accent,
         24
     ));
     DesignTokens::applyAccessible(
@@ -390,8 +391,8 @@ void PlayerBar::mousePressEvent(QMouseEvent *event) {
 void PlayerBar::update_theme() {
     const auto &c = DesignTokens::current();
     
-    artwork_label_->setStyleSheet(QString("background-color: %1; border-radius: 6px;")
-        .arg(c.bg_elevated.name()));
+    artwork_label_->setStyleSheet(QString("background-color: %1; border-radius: %2px;")
+        .arg(c.bg_elevated.name()).arg(DesignTokens::radius().sm));
     
     play_btn_->setStyleSheet(DesignTokens::primaryButtonStyle(20));
     progress_->setStyleSheet(DesignTokens::sliderStyle(true));

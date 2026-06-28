@@ -24,6 +24,7 @@ static ColorScheme g_dark_colors = {
     QColor(139, 92, 246, 38), // accent_dim (rgba 0.15)
     QColor(139, 92, 246, 64), // accent_glow (rgba 0.25)
     QColor("#F1F0FF"), // text_primary
+    QColor("#FFFFFF"), // text_on_accent
     QColor("#B8B4D8"), // text_secondary
     QColor("#77739D"), // text_muted
     QColor(255, 255, 255, 24), // border (rgba 0.09)
@@ -52,6 +53,7 @@ static ColorScheme g_light_colors = {
     QColor(124, 58, 237, 25), // accent_dim (rgba 0.10)
     QColor(124, 58, 237, 38), // accent_glow (rgba 0.15)
     QColor("#0D0D1A"), // text_primary
+    QColor("#FFFFFF"), // text_on_accent
     QColor("#4F4A68"), // text_secondary
     QColor("#716B88"), // text_muted
     QColor(0, 0, 0, 31), // border (rgba 0.12)
@@ -77,6 +79,7 @@ static const SpacingTokens g_spacing = {
 };
 
 static const RadiusTokens g_radius = {
+    2,   // xs
     6,   // sm
     8,   // md
     12,  // lg
@@ -89,6 +92,10 @@ static const MotionTokens g_motion = {
     120, // fast_ms
     180, // normal_ms
     260  // slow_ms
+};
+
+static const QStringList g_accent_palette = {
+    "#7C4DFF", "#A78BFA", "#22D3EE", "#F472B6", "#34D399"
 };
 
 static ElevationTokens makeElevationTokens(const ColorScheme &c) {
@@ -122,6 +129,18 @@ const ElevationTokens &DesignTokens::elevation() {
 
 const MotionTokens &DesignTokens::motion() {
     return g_motion;
+}
+
+const QStringList &DesignTokens::accentPalette() {
+    return g_accent_palette;
+}
+
+QMargins DesignTokens::pagePadding() {
+    return QMargins(g_spacing.xl, g_spacing.xl, g_spacing.xl, g_spacing.xl);
+}
+
+QMargins DesignTokens::pagePaddingNarrow() {
+    return QMargins(g_spacing.xl, g_spacing.lg, g_spacing.xl, g_spacing.xl);
 }
 
 void DesignTokens::setTheme(Theme theme) {
@@ -224,9 +243,17 @@ QFont DesignTokens::getFont(const QString &level, int size) {
         font.setFamily("Inter");
         font.setPixelSize(size > 0 ? size : 14);
         font.setWeight(QFont::Normal);
+    } else if (level == "body_sm") {
+        font.setFamily("Inter");
+        font.setPixelSize(13);
+        font.setWeight(QFont::Normal);
     } else if (level == "caption") {
         font.setFamily("Inter");
         font.setPixelSize(size > 0 ? size : 12);
+        font.setWeight(QFont::Normal);
+    } else if (level == "caption_sm") {
+        font.setFamily("Inter");
+        font.setPixelSize(11);
         font.setWeight(QFont::Normal);
     } else if (level == "micro") {
         font.setFamily("Inter");
@@ -419,7 +446,7 @@ QString DesignTokens::primaryButtonStyle(int radiusValue) {
         "    background-color: %1;\n"
         "    border: 1px solid %1;\n"
         "    border-radius: %2px;\n"
-        "    color: #FFFFFF;\n"
+        "    color: %8;\n"
         "    font-weight: 600;\n"
         "}\n"
         "QPushButton:hover {\n"
@@ -445,7 +472,8 @@ QString DesignTokens::primaryButtonStyle(int radiusValue) {
         .arg(c.accent.darker(115).name())
         .arg(c.text_primary.name())
         .arg(rgba(c.border_accent))
-        .arg(c.text_muted.name());
+        .arg(c.text_muted.name())
+        .arg(c.text_on_accent.name());
 }
 
 QString DesignTokens::navButtonStyle() {

@@ -16,6 +16,8 @@ QFont IconProvider::getFont(int size, bool filled) {
 }
 
 QIcon IconProvider::getIcon(const QString &name, const QColor &color, int size, bool filled) {
+    QColor effectiveColor = color.isValid() ? color : DesignTokens::current().text_primary;
+
     // Generate a high DPI pixmap (e.g. scale up by 2x for retina screens)
     int scale = 2;
     QPixmap pixmap(size * scale, size * scale);
@@ -27,7 +29,7 @@ QIcon IconProvider::getIcon(const QString &name, const QColor &color, int size, 
 
     QFont font = getFont(size * scale, filled);
     painter.setFont(font);
-    painter.setPen(color);
+    painter.setPen(effectiveColor);
     
     painter.drawText(pixmap.rect(), Qt::AlignCenter, name);
     painter.end();
@@ -44,6 +46,7 @@ QLabel *IconProvider::createIconLabel(const QString &name, int size, const QColo
 }
 
 void IconProvider::setupIconLabel(QLabel *label, const QString &name, int size, const QColor &color, bool filled) {
+    QColor effectiveColor = color.isValid() ? color : DesignTokens::current().text_primary;
     label->setText(name);
     label->setFont(getFont(size, filled));
     label->setAlignment(Qt::AlignCenter);
@@ -54,7 +57,7 @@ void IconProvider::setupIconLabel(QLabel *label, const QString &name, int size, 
     
     // Use rgba color format to preserve alpha
     QString color_str = QString("rgba(%1, %2, %3, %4)")
-        .arg(color.red()).arg(color.green()).arg(color.blue()).arg(color.alpha() / 255.0);
+        .arg(effectiveColor.red()).arg(effectiveColor.green()).arg(effectiveColor.blue()).arg(effectiveColor.alpha() / 255.0);
         
     // Set style
     QString style = QString("color: %1; background: transparent; font-family: 'Material Symbols Rounded'; font-size: %2px;")

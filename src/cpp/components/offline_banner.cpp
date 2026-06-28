@@ -27,15 +27,15 @@ OfflineBannerWidget::OfflineBannerWidget(QWidget *parent)
     layout->addWidget(m_icon);
 
     m_label = new QLabel("Sin conexión: reproduciendo descargas locales", m_container);
-    m_label->setFont(DesignTokens::getFont("body", 13));
-    m_label->setStyleSheet("color: #FFFFFF; font-weight: 500; border: none; background: transparent;");
+    m_label->setFont(DesignTokens::getFont("body_sm"));
+    m_label->setStyleSheet(QString("color: %1; font-weight: 500; border: none; background: transparent;").arg(c.text_on_accent.name()));
     layout->addWidget(m_label);
 
     layout->addStretch();
 
     // Add badge
     m_badge = new QLabel("MODO OFFLINE", m_container);
-    m_badge->setFont(DesignTokens::getFont("label", 9));
+    m_badge->setFont(DesignTokens::getFont("micro"));
     m_badge->setAlignment(Qt::AlignCenter);
     m_badge->setFixedSize(96, 20);
     layout->addWidget(m_badge);
@@ -61,22 +61,22 @@ void OfflineBannerWidget::applyStyle() {
         "QWidget#OfflineBannerContainer {"
         "  background-color: rgba(%1,%2,%3,0.08);"
         "  border: 1px solid rgba(%1,%2,%3,0.25);"
-        "  border-radius: 12px;"
+        "  border-radius: %4px;"
         "  margin: 4px 18px 8px 18px;"
         "}"
-    ).arg(r).arg(g).arg(b));
+    ).arg(r).arg(g).arg(b).arg(DesignTokens::radius().lg));
 
-    m_label->setStyleSheet("color: #FFFFFF; font-weight: 500; border: none; background: transparent;");
+    m_label->setStyleSheet(QString("color: %1; font-weight: 500; border: none; background: transparent;").arg(c.text_on_accent.name()));
 
     m_badge->setStyleSheet(QString(
         "QLabel {"
         "  background-color: rgba(%1,%2,%3,0.15);"
         "  color: %4;"
         "  border: 1px solid rgba(%1,%2,%3,0.4);"
-        "  border-radius: 6px;"
+        "  border-radius: %5px;"
         "  font-weight: 700;"
         "}"
-    ).arg(r).arg(g).arg(b).arg(c.warning.name()));
+    ).arg(r).arg(g).arg(b).arg(c.warning.name()).arg(DesignTokens::radius().sm));
     
     if (m_icon) {
         IconProvider::setupIconLabel(m_icon, "wifi_off", 18, c.warning, true);

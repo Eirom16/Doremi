@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+#![deny(clippy::all)]
 #![allow(clippy::collapsible_if)]
 #![allow(clippy::clone_on_copy)]
 #![allow(clippy::field_reassign_with_default)]

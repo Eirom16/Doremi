@@ -1,0 +1,29 @@
+{
+  "mcpServers": {
+    "rust-analyzer": {
+      "command": "rust-analyzer-mcp",
+      "type": "stdio"
+    },
+    "clangd": {
+      "command": "/home/eirom/.local/bin/clangd-mcp-server",
+      "type": "stdio"
+    },
+    "qt-docs": {
+      "type": "remote",
+      "url": "https://qt-docs-mcp.qt.io/mcp"
+    },
+    "context7": {
+      "type": "remote",
+      "url": "https://mcp.context7.com/mcp",
+      "headers": {
+        "Authorization": "Bearer ctx7sk-88842c84-a536-406d-b113-80e60936f801"
+      }
+    },
+    "sqlite": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-sqlite", "--db-path", "${env:DOREMI_DB_PATH:-/tmp/test.db}"],
+      "type": "stdio",
+      "disabled": true
+    }
+  }
+}

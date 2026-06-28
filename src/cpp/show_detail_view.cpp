@@ -118,7 +118,7 @@ void ShowDetailView::setupLayout() {
     auto *container = new QWidget;
     container->setStyleSheet("background: transparent;");
     content_layout_ = new QVBoxLayout(container);
-    content_layout_->setContentsMargins(24, 24, 24, 24);
+    content_layout_->setContentsMargins(DesignTokens::pagePadding());
     content_layout_->setSpacing(16);
 
     // Header row: cover + info
@@ -127,7 +127,7 @@ void ShowDetailView::setupLayout() {
 
     cover_label_ = new QLabel;
     cover_label_->setFixedSize(200, 200);
-    cover_label_->setStyleSheet(QString("background: %1; border-radius: 8px;").arg(c.bg_elevated.name()));
+    cover_label_->setStyleSheet(QString("background: %1; border-radius: %2px;").arg(c.bg_elevated.name()).arg(DesignTokens::radius().md));
     cover_label_->setAlignment(Qt::AlignCenter);
     header->addWidget(cover_label_);
 
@@ -227,7 +227,7 @@ void ShowDetailView::set_show_info(const Show &show) {
             cover_label_->setPixmap(pix.scaled(200, 200, Qt::KeepAspectRatio, Qt::SmoothTransformation));
         } else {
             cover_label_->setText(QString::fromUtf8("🎙️"));
-            cover_label_->setStyleSheet(QString("font-size: 64px; background: %1; border-radius: 8px;").arg(c.bg_elevated.name()));
+            cover_label_->setStyleSheet(QString("font-size: 64px; background: %1; border-radius: %2px;").arg(c.bg_elevated.name()).arg(DesignTokens::radius().md));
         }
     }
 
@@ -267,7 +267,7 @@ void ShowDetailView::clear() {
     description_label_->clear();
     episode_count_label_->clear();
     cover_label_->clear();
-    cover_label_->setStyleSheet(QString("background: %1; border-radius: 8px;").arg(DesignTokens::current().bg_elevated.name()));
+    cover_label_->setStyleSheet(QString("background: %1; border-radius: %2px;").arg(DesignTokens::current().bg_elevated.name()).arg(DesignTokens::radius().md));
     updateSubscriptionButtonState(false);
     QLayoutItem *child;
     while ((child = episodes_layout_->takeAt(0)) != nullptr) {
@@ -283,17 +283,20 @@ void ShowDetailView::updateSubscriptionButtonState(bool subscribed) {
     if (subscribed) {
         subscribe_btn_->setText(tr_q("unsubscribe"));
         subscribe_btn_->setStyleSheet(QString(
-            "QPushButton { background: transparent; border: 1px solid %1; border-radius: 18px; color: %1; padding: 0 16px; font-weight: bold; }"
+            "QPushButton { background: transparent; border: 1px solid %1; border-radius: %5px; color: %1; padding: 0 16px; font-weight: bold; }"
             "QPushButton:hover { background: rgba(%2, %3, %4, 0.08); }")
             .arg(c.text_primary.name())
-            .arg(c.text_primary.red()).arg(c.text_primary.green()).arg(c.text_primary.blue()));
+            .arg(c.text_primary.red()).arg(c.text_primary.green()).arg(c.text_primary.blue())
+            .arg(DesignTokens::radius().pill));
     } else {
         subscribe_btn_->setText(tr_q("subscribe"));
         subscribe_btn_->setStyleSheet(QString(
-            "QPushButton { background: %1; border: none; border-radius: 18px; color: #FFFFFF; padding: 0 16px; font-weight: bold; }"
+            "QPushButton { background: %1; border: none; border-radius: %3px; color: %4; padding: 0 16px; font-weight: bold; }"
             "QPushButton:hover { background: %2; }")
             .arg(c.accent.name())
-            .arg(c.accent.lighter(115).name()));
+            .arg(c.accent.lighter(115).name())
+            .arg(DesignTokens::radius().pill)
+            .arg(c.text_on_accent.name()));
     }
 }
 
@@ -304,7 +307,7 @@ bool ShowDetailView::eventFilter(QObject *obj, QEvent *event) {
 void ShowDetailView::update_theme() {
     const auto &c = DesignTokens::current();
     if (cover_label_) {
-        cover_label_->setStyleSheet(QString("background: %1; border-radius: 8px;").arg(c.bg_elevated.name()));
+        cover_label_->setStyleSheet(QString("background: %1; border-radius: %2px;").arg(c.bg_elevated.name()).arg(DesignTokens::radius().md));
     }
     if (title_label_) {
         title_label_->setStyleSheet(QString("font-size: 24px; font-weight: 700; color: %1;").arg(c.text_primary.name()));

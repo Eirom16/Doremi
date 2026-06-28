@@ -74,7 +74,7 @@ pub async fn load_album(browse_id: &str) {
 
 pub async fn load_artist(browse_id: &str) {
     match crate::api::innertube::artist_detail(browse_id).await {
-        Ok(mut detail) => {
+        Ok(detail) => {
             let artist = crate::bridge::bridge::Artist {
                 id: detail.artist.id,
                 name: detail.artist.name,

@@ -77,16 +77,17 @@ void UpdateDialog::build_ui() {
     panel_->setStyleSheet(QString(
         "#updatePanel {"
         "    background-color: %1;"
-        "    border-radius: 20px;"
+        "    border-radius: %5px;"
         "    border: 1px solid rgba(%2, %3, %4, 0.25);"
         "}"
     ).arg(c.bg_elevated.name())
-     .arg(c.accent.red()).arg(c.accent.green()).arg(c.accent.blue()));
+     .arg(c.accent.red()).arg(c.accent.green()).arg(c.accent.blue())
+     .arg(DesignTokens::radius().xl));
 
     auto *shadow = new QGraphicsDropShadowEffect(panel_);
     shadow->setBlurRadius(48);
     shadow->setOffset(0, 12);
-    shadow->setColor(QColor(0, 0, 0, 120));
+    shadow->setColor(DesignTokens::elevation().medium);
     panel_->setGraphicsEffect(shadow);
 
     auto *layout = new QVBoxLayout(panel_);
@@ -101,11 +102,11 @@ void UpdateDialog::build_ui() {
     title_col->setSpacing(2);
 
     title_lbl_ = new QLabel(tr_q("update_available_title"), panel_);
-    title_lbl_->setFont(DesignTokens::getFont("heading", 18));
+    title_lbl_->setFont(DesignTokens::getFont("heading_lg"));
     title_lbl_->setStyleSheet(QString("color: %1; background: transparent; font-weight: bold;").arg(c.text_primary.name()));
 
     version_lbl_ = new QLabel(panel_);
-    version_lbl_->setFont(DesignTokens::getFont("body", 13));
+    version_lbl_->setFont(DesignTokens::getFont("body_sm"));
     version_lbl_->setStyleSheet(QString("color: %1; background: transparent; font-family: monospace;").arg(c.accent.name()));
 
     title_col->addWidget(title_lbl_);
@@ -140,19 +141,20 @@ void UpdateDialog::build_ui() {
 
     notes_box_ = new QTextEdit(panel_);
     notes_box_->setReadOnly(true);
-    notes_box_->setFont(DesignTokens::getFont("body", 13));
+    notes_box_->setFont(DesignTokens::getFont("body_sm"));
     notes_box_->setFixedHeight(140);
     notes_box_->setStyleSheet(QString(
         "QTextEdit {"
         "    background: %1;"
         "    border: 1px solid rgba(%2, %3, %4, 0.08);"
-        "    border-radius: 12px;"
+        "    border-radius: %6px;"
         "    color: %5;"
         "    padding: 10px;"
         "}"
     ).arg(c.bg_surface.name())
      .arg(c.accent.red()).arg(c.accent.green()).arg(c.accent.blue())
-     .arg(c.text_secondary.name()));
+     .arg(c.text_secondary.name())
+     .arg(DesignTokens::radius().lg));
     layout->addWidget(notes_box_);
 
     // Progress Bar Container (hidden until downloading)
@@ -170,13 +172,13 @@ void UpdateDialog::build_ui() {
         "QProgressBar {"
         "    background-color: %1;"
         "    border: none;"
-        "    border-radius: 4px;"
+        "    border-radius: %3px;"
         "}"
         "QProgressBar::chunk {"
         "    background-color: %2;"
-        "    border-radius: 4px;"
+        "    border-radius: %3px;"
         "}"
-    ).arg(c.bg_surface.name()).arg(c.accent.name()));
+    ).arg(c.bg_surface.name(), c.accent.name(), QString::number(DesignTokens::radius().sm)));
 
     progress_label_ = new QLabel(tr_q("update_preparing"), progress_container_);
     progress_label_->setFont(DesignTokens::getFont("body", 12));
@@ -193,7 +195,7 @@ void UpdateDialog::build_ui() {
 
     github_btn_ = new RippleButton(tr_q("update_btn_github"), panel_, RippleButton::Variant::Ghost);
     github_btn_->setIcon(IconProvider::getIcon("open_in_new", c.text_secondary, 20));
-    github_btn_->setFont(DesignTokens::getFont("body", 13));
+    github_btn_->setFont(DesignTokens::getFont("body_sm"));
     connect(github_btn_, &QPushButton::clicked, this, &UpdateDialog::on_github_clicked);
 
     postpone_btn_ = new RippleButton(tr_q("update_btn_postpone"), panel_, RippleButton::Variant::Secondary);

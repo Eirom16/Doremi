@@ -1,6 +1,8 @@
 #include "library_view.h"
 #include "design_tokens.h"
 #include "icon_provider.h"
+#include "components/loading_state.h"
+#include "components/empty_state.h"
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QVariant>
@@ -53,7 +55,7 @@ LibraryView::LibraryView(QWidget *parent)
         btn->setCheckable(true);
         btn->setFixedHeight(43); // 1px less to overlap with border-bottom
         btn->setCursor(Qt::PointingHandCursor);
-        btn->setFont(DesignTokens::getFont("body", 13));
+        btn->setFont(DesignTokens::getFont("body_sm"));
         
         QString btnStyle = QString(
             "QPushButton {\n"
@@ -182,9 +184,9 @@ void LibraryView::setup_search_bar() {
     search_box_->setClearButtonEnabled(true);
     search_box_->setFixedHeight(36);
     search_box_->setStyleSheet(QString(
-        "QLineEdit { background: %1; border: 1px solid %2; border-radius: 18px; padding: 0 16px; color: %3; font-size: 13px; }"
+        "QLineEdit { background: %1; border: 1px solid %2; border-radius: %5px; padding: 0 16px; color: %3; font-size: 13px; }"
         "QLineEdit:focus { border-color: %4; }")
-        .arg(c.bg_elevated.name()).arg(c.border.name()).arg(c.text_primary.name()).arg(c.accent.name()));
+        .arg(c.bg_elevated.name()).arg(c.border.name()).arg(c.text_primary.name()).arg(c.accent.name()).arg(DesignTokens::radius().pill));
 
     source_combo_ = new QComboBox(this);
     source_combo_->addItem(tr_q("source_all"), 0);
@@ -193,9 +195,9 @@ void LibraryView::setup_search_bar() {
     source_combo_->addItem(tr_q("source_local"), 3);
     source_combo_->setFixedHeight(32);
     source_combo_->setStyleSheet(QString(
-        "QComboBox { background: %1; border: 1px solid %2; border-radius: 16px; padding: 0 12px; color: %3; font-size: 12px; }"
+        "QComboBox { background: %1; border: 1px solid %2; border-radius: %4px; padding: 0 12px; color: %3; font-size: 12px; }"
         "QComboBox::drop-down { border: none; width: 20px; }")
-        .arg(c.bg_elevated.name()).arg(c.border.name()).arg(c.text_primary.name()));
+        .arg(c.bg_elevated.name()).arg(c.border.name()).arg(c.text_primary.name()).arg(DesignTokens::radius().xl));
 
     sort_combo_ = new QComboBox(this);
     sort_combo_->addItem(tr_q("sort_name_asc"), "name_asc");
@@ -204,9 +206,9 @@ void LibraryView::setup_search_bar() {
     sort_combo_->addItem(tr_q("sort_oldest"), "oldest");
     sort_combo_->setFixedHeight(32);
     sort_combo_->setStyleSheet(QString(
-        "QComboBox { background: %1; border: 1px solid %2; border-radius: 16px; padding: 0 12px; color: %3; font-size: 12px; }"
+        "QComboBox { background: %1; border: 1px solid %2; border-radius: %4px; padding: 0 12px; color: %3; font-size: 12px; }"
         "QComboBox::drop-down { border: none; width: 20px; }")
-        .arg(c.bg_elevated.name()).arg(c.border.name()).arg(c.text_primary.name()));
+        .arg(c.bg_elevated.name()).arg(c.border.name()).arg(c.text_primary.name()).arg(DesignTokens::radius().xl));
 
     connect(search_box_, &QLineEdit::textChanged, this, [this](const QString &text) {
         emit search_requested(active_tab_, text.toStdString(), sort_combo_->currentData().toString().toStdString());
@@ -238,9 +240,9 @@ void LibraryView::set_playlists(const std::vector<Playlist> &playlists) {
     auto *create_btn = new QPushButton(tr_q("new_playlist"), this);
     create_btn->setCursor(Qt::PointingHandCursor);
     create_btn->setStyleSheet(QString(
-        "QPushButton { background: %1; color: white; border: none; border-radius: 8px; padding: 10px 20px; font-size: 14px; font-weight: 600; }"
+        "QPushButton { background: %1; color: white; border: none; border-radius: %3px; padding: 10px 20px; font-size: 14px; font-weight: 600; }"
         "QPushButton:hover { background: %2; }"
-    ).arg(c.accent.name()).arg(c.accent_bright.name()));
+    ).arg(c.accent.name()).arg(c.accent_bright.name()).arg(DesignTokens::radius().md));
     connect(create_btn, &QPushButton::clicked, this, [this]() {
         CreatePlaylistDialog dlg(this);
         if (dlg.exec() == QDialog::Accepted) {
@@ -255,7 +257,7 @@ void LibraryView::set_playlists(const std::vector<Playlist> &playlists) {
     list_->addSpacing(8);
     if (playlists.empty()) {
         auto *lbl = new QLabel(tr_q("no_playlists_message"), this);
-        lbl->setFont(DesignTokens::getFont("body", 13));
+        lbl->setFont(DesignTokens::getFont("body_sm"));
         lbl->setStyleSheet(QString("color: %1; padding: 12px;").arg(c.text_muted.name()));
         list_->addWidget(lbl);
     } else {
@@ -387,9 +389,9 @@ void LibraryView::set_search_results(
         auto *create_btn = new QPushButton(tr_q("new_playlist"), this);
         create_btn->setCursor(Qt::PointingHandCursor);
         create_btn->setStyleSheet(QString(
-            "QPushButton { background: %1; color: white; border: none; border-radius: 8px; padding: 10px 20px; font-size: 14px; font-weight: 600; }"
+            "QPushButton { background: %1; color: white; border: none; border-radius: %3px; padding: 10px 20px; font-size: 14px; font-weight: 600; }"
             "QPushButton:hover { background: %2; }"
-        ).arg(c.accent.name()).arg(c.accent_bright.name()));
+        ).arg(c.accent.name()).arg(c.accent_bright.name()).arg(DesignTokens::radius().md));
         connect(create_btn, &QPushButton::clicked, this, [this]() {
             CreatePlaylistDialog dlg(this);
             if (dlg.exec() == QDialog::Accepted) {
@@ -404,7 +406,7 @@ void LibraryView::set_search_results(
         list_->addSpacing(8);
         if (playlists.empty()) {
             auto *lbl = new QLabel(tr_q("no_playlists_message"), this);
-            lbl->setFont(DesignTokens::getFont("body", 13));
+            lbl->setFont(DesignTokens::getFont("body_sm"));
             lbl->setStyleSheet(QString("color: %1; padding: 12px;").arg(c.text_muted.name()));
             list_->addWidget(lbl);
         } else {
@@ -422,67 +424,39 @@ void LibraryView::set_search_results(
 void LibraryView::set_library_state(const std::string &state, const std::string &message) {
     clear_list();
 
-    const auto &c = DesignTokens::current();
+    if (state == "loading") {
+        auto *loading = new LoadingState(LoadingState::ListRows, this);
+        list_->addStretch(1);
+        list_->addWidget(loading);
+        list_->addStretch(1);
+        return;
+    }
 
-    auto *state_panel = new QWidget(this);
-    state_panel->setObjectName("libraryStatePanel");
-    state_panel->setStyleSheet(QString(
-        "QWidget#libraryStatePanel {"
-        "    background: %1;"
-        "    border: 1px solid %2;"
-        "    border-radius: 12px;"
-        "}")
-        .arg(state == "error" ? DesignTokens::rgba(c.danger_surface) : DesignTokens::rgba(c.surface_selected))
-        .arg(state == "error" ? DesignTokens::rgba(c.error) : DesignTokens::rgba(c.border_accent)));
-    auto *panel_lay = new QVBoxLayout(state_panel);
-    panel_lay->setContentsMargins(28, 28, 28, 28);
-    panel_lay->setSpacing(10);
-    panel_lay->setAlignment(Qt::AlignCenter);
+    auto *panel = new EmptyState(this);
+    panel->applyPanelStyle(QString::fromStdString(state));
 
     QString iconName = state == "error" ? "error" :
                        state == "not_authenticated" ? "login" : "library_music";
-    QColor iconColor = state == "error" ? c.error : c.accent;
-    auto *icon = IconProvider::createIconLabel(iconName, 36, iconColor, true, state_panel);
-    icon->setAlignment(Qt::AlignCenter);
-    panel_lay->addWidget(icon, 0, Qt::AlignHCenter);
+    panel->setIcon(iconName);
 
     QString title = state == "error" ? "No se pudo cargar esta sección" :
                     state == "not_authenticated" ? tr_q("login_yt_music") :
                     tr_q("library_empty_title");
-    auto *title_lbl = new QLabel(title, state_panel);
-    title_lbl->setFont(DesignTokens::getFont("heading_sm", 16));
-    title_lbl->setStyleSheet(QString("color: %1; background: transparent; font-weight: 600;").arg(c.text_primary.name()));
-    title_lbl->setAlignment(Qt::AlignCenter);
-    panel_lay->addWidget(title_lbl);
-
-    auto *placeholder = new QLabel(QString::fromStdString(message), state_panel);
-    placeholder->setFont(DesignTokens::getFont("body", 13));
-    placeholder->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
-    placeholder->setAlignment(Qt::AlignCenter);
-    placeholder->setWordWrap(true);
-    placeholder->setMaximumWidth(460);
-    panel_lay->addWidget(placeholder);
+    panel->setTitle(title);
+    panel->setDescription(QString::fromStdString(message));
 
     if (state == "not_authenticated") {
-        auto *login_btn = new QPushButton(tr_q("login_yt_music"), state_panel);
-        login_btn->setCursor(Qt::PointingHandCursor);
-        login_btn->setMinimumHeight(38);
-        login_btn->setStyleSheet(DesignTokens::primaryButtonStyle(8));
+        auto *login_btn = panel->addButton(tr_q("login_yt_music"));
         connect(login_btn, &QPushButton::clicked, this, &LibraryView::login_requested);
-        panel_lay->addWidget(login_btn, 0, Qt::AlignHCenter);
     } else if (state == "error") {
-        auto *retry_btn = new QPushButton("Reintentar", state_panel);
-        retry_btn->setCursor(Qt::PointingHandCursor);
-        retry_btn->setMinimumHeight(38);
-        retry_btn->setStyleSheet(DesignTokens::primaryButtonStyle(8));
+        auto *retry_btn = panel->addButton("Reintentar");
         connect(retry_btn, &QPushButton::clicked, this, [this]() {
             emit tab_changed(active_tab_.empty() ? "playlists" : active_tab_);
         });
-        panel_lay->addWidget(retry_btn, 0, Qt::AlignHCenter);
     }
 
     list_->addStretch(1);
-    list_->addWidget(state_panel);
+    list_->addWidget(panel);
     list_->addStretch(1);
 }
 

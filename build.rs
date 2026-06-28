@@ -184,6 +184,8 @@ fn main() {
         "components/animated_toggle.cpp",
         "components/toast_notification.cpp",
         "components/offline_banner.cpp",
+        "components/loading_state.cpp",
+        "components/empty_state.cpp",
         "components/icon_button.cpp",
         "components/fade_stack.cpp",
         "components/song_card.cpp",
@@ -204,6 +206,7 @@ fn main() {
         "components/stat_card.cpp",
         "components/bar_chart.cpp",
         "components/theme_transition.cpp",
+        "components/track_row.cpp",
         "history_view.cpp",
         "album_detail_view.cpp",
         "artist_detail_view.cpp",
@@ -224,6 +227,10 @@ fn main() {
     for src in &cpp_sources {
         build.file(format!("src/cpp/{src}"));
     }
+
+    // Extraídos de main_window.cpp para reducir el god object (BF3.4)
+    build.file("src/cpp/bridge_setters.cpp");
+    build.file("src/cpp/thumbnail_provider.cpp");
 
     build
         .flag_if_supported("-std=c++17")
@@ -255,6 +262,8 @@ fn main() {
         "components/animated_toggle.h",
         "components/toast_notification.h",
         "components/offline_banner.h",
+        "components/loading_state.h",
+        "components/empty_state.h",
         "components/icon_button.h",
         "components/fade_stack.h",
         "components/song_card.h",
@@ -274,6 +283,7 @@ fn main() {
         "components/stat_card.h",
         "components/bar_chart.h",
         "components/theme_transition.h",
+        "components/track_row.h",
         "history_view.h",
         "album_detail_view.h",
         "artist_detail_view.h",

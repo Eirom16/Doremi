@@ -49,7 +49,7 @@ void RippleButton::updateStyle() {
         case Variant::Primary:
             bg_color = c.accent.name();
             border_color = "transparent";
-            text_color = "#FFFFFF";
+            text_color = c.text_on_accent.name();
             hover_bg = c.accent_bright.name();
             break;
         case Variant::Secondary:
@@ -67,7 +67,7 @@ void RippleButton::updateStyle() {
         case Variant::Danger:
             bg_color = c.error.name();
             border_color = "transparent";
-            text_color = "#FFFFFF";
+            text_color = c.text_on_accent.name();
             hover_bg = c.error.lighter(110).name();
             break;
     }
@@ -76,7 +76,7 @@ void RippleButton::updateStyle() {
         "QPushButton {\n"
         "    background-color: %1;\n"
         "    border: 1px solid %2;\n"
-        "    border-radius: 8px;\n"
+        "    border-radius: %4px;\n"
         "    color: %3;\n"
         "    padding: 8px 16px;\n"
         "    font-weight: 500;\n"
@@ -88,7 +88,8 @@ void RippleButton::updateStyle() {
     .arg(bg_color)
     .arg(border_color)
     .arg(text_color)
-    .arg(hover_bg);
+    .arg(hover_bg)
+    .arg(DesignTokens::radius().md);
     
     setStyleSheet(style);
 }

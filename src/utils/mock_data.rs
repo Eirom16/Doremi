@@ -132,6 +132,7 @@ pub fn load_mock_data_for_view(view: &str) {
                 track_count: 0,
                 owner: "Test User".to_string(),
                 privacy: "PRIVATE".to_string(),
+                editable: true,
             });
 
             set_search_results(
@@ -167,6 +168,7 @@ pub fn load_mock_data_for_view(view: &str) {
                 name: "My Empty Playlist".to_string(),
                 description: "Esta es una playlist vacía para pruebas visuales".to_string(),
                 thumbnail: "".to_string(),
+                editable: true,
                 track_count: 0,
                 owner: "Test User".to_string(),
                 privacy: "PRIVATE".to_string(),

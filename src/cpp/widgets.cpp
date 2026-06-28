@@ -57,22 +57,24 @@ QSlider* create_seek_slider(QWidget *parent) {
         "QSlider::groove:horizontal {\n"
         "    height: 4px;\n"
         "    background: rgba(255, 255, 255, 0.1);\n"
-        "    border-radius: 2px;\n"
+        "    border-radius: %3px;\n"
         "}\n"
         "QSlider::sub-page:horizontal {\n"
         "    background: %1;\n"
-        "    border-radius: 2px;\n"
+        "    border-radius: %3px;\n"
         "}\n"
         "QSlider::handle:horizontal {\n"
         "    background: %2;\n"
         "    width: 10px;\n"
         "    height: 10px;\n"
         "    margin: -3px 0;\n"
-        "    border-radius: 5px;\n"
+        "    border-radius: %4px;\n"
         "}\n"
     )
     .arg(c.accent.name())
-    .arg(c.accent_bright.name());
+    .arg(c.accent_bright.name())
+    .arg(DesignTokens::radius().xs)
+    .arg(DesignTokens::radius().sm);
     slider->setStyleSheet(style);
     
     return slider;
@@ -106,7 +108,7 @@ ClickableItem::ClickableItem(const std::string &title, const std::string &subtit
     // Left artwork placeholder
     artwork_label_ = new QLabel(this);
     artwork_label_->setFixedSize(36, 36);
-    artwork_label_->setStyleSheet(QString("background-color: %1; border-radius: 4px;").arg(c.bg_elevated.name()));
+    artwork_label_->setStyleSheet(QString("background-color: %1; border-radius: %2px;").arg(c.bg_elevated.name(), QString::number(DesignTokens::radius().sm)));
     artwork_label_->setPixmap(IconProvider::getIcon("music_note", c.text_secondary, 18).pixmap(36, 36));
     artwork_label_->setAlignment(Qt::AlignCenter);
     lay->addWidget(artwork_label_);
@@ -116,19 +118,19 @@ ClickableItem::ClickableItem(const std::string &title, const std::string &subtit
     vl->setContentsMargins(0, 0, 0, 0);
     
     title_label_ = new QLabel(QString::fromStdString(title), this);
-    title_label_->setFont(DesignTokens::getFont("body", 13));
+    title_label_->setFont(DesignTokens::getFont("body_sm"));
     title_label_->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_primary.name()));
     vl->addWidget(title_label_);
 
     if (!subtitle.empty()) {
         sub_label_ = new QLabel(QString::fromStdString(subtitle), this);
-        sub_label_->setFont(DesignTokens::getFont("caption", 11));
+        sub_label_->setFont(DesignTokens::getFont("caption_sm"));
         sub_label_->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
         vl->addWidget(sub_label_);
     }
     lay->addLayout(vl, 1);
 
-    setStyleSheet("ClickableItem { background: transparent; border-radius: 6px; }");
+    setStyleSheet(QString("ClickableItem { background: transparent; border-radius: %1px; }").arg(DesignTokens::radius().sm));
 
     connect(this, &QWidget::customContextMenuRequested, this, [this](const QPoint &pos) {
         show_context_menu(mapToGlobal(pos));
@@ -175,12 +177,12 @@ void ClickableItem::enterEvent(QEnterEvent *) {
     const auto &c = DesignTokens::current();
     QString hover_bg = QString("rgba(%1, %2, %3, %4)")
         .arg(c.accent_dim.red()).arg(c.accent_dim.green()).arg(c.accent_dim.blue()).arg(c.accent_dim.alpha() / 255.0);
-    setStyleSheet(QString("ClickableItem { background: %1; border-radius: 6px; }").arg(hover_bg));
+    setStyleSheet(QString("ClickableItem { background: %1; border-radius: %2px; }").arg(hover_bg).arg(DesignTokens::radius().sm));
 }
 
 void ClickableItem::leaveEvent(QEvent *) {
     if (!hasFocus()) {
-        setStyleSheet("ClickableItem { background: transparent; border-radius: 6px; }");
+        setStyleSheet(QString("ClickableItem { background: transparent; border-radius: %1px; }").arg(DesignTokens::radius().sm));
     }
 }
 
@@ -204,12 +206,12 @@ void ClickableItem::keyPressEvent(QKeyEvent *event) {
 void ClickableItem::focusInEvent(QFocusEvent *) {
     const auto &c = DesignTokens::current();
     setStyleSheet(QString(
-        "ClickableItem { background: transparent; border-radius: 6px; border: 1px solid %1; }"
-    ).arg(c.accent.name()));
+        "ClickableItem { background: transparent; border-radius: %1px; border: 1px solid %2; }"
+    ).arg(DesignTokens::radius().sm).arg(c.accent.name()));
 }
 
 void ClickableItem::focusOutEvent(QFocusEvent *) {
-    setStyleSheet("ClickableItem { background: transparent; border-radius: 6px; }");
+    setStyleSheet(QString("ClickableItem { background: transparent; border-radius: %1px; }").arg(DesignTokens::radius().sm));
 }
 
 void ClickableItem::show_context_menu(const QPoint &global_pos) {

@@ -5,34 +5,11 @@
 #include <QVBoxLayout>
 #include <QLabel>
 #include <QHBoxLayout>
-#include <QMouseEvent>
-#include <QContextMenuEvent>
 #include <QPushButton>
 #include <vector>
 #include <string>
+#include "components/track_row.h"
 #include "doremi/src/bridge.rs.h"
-
-// Internal track row widget for artist tracks
-class ArtistTrackRow : public QWidget {
-    Q_OBJECT
-public:
-    ArtistTrackRow(const QString &title, const QString &album,
-                   const QString &duration, Track track,
-                   QWidget *parent = nullptr);
-
-    void update_theme();
-signals:
-    void play_requested(Track track);
-
-protected:
-    void mousePressEvent(QMouseEvent *event) override;
-    void contextMenuEvent(QContextMenuEvent *event) override;
-    void enterEvent(QEnterEvent *event) override;
-    void leaveEvent(QEvent *event) override;
-
-private:
-    Track track_;
-};
 
 class ArtistDetailView : public QWidget {
     Q_OBJECT

@@ -54,7 +54,7 @@ NavSidebar::NavSidebar(QWidget *parent)
         icon_label->setObjectName("nav_icon");
         auto *text_label = new QLabel(title, btn);
         text_label->setObjectName("nav_text");
-        text_label->setFont(DesignTokens::getFont("body", 13));
+        text_label->setFont(DesignTokens::getFont("body_sm"));
         text_label->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
         
         btn_layout->addWidget(icon_label);
