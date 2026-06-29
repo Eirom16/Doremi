@@ -7,6 +7,9 @@
 #include <QPushButton>
 #include <QPointer>
 #include "doremi/src/bridge.rs.h"
+#include "components/loading_state.h"
+#include "components/empty_state.h"
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // AlbumDetailView
@@ -239,11 +242,11 @@ void AlbumDetailView::set_album_tracks(const std::vector<Track> &tracks) {
     }
 
     if (tracks.empty()) {
-        const auto &c = DesignTokens::current();
-        auto *empty = new QLabel("No se encontraron canciones en este álbum.", tracks_widget_);
-        empty->setAlignment(Qt::AlignCenter);
-        empty->setFont(DesignTokens::getFont("caption", 12));
-        empty->setStyleSheet(QString("color: %1; padding: 30px;").arg(c.text_muted.name()));
+        auto *empty = new EmptyState(tracks_widget_);
+        empty->setIcon("album");
+        empty->setTitle(tr_q("empty_album_title"));
+        empty->setDescription(tr_q("empty_album_desc"));
+        empty->applyPanelStyle("empty");
         tracks_layout_->addWidget(empty);
     }
 }
@@ -259,6 +262,10 @@ void AlbumDetailView::clear() {
         if (item->widget()) item->widget()->deleteLater();
         delete item;
     }
+    auto *loading = new LoadingState(LoadingState::ListRows, tracks_widget_);
+    loading->setRowCount(4);
+    loading->setRowHeight(48);
+    tracks_layout_->addWidget(loading);
 }
 
 bool AlbumDetailView::eventFilter(QObject *obj, QEvent *event) {

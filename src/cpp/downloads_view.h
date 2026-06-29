@@ -14,6 +14,8 @@
 #include <vector>
 #include <string>
 #include "doremi/src/bridge.rs.h"
+#include "components/empty_state.h"
+
 
 class DownloadsView : public QWidget {
     Q_OBJECT
@@ -40,7 +42,7 @@ private:
     void update_batch_row(QWidget *row, int total, int completed, double percent);
     QVBoxLayout *list_;
     QVBoxLayout *rows_layout_;
-    QLabel *status_label_;
+    EmptyState *status_label_;
     QMap<std::string, QWidget*> row_map_;
     QMap<std::string, QWidget*> batch_row_map_;
     std::string active_tab_;

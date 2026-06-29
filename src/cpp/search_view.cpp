@@ -2,6 +2,9 @@
 #include "search_view.h"
 #include "design_tokens.h"
 #include "icon_provider.h"
+#include "components/loading_state.h"
+#include "components/empty_state.h"
+
 
 SearchView::SearchView(QWidget *parent)
     : QWidget(parent)
@@ -98,6 +101,11 @@ void SearchView::set_query(const std::string &query) {
     for (auto *btn : filter_btns_) {
         btn->setChecked(btn->property("filterValue").toString() == "all");
     }
+    clear_layout(results_);
+    auto *loading = new LoadingState(LoadingState::ListRows, this);
+    loading->setRowCount(6);
+    loading->setRowHeight(56);
+    results_->addWidget(loading);
 }
 
 static void clear_layout(QVBoxLayout *lay) {
@@ -125,10 +133,11 @@ void SearchView::show_results(const TopResult &top_result, bool has_top_result,
 
     bool has_any = has_top_result || !songs.empty() || !videos.empty() || !artists.empty() || !albums.empty() || !playlists.empty() || !shows.empty() || !episodes.empty();
     if (!has_any) {
-        auto *empty = new QLabel(tr_q("no_results"), this);
-        empty->setFont(DesignTokens::getFont("body", 14));
-        empty->setStyleSheet(QString("color: %1; padding: 24px;").arg(c.text_muted.name()));
-        empty->setAlignment(Qt::AlignCenter);
+        auto *empty = new EmptyState(this);
+        empty->setIcon("search");
+        empty->setTitle(tr_q("no_results"));
+        empty->setDescription(tr_q("search_no_results_desc"));
+        empty->applyPanelStyle("empty");
         results_->addWidget(empty);
         results_->addStretch(1);
         return;

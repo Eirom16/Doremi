@@ -1,103 +1,12 @@
 #include "show_detail_view.h"
 #include "design_tokens.h"
+#include "components/loading_state.h"
+#include "components/empty_state.h"
 #include <QScrollArea>
 #include <QStyle>
 #include <QDateTime>
 #include <cmath>
 
-EpisodeRow::EpisodeRow(const QString &title, const QString &description,
-                       const QString &duration, Episode episode,
-                       QWidget *parent)
-    : QWidget(parent), episode_(std::move(episode)) {
-    setFixedHeight(72);
-    setCursor(Qt::PointingHandCursor);
-
-    const auto &c = DesignTokens::current();
-
-    auto *row = new QHBoxLayout(this);
-    row->setContentsMargins(12, 8, 12, 8);
-
-    auto *info = new QVBoxLayout;
-    auto *title_lbl = new QLabel(title);
-    title_lbl->setObjectName("titleLabel");
-    title_lbl->setStyleSheet(QString("font-size: 14px; font-weight: 600; color: %1;").arg(c.text_primary.name()));
-    title_lbl->setWordWrap(false);
-    title_lbl->setFixedHeight(20);
-
-    auto *desc_lbl = new QLabel(description);
-    desc_lbl->setObjectName("descLabel");
-    desc_lbl->setStyleSheet(QString("font-size: 12px; color: %1;").arg(c.text_secondary.name()));
-    desc_lbl->setWordWrap(false);
-    desc_lbl->setFixedHeight(16);
-
-    auto *duration_lbl = new QLabel(duration);
-    duration_lbl->setObjectName("durationLabel");
-    duration_lbl->setStyleSheet(QString("font-size: 11px; color: %1;").arg(c.text_muted.name()));
-
-    info->addWidget(title_lbl);
-    info->addWidget(desc_lbl);
-    info->addWidget(duration_lbl);
-    row->addLayout(info, 1);
-}
-
-void EpisodeRow::mousePressEvent(QMouseEvent *event) {
-    if (event->button() == Qt::LeftButton) {
-        emit play_requested(episode_);
-    }
-    QWidget::mousePressEvent(event);
-}
-
-void EpisodeRow::contextMenuEvent(QContextMenuEvent *event) {
-    QMenu menu(this);
-    
-    QAction *play = menu.addAction("Reproducir");
-    
-    bool is_fav = get_track_favorite_state(static_cast<std::string>(episode_.id));
-    QAction *fav = menu.addAction(is_fav ? "Quitar de favoritos" : "Agregar a favoritos");
-    
-    QAction *dl = menu.addAction("Descargar");
-
-    QAction *chosen = menu.exec(event->globalPos());
-    if (chosen == play) {
-        emit play_requested(episode_);
-    } else if (chosen == fav) {
-        Track t;
-        t.id = episode_.id;
-        t.title = episode_.title;
-        t.artist = episode_.show;
-        t.album = "";
-        t.duration_ms = static_cast<int32_t>(episode_.duration_ms);
-        t.thumbnail = episode_.thumbnail;
-        
-        if (is_fav) {
-            on_remove_favorite(static_cast<std::string>(episode_.id));
-        } else {
-            on_add_favorite(t);
-        }
-    } else if (chosen == dl) {
-        Track t;
-        t.id = episode_.id;
-        t.title = episode_.title;
-        t.artist = episode_.show;
-        t.album = "";
-        t.duration_ms = static_cast<int32_t>(episode_.duration_ms);
-        t.thumbnail = episode_.thumbnail;
-        std::string parent_id = "show_" + static_cast<std::string>(episode_.show_id);
-        std::string parent_title = static_cast<std::string>(episode_.show);
-        std::string parent_thumbnail = static_cast<std::string>(episode_.thumbnail);
-        on_download_requested_with_parent(t, parent_id, parent_title, parent_thumbnail);
-    }
-}
-
-void EpisodeRow::enterEvent(QEnterEvent *event) {
-    setStyleSheet(QString("background: %1;").arg(DesignTokens::current().bg_elevated.name()));
-    QWidget::enterEvent(event);
-}
-
-void EpisodeRow::leaveEvent(QEvent *event) {
-    setStyleSheet("");
-    QWidget::leaveEvent(event);
-}
 
 ShowDetailView::ShowDetailView(QWidget *parent)
     : QWidget(parent) {
@@ -259,6 +168,15 @@ void ShowDetailView::set_episodes(const std::vector<Episode> &episodes) {
                          this, &ShowDetailView::play_episode_requested);
         episodes_layout_->addWidget(row);
     }
+
+    if (episodes.empty()) {
+        auto *empty = new EmptyState(episodes_widget_);
+        empty->setIcon("podcast");
+        empty->setTitle(tr_q("empty_podcast_title"));
+        empty->setDescription(tr_q("empty_podcast_desc"));
+        empty->applyPanelStyle("empty");
+        episodes_layout_->addWidget(empty);
+    }
 }
 
 void ShowDetailView::clear() {
@@ -275,6 +193,11 @@ void ShowDetailView::clear() {
         delete child;
     }
     episodes_.clear();
+
+    auto *loading = new LoadingState(LoadingState::ListRows, episodes_widget_);
+    loading->setRowCount(4);
+    loading->setRowHeight(72);
+    episodes_layout_->addWidget(loading);
 }
 
 void ShowDetailView::updateSubscriptionButtonState(bool subscribed) {
@@ -337,15 +260,3 @@ void ShowDetailView::update_theme() {
     }
 }
 
-void EpisodeRow::update_theme() {
-    const auto &c = DesignTokens::current();
-    if (auto *title_lbl = findChild<QLabel*>("titleLabel")) {
-        title_lbl->setStyleSheet(QString("font-size: 14px; font-weight: 600; color: %1;").arg(c.text_primary.name()));
-    }
-    if (auto *desc_lbl = findChild<QLabel*>("descLabel")) {
-        desc_lbl->setStyleSheet(QString("font-size: 12px; color: %1;").arg(c.text_secondary.name()));
-    }
-    if (auto *duration_lbl = findChild<QLabel*>("durationLabel")) {
-        duration_lbl->setStyleSheet(QString("font-size: 11px; color: %1;").arg(c.text_muted.name()));
-    }
-}

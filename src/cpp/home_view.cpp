@@ -164,13 +164,10 @@ void HomeView::set_state(const std::string &state, const std::string &message) {
         label->setStyleSheet(QString("color: %1; padding: 36px;").arg(c.text_muted.name()));
         layout->addWidget(label);
         if (state == "error") {
-            auto *retry = new QPushButton("Reintentar", state_widget_);
+            auto *retry = new QPushButton(tr_q("retry"), state_widget_);
             retry->setCursor(Qt::PointingHandCursor);
             retry->setFixedWidth(140);
-            retry->setStyleSheet(QString(
-                "QPushButton { background: %1; color: white; border: none; border-radius: %3px; padding: 10px; }"
-                "QPushButton:hover { background: %2; }")
-                .arg(c.accent.name(), c.accent_bright.name(), QString::number(DesignTokens::radius().md)));
+            retry->setStyleSheet(DesignTokens::primaryButtonStyle(DesignTokens::radius().md));
             connect(retry, &QPushButton::clicked, this, &HomeView::retry_requested);
             layout->addWidget(retry, 0, Qt::AlignHCenter);
         }

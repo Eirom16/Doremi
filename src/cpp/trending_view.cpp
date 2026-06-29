@@ -231,10 +231,7 @@ void TrendingView::set_state(const std::string &state, const std::string &messag
             retry->setObjectName("trendingRetryBtn");
             retry->setCursor(Qt::PointingHandCursor);
             retry->setFixedWidth(140);
-    retry->setStyleSheet(QString(
-        "QPushButton { background: %1; color: white; border: none; border-radius: %3px; padding: 10px; }"
-        "QPushButton:hover { background: %2; }")
-        .arg(c.accent.name(), c.accent_bright.name()).arg(DesignTokens::radius().md));
+    retry->setStyleSheet(DesignTokens::primaryButtonStyle(DesignTokens::radius().md));
             connect(retry, &QPushButton::clicked, this, &TrendingView::retry_requested);
             layout->addWidget(retry, 0, Qt::AlignHCenter);
         }
@@ -254,10 +251,7 @@ void TrendingView::update_theme() {
         label->setStyleSheet(QString("color: %1; padding: 36px;").arg(c.text_muted.name()));
     }
     if (auto *retry = findChild<QPushButton*>("trendingRetryBtn")) {
-        retry->setStyleSheet(QString(
-            "QPushButton { background: %1; color: white; border: none; border-radius: %3px; padding: 10px; }"
-            "QPushButton:hover { background: %2; }")
-            .arg(c.accent.name(), c.accent_bright.name()).arg(DesignTokens::radius().md));
+        retry->setStyleSheet(DesignTokens::primaryButtonStyle(DesignTokens::radius().md));
     }
     for (auto *card : findChildren<QWidget*>("trendingCard")) {
         QString cardStyle = QString(

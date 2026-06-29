@@ -64,12 +64,11 @@ void HistoryView::setupLayout() {
     subtitle->setStyleSheet(QString("color: %1; margin-bottom: 12px;").arg(c.text_secondary.name()));
     content_layout_->addWidget(subtitle);
 
-    empty_label_ = new QLabel(tr_q("history_empty_desc"), this);
+    empty_label_ = new EmptyState(this);
     empty_label_->setObjectName("historyEmptyLabel");
-    empty_label_->setAlignment(Qt::AlignCenter);
-    empty_label_->setFont(DesignTokens::getFont("body_sm"));
-    empty_label_->setStyleSheet(QString("color: %1; padding: 60px 0;").arg(c.text_muted.name()));
-    empty_label_->setWordWrap(true);
+    empty_label_->setIcon("history");
+    empty_label_->setTitle(tr_q("history_empty_desc"));
+    empty_label_->applyPanelStyle("empty");
     empty_label_->hide();
     content_layout_->addWidget(empty_label_);
 
@@ -118,11 +117,11 @@ void HistoryView::set_history(const std::vector<Track> &tracks,
     const auto &c = DesignTokens::current();
 
     if (tracks.empty()) {
-        empty_label_ = new QLabel(tr_q("history_empty_desc"), this);
-        empty_label_->setAlignment(Qt::AlignCenter);
-        empty_label_->setFont(DesignTokens::getFont("body_sm"));
-        empty_label_->setStyleSheet(QString("color: %1; padding: 60px 0;").arg(c.text_muted.name()));
-        empty_label_->setWordWrap(true);
+        empty_label_ = new EmptyState(this);
+        empty_label_->setObjectName("historyEmptyLabel");
+        empty_label_->setIcon("history");
+        empty_label_->setTitle(tr_q("history_empty_desc"));
+        empty_label_->applyPanelStyle("empty");
         content_layout_->addWidget(empty_label_);
         return;
     }
@@ -172,8 +171,8 @@ void HistoryView::update_theme() {
     if (auto *subtitle = findChild<QLabel*>("historySubtitle")) {
         subtitle->setStyleSheet(QString("color: %1; margin-bottom: 12px;").arg(c.text_secondary.name()));
     }
-    if (auto *empty = findChild<QLabel*>("historyEmptyLabel")) {
-        empty->setStyleSheet(QString("color: %1; padding: 60px 0;").arg(c.text_muted.name()));
+    if (auto *empty = findChild<EmptyState*>("historyEmptyLabel")) {
+        empty->applyPanelStyle("empty");
     }
     for (auto *row : findChildren<HistoryRow*>()) {
         row->update_theme();

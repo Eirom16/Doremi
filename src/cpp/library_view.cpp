@@ -186,7 +186,7 @@ void LibraryView::setup_search_bar() {
     search_box_->setStyleSheet(QString(
         "QLineEdit { background: %1; border: 1px solid %2; border-radius: %5px; padding: 0 16px; color: %3; font-size: 13px; }"
         "QLineEdit:focus { border-color: %4; }")
-        .arg(c.bg_elevated.name()).arg(c.border.name()).arg(c.text_primary.name()).arg(c.accent.name()).arg(DesignTokens::radius().pill));
+        .arg(c.bg_elevated.name()).arg(c.border.name()).arg(c.text_primary.name()).arg(c.accent.name()).arg(DesignTokens::radius().md));
 
     source_combo_ = new QComboBox(this);
     source_combo_->addItem(tr_q("source_all"), 0);
@@ -239,10 +239,7 @@ void LibraryView::set_playlists(const std::vector<Playlist> &playlists) {
     const auto &c = DesignTokens::current();
     auto *create_btn = new QPushButton(tr_q("new_playlist"), this);
     create_btn->setCursor(Qt::PointingHandCursor);
-    create_btn->setStyleSheet(QString(
-        "QPushButton { background: %1; color: white; border: none; border-radius: %3px; padding: 10px 20px; font-size: 14px; font-weight: 600; }"
-        "QPushButton:hover { background: %2; }"
-    ).arg(c.accent.name()).arg(c.accent_bright.name()).arg(DesignTokens::radius().md));
+    create_btn->setStyleSheet(DesignTokens::primaryButtonStyle(DesignTokens::radius().md));
     connect(create_btn, &QPushButton::clicked, this, [this]() {
         CreatePlaylistDialog dlg(this);
         if (dlg.exec() == QDialog::Accepted) {
@@ -388,10 +385,7 @@ void LibraryView::set_search_results(
         const auto &c = DesignTokens::current();
         auto *create_btn = new QPushButton(tr_q("new_playlist"), this);
         create_btn->setCursor(Qt::PointingHandCursor);
-        create_btn->setStyleSheet(QString(
-            "QPushButton { background: %1; color: white; border: none; border-radius: %3px; padding: 10px 20px; font-size: 14px; font-weight: 600; }"
-            "QPushButton:hover { background: %2; }"
-        ).arg(c.accent.name()).arg(c.accent_bright.name()).arg(DesignTokens::radius().md));
+        create_btn->setStyleSheet(DesignTokens::primaryButtonStyle(DesignTokens::radius().md));
         connect(create_btn, &QPushButton::clicked, this, [this]() {
             CreatePlaylistDialog dlg(this);
             if (dlg.exec() == QDialog::Accepted) {

@@ -8,7 +8,7 @@
 CreatePlaylistDialog::CreatePlaylistDialog(QWidget *parent)
     : QDialog(parent)
 {
-    setWindowTitle("Crear playlist");
+    setWindowTitle(tr_q("create_playlist"));
     setFixedSize(400, 300);
     const auto &c = DesignTokens::current();
 
@@ -16,13 +16,13 @@ CreatePlaylistDialog::CreatePlaylistDialog(QWidget *parent)
     layout->setSpacing(16);
     layout->setContentsMargins(DesignTokens::pagePadding());
 
-    auto *title_lbl = new QLabel("Nueva playlist", this);
+    auto *title_lbl = new QLabel(tr_q("dialog_new_playlist"), this);
     title_lbl->setFont(DesignTokens::getFont("heading_lg"));
     title_lbl->setStyleSheet(QString("color: %1; font-weight: 700;").arg(c.text_primary.name()));
     layout->addWidget(title_lbl);
 
     name_edit_ = new QLineEdit(this);
-    name_edit_->setPlaceholderText("Nombre de la playlist");
+    name_edit_->setPlaceholderText(tr_q("playlist_name_placeholder"));
     name_edit_->setStyleSheet(QString(
         "QLineEdit { background: %1; color: %2; border: 1px solid %3; border-radius: %5px; padding: 10px 14px; font-size: 14px; }"
         "QLineEdit:focus { border-color: %4; }"
@@ -30,7 +30,7 @@ CreatePlaylistDialog::CreatePlaylistDialog(QWidget *parent)
     layout->addWidget(name_edit_);
 
     desc_edit_ = new QTextEdit(this);
-    desc_edit_->setPlaceholderText("Descripción (opcional)");
+    desc_edit_->setPlaceholderText(tr_q("playlist_desc_placeholder"));
     desc_edit_->setFixedHeight(80);
     desc_edit_->setStyleSheet(QString(
         "QTextEdit { background: %1; color: %2; border: 1px solid %3; border-radius: %5px; padding: 10px 14px; font-size: 14px; }"
@@ -39,9 +39,9 @@ CreatePlaylistDialog::CreatePlaylistDialog(QWidget *parent)
     layout->addWidget(desc_edit_);
 
     privacy_combo_ = new QComboBox(this);
-    privacy_combo_->addItem("Pública", QString("PUBLIC"));
-    privacy_combo_->addItem("No listada", QString("UNLISTED"));
-    privacy_combo_->addItem("Privada", QString("PRIVATE"));
+    privacy_combo_->addItem(tr_q("privacy_public"), QString("PUBLIC"));
+    privacy_combo_->addItem(tr_q("privacy_unlisted"), QString("UNLISTED"));
+    privacy_combo_->addItem(tr_q("privacy_private"), QString("PRIVATE"));
     privacy_combo_->setStyleSheet(QString(
         "QComboBox { background: %1; color: %2; border: 1px solid %3; border-radius: %5px; padding: 8px 14px; font-size: 14px; }"
         "QComboBox::drop-down { border: none; }"
@@ -54,7 +54,7 @@ CreatePlaylistDialog::CreatePlaylistDialog(QWidget *parent)
     auto *btn_layout = new QHBoxLayout();
     btn_layout->addStretch();
 
-    auto *cancel_btn = new QPushButton("Cancelar", this);
+    auto *cancel_btn = new QPushButton(tr_q("cancel"), this);
     cancel_btn->setStyleSheet(QString(
         "QPushButton { background: transparent; color: %1; border: 1px solid %2; border-radius: %3px; padding: 8px 20px; font-size: 14px; }"
         "QPushButton:hover { background: rgba(255,255,255,0.05); }"
@@ -62,11 +62,8 @@ CreatePlaylistDialog::CreatePlaylistDialog(QWidget *parent)
     connect(cancel_btn, &QPushButton::clicked, this, &QDialog::reject);
     btn_layout->addWidget(cancel_btn);
 
-    auto *create_btn = new QPushButton("Crear", this);
-    create_btn->setStyleSheet(QString(
-        "QPushButton { background: %1; color: white; border: none; border-radius: %3px; padding: 8px 20px; font-size: 14px; font-weight: 600; }"
-        "QPushButton:hover { background: %2; }"
-    ).arg(c.accent.name(), c.accent_bright.name(), QString::number(DesignTokens::radius().md)));
+    auto *create_btn = new QPushButton(tr_q("create"), this);
+    create_btn->setStyleSheet(DesignTokens::primaryButtonStyle(DesignTokens::radius().md));
     connect(create_btn, &QPushButton::clicked, this, [this]() {
         if (name_edit_->text().trimmed().isEmpty()) {
             return;

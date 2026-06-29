@@ -20,7 +20,7 @@ pub fn export_backup(zip_path: &Path) -> bool {
 
     let mut zip = zip::ZipWriter::new(file);
     let options =
-        zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
 
     // 1. Add database
     if db_path.exists() {

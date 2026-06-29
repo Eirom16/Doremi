@@ -364,7 +364,7 @@ Clases redundantes: `PlaylistTrackRow` (`playlist_detail_view.cpp:27`, 48px),
 `EpisodeRow` (`show_detail_view.cpp:12`, 72px), `TopTrackRow` (`stats_view`), `ArtistTrackRow`
 (`artist_detail_view.h:16`).
 
-- [ ] Extraer un componente base `TrackRow` parametrizable (altura, acciones, columnas) y migrar las 6
+- [x] Extraer un componente base `TrackRow` parametrizable (altura, acciones, columnas) y migrar las 6
       clases a el. Fijar una unica altura por densidad via token (p. ej. 56px).
 
 ### BF4.5 Escala tipografica consistente — ALTO
@@ -383,7 +383,7 @@ Clases redundantes: `PlaylistTrackRow` (`playlist_detail_view.cpp:27`, 48px),
 
 33 hex + ~22 `QColor(r,g,b)` numericos.
 
-- [ ] Añadir un token `text_on_accent` (= blanco) y reemplazar los `#FFFFFF`/`color: white` repetidos
+- [x] Añadir un token `text_on_accent` (= blanco) y reemplazar los `#FFFFFF`/`color: white` repetidos
       (`player_bar.cpp:114,309`, `now_playing_view.cpp:163,466`, `library_view.cpp:255,403,452`, ...).
 - [x] Mover la paleta de acentos hardcodeada de `settings_view.cpp:169`
       (`{"#7C4DFF","#A78BFA","#22D3EE","#F472B6","#34D399"}`) al design system
@@ -396,12 +396,12 @@ Clases redundantes: `PlaylistTrackRow` (`playlist_detail_view.cpp:27`, 48px),
 
 ### BF4.7 Estados de carga y vacio consistentes — BAJO
 
-- [ ] Crear componentes compartidos `EmptyState` y `LoadingState` y aplicarlos en todas las vistas con
+- [x] Crear componentes compartidos `EmptyState` y `LoadingState` y aplicarlos en todas las vistas con
       listas (hoy `SkeletonLoader` solo se usa en `home_view` y `trending_view`; library/search/
       playlist/album/downloads no muestran estado de carga).
-- [ ] Unificar el radio del input de busqueda (`search_view.cpp:41` usa 16px; `library_view.cpp:199`
+- [x] Unificar el radio del input de busqueda (`search_view.cpp:41` usa 16px; `library_view.cpp:199`
       usa 18px para el mismo widget).
-- [ ] Definir un token de "page padding" y unificar los `setContentsMargins` (hoy 25+ combinaciones).
+- [x] Definir un token de "page padding" y unificar los `setContentsMargins` (hoy 25+ combinaciones).
 
 ---
 
@@ -413,15 +413,15 @@ Archivo: `Cargo.toml`.
 
 - [ ] **ALTO:** documentar el riesgo de `vlc-rs = "0.3.0"` (crate sin releases desde 2018). Evaluar
       vendoring o un wrapper propio; si se mantiene, dejar constancia en un ADR.
-- [ ] **MEDIO:** actualizar `zip = "0.6"` a la rama 8.x (estable 8.6.0; la 0.6 tiene CVEs historicos).
+- [x] **MEDIO:** actualizar `zip = "0.6"` a la rama 2.2.0 (estable 2.2.0; la 0.6 tiene CVEs historicos).
       Ajustar la API de extraccion (`backup.rs`) a la nueva version.
-- [ ] **BAJO:** relajar los pins de patch exactos (`rand = "0.10.1"`, `md5 = "0.8.0"`,
+- [x] **BAJO:** relajar los pins de patch exactos (`rand = "0.10.1"`, `md5 = "0.8.0"`,
       `discord-rich-presence = "1.1.0"`, `sha1 = "0.10.6"`) a minor (`"0.10"`, etc.) para recibir
       fixes, en linea con `tokio = "1"`/`serde = "1"`.
 
 ### BF5.2 i18n no llega a la UI Qt — ALTO
 
-- [ ] Sustituir los ~647 literales de texto hardcodeados en `src/cpp/` por claves de locale (hoy 0
+- [x] Sustituir los ~647 literales de texto hardcodeados en `src/cpp/` por claves de locale (hoy 0
       `tr()` en C++). Usar el helper `tr_q()` de BF3.9 sobre `doremi_tr(key)` y añadir las claves
       faltantes a `src/locales/es.json` y `en.json` manteniendo la paridad (hoy 339=339).
 
@@ -442,7 +442,7 @@ Archivos: `README.md:29,31`; directorio `src/native/`.
 
 ### BF5.5 Tooling de calidad estatica — MEDIO
 
-- [ ] Activar `cargo clippy --all-targets -- -D warnings` y resolver los hallazgos.
+- [x] Activar `cargo clippy --all-targets -- -D warnings` y resolver los hallazgos.
 - [ ] Añadir `clang-format`/`clang-tidy` para C++.
 - [ ] Añadir los lints de diseño de BF4.3 (hex y border-radius) al pipeline.
 

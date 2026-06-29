@@ -161,11 +161,11 @@ mod tests {
         let backup_path = dir.join("backup.zip");
         let file = std::fs::File::create(&backup_path).unwrap();
         let mut zip = zip::ZipWriter::new(file);
-        zip.start_file("settings.toml", zip::write::FileOptions::default())
+        zip.start_file("settings.toml", zip::write::SimpleFileOptions::default())
             .unwrap();
         zip.write_all(settings.sanitized_toml().unwrap().as_bytes())
             .unwrap();
-        zip.start_file("doremi.db", zip::write::FileOptions::default())
+        zip.start_file("doremi.db", zip::write::SimpleFileOptions::default())
             .unwrap();
         zip.write_all(&std::fs::read(&db_path).unwrap()).unwrap();
         zip.finish().unwrap();

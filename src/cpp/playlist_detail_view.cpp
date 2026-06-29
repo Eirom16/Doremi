@@ -13,6 +13,9 @@
 #include <QPushButton>
 #include <QPointer>
 #include "doremi/src/bridge.rs.h"
+#include "components/loading_state.h"
+#include "components/empty_state.h"
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PlaylistDetailView
@@ -367,22 +370,28 @@ void PlaylistDetailView::rebuild_tracks() {
     }
 
     if (tracks_.empty()) {
-        const auto &c = DesignTokens::current();
-        QString message = "Esta playlist está vacía.";
         const QString title = title_label_ ? title_label_->text() : QString();
         if (title.contains("Cargando", Qt::CaseInsensitive)) {
-            message = "Cargando canciones...";
-        } else if (title.contains("No se pudo", Qt::CaseInsensitive)) {
-            message = desc_label_ && desc_label_->isVisible()
-                ? desc_label_->text()
-                : "No se pudo cargar esta playlist.";
+            auto *loading = new LoadingState(LoadingState::ListRows, tracks_widget_);
+            loading->setRowCount(4);
+            loading->setRowHeight(48);
+            tracks_layout_->addWidget(loading);
+        } else {
+            auto *empty = new EmptyState(tracks_widget_);
+            bool is_error = title.contains("No se pudo", Qt::CaseInsensitive);
+            empty->setIcon(is_error ? "error" : "playlist_play");
+            empty->setTitle(is_error ? "Error" : "Playlist vacía");
+            empty->applyPanelStyle(is_error ? "error" : "empty");
+            
+            QString message = "Esta playlist está vacía.";
+            if (is_error) {
+                message = desc_label_ && desc_label_->isVisible()
+                    ? desc_label_->text()
+                    : "No se pudo cargar esta playlist.";
+            }
+            empty->setDescription(message);
+            tracks_layout_->addWidget(empty);
         }
-        auto *empty = new QLabel(message, tracks_widget_);
-        empty->setAlignment(Qt::AlignCenter);
-        empty->setFont(DesignTokens::getFont("caption", 12));
-        empty->setStyleSheet(QString("color: %1; padding: 30px;").arg(c.text_muted.name()));
-        empty->setWordWrap(true);
-        tracks_layout_->addWidget(empty);
     }
 }
 

@@ -528,3 +528,233 @@ void HistoryRow::update_theme() {
         delete_btn_->setIcon(IconProvider::getIcon("delete", c.text_muted, 18));
     }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EpisodeRow
+// ─────────────────────────────────────────────────────────────────────────────
+
+EpisodeRow::EpisodeRow(const QString &title, const QString &description,
+                       const QString &duration, Episode episode,
+                       QWidget *parent)
+    : QWidget(parent), episode_(std::move(episode)) {
+    setFixedHeight(72);
+    setCursor(Qt::PointingHandCursor);
+
+    const auto &c = DesignTokens::current();
+
+    auto *row = new QHBoxLayout(this);
+    row->setContentsMargins(12, 8, 12, 8);
+
+    auto *info = new QVBoxLayout;
+    auto *title_lbl = new QLabel(title);
+    title_lbl->setObjectName("titleLabel");
+    title_lbl->setStyleSheet(QString("font-size: 14px; font-weight: 600; color: %1;").arg(c.text_primary.name()));
+    title_lbl->setWordWrap(false);
+    title_lbl->setFixedHeight(20);
+
+    auto *desc_lbl = new QLabel(description);
+    desc_lbl->setObjectName("descLabel");
+    desc_lbl->setStyleSheet(QString("font-size: 12px; color: %1;").arg(c.text_secondary.name()));
+    desc_lbl->setWordWrap(false);
+    desc_lbl->setFixedHeight(16);
+
+    auto *duration_lbl = new QLabel(duration);
+    duration_lbl->setObjectName("durationLabel");
+    duration_lbl->setStyleSheet(QString("font-size: 11px; color: %1;").arg(c.text_muted.name()));
+
+    info->addWidget(title_lbl);
+    info->addWidget(desc_lbl);
+    info->addWidget(duration_lbl);
+    row->addLayout(info, 1);
+}
+
+void EpisodeRow::mousePressEvent(QMouseEvent *event) {
+    if (event->button() == Qt::LeftButton) {
+        emit play_requested(episode_);
+    }
+    QWidget::mousePressEvent(event);
+}
+
+void EpisodeRow::contextMenuEvent(QContextMenuEvent *event) {
+    QMenu menu(this);
+    
+    QAction *play = menu.addAction("Reproducir");
+    
+    bool is_fav = get_track_favorite_state(static_cast<std::string>(episode_.id));
+    QAction *fav = menu.addAction(is_fav ? "Quitar de favoritos" : "Agregar a favoritos");
+    
+    QAction *dl = menu.addAction("Descargar");
+
+    QAction *chosen = menu.exec(event->globalPos());
+    if (chosen == play) {
+        emit play_requested(episode_);
+    } else if (chosen == fav) {
+        Track t;
+        t.id = episode_.id;
+        t.title = episode_.title;
+        t.artist = episode_.show;
+        t.album = "";
+        t.duration_ms = static_cast<int32_t>(episode_.duration_ms);
+        t.thumbnail = episode_.thumbnail;
+        
+        if (is_fav) {
+            on_remove_favorite(static_cast<std::string>(episode_.id));
+        } else {
+            on_add_favorite(t);
+        }
+    } else if (chosen == dl) {
+        Track t;
+        t.id = episode_.id;
+        t.title = episode_.title;
+        t.artist = episode_.show;
+        t.album = "";
+        t.duration_ms = static_cast<int32_t>(episode_.duration_ms);
+        t.thumbnail = episode_.thumbnail;
+        std::string parent_id = "show_" + static_cast<std::string>(episode_.show_id);
+        std::string parent_title = static_cast<std::string>(episode_.show);
+        std::string parent_thumbnail = static_cast<std::string>(episode_.thumbnail);
+        on_download_requested_with_parent(t, parent_id, parent_title, parent_thumbnail);
+    }
+}
+
+void EpisodeRow::enterEvent(QEnterEvent *event) {
+    setStyleSheet(QString("background: %1;").arg(DesignTokens::current().bg_elevated.name()));
+    QWidget::enterEvent(event);
+}
+
+void EpisodeRow::leaveEvent(QEvent *event) {
+    setStyleSheet("");
+    QWidget::leaveEvent(event);
+}
+
+void EpisodeRow::update_theme() {
+    const auto &c = DesignTokens::current();
+    if (auto *title_lbl = findChild<QLabel*>("titleLabel")) {
+        title_lbl->setStyleSheet(QString("font-size: 14px; font-weight: 600; color: %1;").arg(c.text_primary.name()));
+    }
+    if (auto *desc_lbl = findChild<QLabel*>("descLabel")) {
+        desc_lbl->setStyleSheet(QString("font-size: 12px; color: %1;").arg(c.text_secondary.name()));
+    }
+    if (auto *duration_lbl = findChild<QLabel*>("durationLabel")) {
+        duration_lbl->setStyleSheet(QString("font-size: 11px; color: %1;").arg(c.text_muted.name()));
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TopTrackRow
+// ─────────────────────────────────────────────────────────────────────────────
+
+TopTrackRow::TopTrackRow(int rank, const Track &track,
+            int plays, int max_plays, QWidget *parent)
+    : QWidget(parent), track_(track)
+{
+    const auto &c = DesignTokens::current();
+    setFixedHeight(56);
+    setCursor(Qt::PointingHandCursor);
+
+    auto *layout = new QHBoxLayout(this);
+    layout->setContentsMargins(12, 6, 12, 6);
+    layout->setSpacing(16);
+
+    auto *rank_lbl = new QLabel(QString("#%1").arg(rank), this);
+    rank_lbl->setFont(DesignTokens::getFont("heading_sm", 12));
+    rank_lbl->setFixedWidth(24);
+    rank_lbl->setStyleSheet(QString("color: %1; font-weight: bold;").arg(c.accent.name()));
+    layout->addWidget(rank_lbl);
+
+    auto *thumb_lbl = new QLabel(this);
+    thumb_lbl->setFixedSize(40, 40);
+    thumb_lbl->setStyleSheet(QString("background-color: %1; border-radius: %2px;")
+        .arg(c.bg_elevated.name()).arg(DesignTokens::radius().sm));
+
+    if (!track.thumbnail.empty()) {
+        QPointer<QLabel> label_ptr(thumb_lbl);
+        ArtworkLoader::load(QString::fromStdString(static_cast<std::string>(track.thumbnail)), QSize(40, 40), [label_ptr](const QPixmap &pixmap) {
+            if (!label_ptr) return;
+            QPixmap dest(pixmap.size());
+            dest.fill(Qt::transparent);
+            QPainter painter(&dest);
+            painter.setRenderHint(QPainter::Antialiasing);
+            QPainterPath path;
+            path.addRoundedRect(pixmap.rect(), 4, 4);
+            painter.setClipPath(path);
+            painter.drawPixmap(0, 0, pixmap);
+            label_ptr->setPixmap(dest.scaled(40, 40, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation));
+        });
+    } else {
+        QPixmap default_art = IconProvider::getIcon("music_note", c.text_secondary, 20).pixmap(40, 40);
+        thumb_lbl->setPixmap(default_art);
+    }
+    layout->addWidget(thumb_lbl);
+
+    auto *text_container = new QWidget(this);
+    auto *text_layout = new QVBoxLayout(text_container);
+    text_layout->setContentsMargins(0, 0, 0, 0);
+    text_layout->setSpacing(2);
+
+    auto *title_lbl = new QLabel(QString::fromStdString(static_cast<std::string>(track.title)), this);
+    title_lbl->setFont(DesignTokens::getFont("body_sm"));
+    title_lbl->setStyleSheet(QString("color: %1; font-weight: bold;").arg(c.text_primary.name()));
+
+    auto *artist_lbl = new QLabel(QString::fromStdString(static_cast<std::string>(track.artist)), this);
+    artist_lbl->setFont(DesignTokens::getFont("caption_sm"));
+    artist_lbl->setStyleSheet(QString("color: %1;").arg(c.text_secondary.name()));
+
+    text_layout->addWidget(title_lbl);
+    text_layout->addWidget(artist_lbl);
+    layout->addWidget(text_container, 2);
+
+    auto *ratio_widget = new QWidget(this);
+    ratio_widget->setMinimumWidth(80);
+    auto *ratio_layout = new QVBoxLayout(ratio_widget);
+    ratio_layout->setContentsMargins(0, 0, 0, 0);
+    ratio_layout->setSpacing(4);
+
+    auto *plays_lbl = new QLabel(QString("%1 reproducciones").arg(plays), this);
+    plays_lbl->setFont(DesignTokens::getFont("caption", 10));
+    plays_lbl->setStyleSheet(QString("color: %1;").arg(c.text_secondary.name()));
+    plays_lbl->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+
+    auto *bar = new QWidget(this);
+    bar->setFixedHeight(4);
+    int target_w = max_plays > 0 ? (plays * 80 / max_plays) : 0;
+    bar->setFixedWidth(qMax(4, target_w));
+    bar->setStyleSheet(QString("background-color: %1; border-radius: %2px;").arg(c.accent.name()).arg(DesignTokens::radius().xs));
+
+    auto *bar_container = new QWidget(this);
+    bar_container->setFixedHeight(4);
+    auto *bar_c_layout = new QHBoxLayout(bar_container);
+    bar_c_layout->setContentsMargins(0, 0, 0, 0);
+    bar_c_layout->addStretch();
+    bar_c_layout->addWidget(bar);
+
+    ratio_layout->addWidget(plays_lbl);
+    ratio_layout->addWidget(bar_container);
+    layout->addWidget(ratio_widget, 1);
+
+    setLayout(layout);
+
+    setObjectName("TopTrackRow");
+    setStyleSheet(QString("QWidget#TopTrackRow { background-color: transparent; border-radius: %1px; }").arg(DesignTokens::radius().sm));
+}
+
+void TopTrackRow::mousePressEvent(QMouseEvent *event) {
+    QWidget::mousePressEvent(event);
+    if (event->button() == Qt::LeftButton) {
+        emit clicked(track_);
+    }
+}
+
+void TopTrackRow::enterEvent(QEnterEvent *event) {
+    QWidget::enterEvent(event);
+    setStyleSheet(QString("QWidget#TopTrackRow { background-color: %1; }")
+        .arg(QString("rgba(%1, %2, %3, 0.06)").arg(DesignTokens::current().text_primary.red())
+                                                .arg(DesignTokens::current().text_primary.green())
+                                                .arg(DesignTokens::current().text_primary.blue())));
+}
+
+void TopTrackRow::leaveEvent(QEvent *event) {
+    QWidget::leaveEvent(event);
+    setStyleSheet("QWidget#TopTrackRow { background-color: transparent; }");
+}
+

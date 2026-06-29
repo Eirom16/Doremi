@@ -119,3 +119,43 @@ private:
 
     void loadThumbnail(const Track &track);
 };
+
+class EpisodeRow : public QWidget {
+    Q_OBJECT
+public:
+    EpisodeRow(const QString &title, const QString &description,
+               const QString &duration, Episode episode,
+               QWidget *parent = nullptr);
+
+    void update_theme();
+signals:
+    void play_requested(Episode episode);
+
+protected:
+    void mousePressEvent(QMouseEvent *event) override;
+    void contextMenuEvent(QContextMenuEvent *event) override;
+    void enterEvent(QEnterEvent *event) override;
+    void leaveEvent(QEvent *event) override;
+
+private:
+    Episode episode_;
+};
+
+class TopTrackRow : public QWidget {
+    Q_OBJECT
+public:
+    TopTrackRow(int rank, const Track &track,
+                int plays, int max_plays, QWidget *parent = nullptr);
+
+signals:
+    void clicked(Track track);
+
+protected:
+    void mousePressEvent(QMouseEvent *event) override;
+    void enterEvent(QEnterEvent *event) override;
+    void leaveEvent(QEvent *event) override;
+
+private:
+    Track track_;
+};
+

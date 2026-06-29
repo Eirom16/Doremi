@@ -117,9 +117,10 @@ DownloadsView::DownloadsView(QWidget *parent)
     tab_lay->addStretch(1);
     list_->addWidget(tab_bar);
 
-    status_label_ = new QLabel(tr_q("no_downloads"), this);
-    status_label_->setFont(DesignTokens::getFont("body", 14));
-    status_label_->setStyleSheet(QString("color: %1; padding: 24px 0; background: transparent;").arg(c.text_muted.name()));
+    status_label_ = new EmptyState(this);
+    status_label_->setIcon("download");
+    status_label_->setTitle(tr_q("no_downloads"));
+    status_label_->applyPanelStyle("empty");
     list_->addWidget(status_label_);
 
     rows_layout_ = new QVBoxLayout();
@@ -500,7 +501,7 @@ void DownloadsView::update_view() {
 
     if (active_tab_ == "songs") {
         if (all_downloads_.empty()) {
-            status_label_->setText(tr_q("no_downloads"));
+            status_label_->setTitle(tr_q("no_downloads"));
             status_label_->show();
             return;
         }
@@ -582,7 +583,7 @@ void DownloadsView::update_view() {
         }
 
         if (groups.empty()) {
-            status_label_->setText("Sin descargas en esta categoría");
+            status_label_->setTitle(tr_q("no_downloads_category"));
             status_label_->show();
             return;
         }
@@ -656,7 +657,7 @@ void DownloadsView::clear_downloads() {
 void DownloadsView::update_theme() {
     const auto &c = DesignTokens::current();
     if (status_label_) {
-        status_label_->setStyleSheet(QString("color: %1; padding: 24px 0; background: transparent;").arg(c.text_muted.name()));
+        status_label_->applyPanelStyle("empty");
     }
     for (auto *btn : tab_btns_) {
         if (!btn) continue;

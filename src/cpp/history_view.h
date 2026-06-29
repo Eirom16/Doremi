@@ -7,6 +7,7 @@
 #include <vector>
 #include <string>
 #include "components/track_row.h"
+#include "components/empty_state.h"
 #include "doremi/src/bridge.rs.h"
 
 class HistoryView : public QWidget {
@@ -32,7 +33,7 @@ private:
     QString getGroupLabel(const QString &played_at) const;
 
     QVBoxLayout *content_layout_;
-    QLabel *empty_label_;
+    EmptyState *empty_label_;
 };
 
 #endif

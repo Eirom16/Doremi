@@ -45,6 +45,7 @@
     "region": "Region",
     "volume": "Volume",
     "no_results": "No results",
+    "search_no_results_desc": "Try different search terms or check spelling.",
     "loading": "Loading...",
     "error": "Error",
     "success": "Success",
@@ -313,6 +314,7 @@
     "trending_subtitle": "Most popular at the moment",
     "retry": "Retry",
     "no_downloads": "No downloads yet",
+    "no_downloads_category": "No downloads in this category",
     "queued_status": "Queued...",
     "resolving_status": "Resolving...",
     "downloading_status": "Downloading... %1%",
@@ -337,5 +339,16 @@
     "repeat_all_desc": "Repeats all tracks in the queue.",
     "repeat_one_desc": "Repeats only the current track.",
     "repeat_all_accessible_name": "Repeat all",
-    "repeat_one_accessible_name": "Repeat one"
+    "repeat_one_accessible_name": "Repeat one",
+    "dialog_new_playlist": "New Playlist",
+    "playlist_name_placeholder": "Playlist name",
+    "playlist_desc_placeholder": "Description (optional)",
+    "privacy_public": "Public",
+    "privacy_unlisted": "Unlisted",
+    "privacy_private": "Private",
+    "create": "Create",
+    "empty_album_title": "Empty Album",
+    "empty_album_desc": "No tracks found in this album.",
+    "empty_podcast_title": "No episodes",
+    "empty_podcast_desc": "No episodes found for this podcast."
 }

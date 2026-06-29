@@ -7,25 +7,9 @@
 #include <QString>
 #include "components/stat_card.h"
 #include "components/bar_chart.h"
+#include "components/track_row.h"
 #include "doremi/src/bridge.rs.h"
 
-class TopTrackRow : public QWidget {
-    Q_OBJECT
-public:
-    TopTrackRow(int rank, const Track &track,
-                int plays, int max_plays, QWidget *parent = nullptr);
-
-signals:
-    void clicked(Track track);
-
-protected:
-    void mousePressEvent(QMouseEvent *event) override;
-    void enterEvent(QEnterEvent *event) override;
-    void leaveEvent(QEvent *event) override;
-
-private:
-    Track track_;
-};
 
 class StatsView : public QWidget {
     Q_OBJECT
