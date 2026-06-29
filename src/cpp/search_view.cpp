@@ -6,6 +6,8 @@
 #include "components/empty_state.h"
 
 
+static void clear_layout(QVBoxLayout *lay);
+
 SearchView::SearchView(QWidget *parent)
     : QWidget(parent)
 {
