@@ -15,8 +15,8 @@ public:
     explicit NavSidebar(QWidget *parent = nullptr);
     void set_active_route(const std::string &route);
     void set_compact(bool compact);
-    void update_theme();
     void update_profile(bool authenticated, const std::string &name, const std::string &avatar_url);
+    void update_theme();
 
 signals:
     void route_changed(const std::string &route);

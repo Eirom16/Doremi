@@ -222,6 +222,7 @@ fn main() {
         "navigation_controller.cpp",
         "session_cookie_manager.cpp",
         "theme_controller.cpp",
+        "style_manager.cpp",
     ];
 
     for src in &cpp_sources {
@@ -311,6 +312,7 @@ fn main() {
 
     println!("cargo:rerun-if-changed=assets/resources.qrc");
     println!("cargo:rerun-if-changed=assets/fonts/MaterialSymbolsRounded.ttf");
+    println!("cargo:rerun-if-changed=assets/styles/base.qss");
     println!("cargo:rerun-if-changed=src/bridge.rs");
 
     // Automatically watch all source files in src/cpp

@@ -22,7 +22,7 @@ StatCard::StatCard(const QString &title, const QString &icon_name, QWidget *pare
 
     title_lbl_ = new QLabel(title_, this);
     title_lbl_->setFont(DesignTokens::getFont("caption", 12));
-    title_lbl_->setStyleSheet(QString("color: %1; font-weight: bold;").arg(c.text_secondary.name()));
+    title_lbl_->setProperty("textRole", "secondary");
     
     icon_lbl_ = IconProvider::createIconLabel(icon_name_, 20, c.accent, true, this);
 
@@ -34,14 +34,14 @@ StatCard::StatCard(const QString &title, const QString &icon_name, QWidget *pare
     // Large value label
     value_lbl_ = new QLabel("0", this);
     value_lbl_->setFont(DesignTokens::getFont("heading_lg"));
-    value_lbl_->setStyleSheet(QString("color: %1; font-weight: bold;").arg(c.text_primary.name()));
+    value_lbl_->setProperty("textRole", "primary");
     card_layout->addWidget(value_lbl_);
 
     setLayout(card_layout);
 
     // Setup border and background in stylesheet
     setObjectName("StatCard");
-    setStyleSheet(QString("QWidget#StatCard { %1 }").arg(DesignTokens::panelStyle("surface", 12)));
+    setProperty("boxRole", "card");
 }
 
 void StatCard::setValue(int target_value, const QString &prefix, const QString &suffix) {
@@ -108,33 +108,21 @@ void StatCard::paintEvent(QPaintEvent *event) {
 }
 
 void StatCard::enterEvent(QEnterEvent *event) {
-    QWidget::enterEvent(event);
     is_hovered_ = true;
-    const auto &c = DesignTokens::current();
-    setStyleSheet(QString("QWidget#StatCard { %1 border-color: %2; }")
-        .arg(DesignTokens::panelStyle("elevated", 12))
-        .arg(DesignTokens::rgba(c.border_accent)));
     update();
+    QWidget::enterEvent(event);
 }
 
 void StatCard::leaveEvent(QEvent *event) {
-    QWidget::leaveEvent(event);
     is_hovered_ = false;
-    setStyleSheet(QString("QWidget#StatCard { %1 }").arg(DesignTokens::panelStyle("surface", 12)));
     update();
+    QWidget::leaveEvent(event);
 }
 
 void StatCard::update_theme() {
     const auto &c = DesignTokens::current();
-    title_lbl_->setStyleSheet(QString("color: %1; font-weight: bold;").arg(c.text_secondary.name()));
-    value_lbl_->setStyleSheet(QString("color: %1; font-weight: bold;").arg(c.text_primary.name()));
+    title_lbl_->setProperty("textRole", "secondary");
+    value_lbl_->setProperty("textRole", "primary");
     IconProvider::setupIconLabel(icon_lbl_, icon_name_, 20, c.accent, true);
-    if (is_hovered_) {
-        setStyleSheet(QString("QWidget#StatCard { %1 border-color: %2; }")
-            .arg(DesignTokens::panelStyle("elevated", 12))
-            .arg(DesignTokens::rgba(c.border_accent)));
-    } else {
-        setStyleSheet(QString("QWidget#StatCard { %1 }").arg(DesignTokens::panelStyle("surface", 12)));
-    }
     update();
 }

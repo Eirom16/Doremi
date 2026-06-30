@@ -14,18 +14,15 @@ ShowDetailView::ShowDetailView(QWidget *parent)
 }
 
 void ShowDetailView::setupLayout() {
-    const auto &c = DesignTokens::current();
-
     auto *outer = new QVBoxLayout(this);
     outer->setContentsMargins(0, 0, 0, 0);
 
     auto *scroll = new QScrollArea;
     scroll->setWidgetResizable(true);
     scroll->setFrameShape(QFrame::NoFrame);
-    scroll->setStyleSheet(DesignTokens::scrollAreaStyle());
 
     auto *container = new QWidget;
-    container->setStyleSheet("background: transparent;");
+    container->setProperty("bgRole", "transparent");
     content_layout_ = new QVBoxLayout(container);
     content_layout_->setContentsMargins(DesignTokens::pagePadding());
     content_layout_->setSpacing(16);
@@ -36,7 +33,7 @@ void ShowDetailView::setupLayout() {
 
     cover_label_ = new QLabel;
     cover_label_->setFixedSize(200, 200);
-    cover_label_->setStyleSheet(QString("background: %1; border-radius: %2px;").arg(c.bg_elevated.name()).arg(DesignTokens::radius().md));
+    cover_label_->setStyleSheet(QString("background: %1; border-radius: %2px;").arg(DesignTokens::current().bg_elevated.name()).arg(DesignTokens::radius().md));
     cover_label_->setAlignment(Qt::AlignCenter);
     header->addWidget(cover_label_);
 
@@ -46,29 +43,26 @@ void ShowDetailView::setupLayout() {
     auto *back_btn = new QPushButton("← Volver");
     back_btn->setObjectName("backBtn");
     back_btn->setCursor(Qt::PointingHandCursor);
-    back_btn->setStyleSheet(
-        QString("QPushButton { background: transparent; color: %1; font-size: 14px; border: none; padding: 4px 0; }"
-                "QPushButton:hover { color: %2; }")
-            .arg(c.accent.name())
-            .arg(c.accent_bright.name()));
+    back_btn->setObjectName("backBtn");
     QObject::connect(back_btn, &QPushButton::clicked, this, &ShowDetailView::back_requested);
     header_info->addWidget(back_btn);
 
     title_label_ = new QLabel;
-    title_label_->setStyleSheet(QString("font-size: 24px; font-weight: 700; color: %1;").arg(c.text_primary.name()));
+    title_label_->setProperty("textRole", "heading");
+    title_label_->setObjectName("showTitle");
     title_label_->setWordWrap(true);
     header_info->addWidget(title_label_);
 
     author_label_ = new QLabel;
-    author_label_->setStyleSheet(QString("font-size: 16px; color: %1;").arg(c.text_secondary.name()));
+    author_label_->setProperty("textRole", "secondary");
     header_info->addWidget(author_label_);
 
     episode_count_label_ = new QLabel;
-    episode_count_label_->setStyleSheet(QString("font-size: 13px; color: %1;").arg(c.text_muted.name()));
+    episode_count_label_->setProperty("textRole", "muted");
     header_info->addWidget(episode_count_label_);
 
     description_label_ = new QLabel;
-    description_label_->setStyleSheet(QString("font-size: 13px; color: %1;").arg(c.text_secondary.name()));
+    description_label_->setProperty("textRole", "secondary");
     description_label_->setWordWrap(true);
     header_info->addWidget(description_label_);
 
@@ -94,11 +88,11 @@ void ShowDetailView::setupLayout() {
     // Episodes section
     auto *ep_header = new QLabel("Episodios");
     ep_header->setObjectName("episodesHeader");
-    ep_header->setStyleSheet(QString("font-size: 18px; font-weight: 600; color: %1; margin-top: 16px;").arg(c.text_primary.name()));
+    ep_header->setProperty("textRole", "heading");
     content_layout_->addWidget(ep_header);
 
     episodes_widget_ = new QWidget;
-    episodes_widget_->setStyleSheet("background: transparent;");
+    episodes_widget_->setProperty("bgRole", "transparent");
     episodes_layout_ = new QVBoxLayout(episodes_widget_);
     episodes_layout_->setContentsMargins(0, 0, 0, 0);
     episodes_layout_->setSpacing(2);
@@ -177,6 +171,7 @@ void ShowDetailView::set_episodes(const std::vector<Episode> &episodes) {
         empty->applyPanelStyle("empty");
         episodes_layout_->addWidget(empty);
     }
+    updateGeometry();
 }
 
 void ShowDetailView::clear() {
@@ -202,24 +197,12 @@ void ShowDetailView::clear() {
 
 void ShowDetailView::updateSubscriptionButtonState(bool subscribed) {
     is_subscribed_ = subscribed;
-    const auto &c = DesignTokens::current();
     if (subscribed) {
         subscribe_btn_->setText(tr_q("unsubscribe"));
-        subscribe_btn_->setStyleSheet(QString(
-            "QPushButton { background: transparent; border: 1px solid %1; border-radius: %5px; color: %1; padding: 0 16px; font-weight: bold; }"
-            "QPushButton:hover { background: rgba(%2, %3, %4, 0.08); }")
-            .arg(c.text_primary.name())
-            .arg(c.text_primary.red()).arg(c.text_primary.green()).arg(c.text_primary.blue())
-            .arg(DesignTokens::radius().pill));
+        subscribe_btn_->setObjectName("subscribedBtn");
     } else {
         subscribe_btn_->setText(tr_q("subscribe"));
-        subscribe_btn_->setStyleSheet(QString(
-            "QPushButton { background: %1; border: none; border-radius: %3px; color: %4; padding: 0 16px; font-weight: bold; }"
-            "QPushButton:hover { background: %2; }")
-            .arg(c.accent.name())
-            .arg(c.accent.lighter(115).name())
-            .arg(DesignTokens::radius().pill)
-            .arg(c.text_on_accent.name()));
+        subscribe_btn_->setProperty("buttonRole", "primary");
     }
 }
 
@@ -228,35 +211,8 @@ bool ShowDetailView::eventFilter(QObject *obj, QEvent *event) {
 }
 
 void ShowDetailView::update_theme() {
-    const auto &c = DesignTokens::current();
-    if (cover_label_) {
-        cover_label_->setStyleSheet(QString("background: %1; border-radius: %2px;").arg(c.bg_elevated.name()).arg(DesignTokens::radius().md));
-    }
-    if (title_label_) {
-        title_label_->setStyleSheet(QString("font-size: 24px; font-weight: 700; color: %1;").arg(c.text_primary.name()));
-    }
-    if (author_label_) {
-        author_label_->setStyleSheet(QString("font-size: 16px; color: %1;").arg(c.text_secondary.name()));
-    }
-    if (episode_count_label_) {
-        episode_count_label_->setStyleSheet(QString("font-size: 13px; color: %1;").arg(c.text_muted.name()));
-    }
-    if (description_label_) {
-        description_label_->setStyleSheet(QString("font-size: 13px; color: %1;").arg(c.text_secondary.name()));
-    }
-    if (auto *back_btn = findChild<QPushButton*>("backBtn")) {
-        back_btn->setStyleSheet(
-            QString("QPushButton { background: transparent; color: %1; font-size: 14px; border: none; padding: 4px 0; }"
-                    "QPushButton:hover { color: %2; }")
-                .arg(c.accent.name())
-                .arg(c.accent_bright.name()));
-    }
-    if (auto *ep_header = findChild<QLabel*>("episodesHeader")) {
-        ep_header->setStyleSheet(QString("font-size: 18px; font-weight: 600; color: %1; margin-top: 16px;").arg(c.text_primary.name()));
-    }
     updateSubscriptionButtonState(is_subscribed_);
     for (auto *row : findChildren<EpisodeRow*>()) {
         row->update_theme();
     }
 }
-

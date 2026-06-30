@@ -55,7 +55,6 @@ NavSidebar::NavSidebar(QWidget *parent)
         auto *text_label = new QLabel(title, btn);
         text_label->setObjectName("nav_text");
         text_label->setFont(DesignTokens::getFont("body_sm"));
-        text_label->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
         
         btn_layout->addWidget(icon_label);
         btn_layout->addWidget(text_label);
@@ -63,7 +62,7 @@ NavSidebar::NavSidebar(QWidget *parent)
         
         btn->setLayout(btn_layout);
         
-        btn->setStyleSheet(DesignTokens::navButtonStyle());
+        btn->setProperty("buttonRole", "nav");
         
         layout->addWidget(btn);
         buttons_.push_back({routeInfo.route, btn});
@@ -81,7 +80,7 @@ NavSidebar::NavSidebar(QWidget *parent)
     profile_btn_->setCursor(Qt::PointingHandCursor);
     profile_btn_->setFocusPolicy(Qt::StrongFocus);
     
-    profile_btn_->setStyleSheet(DesignTokens::profileButtonStyle());
+    profile_btn_->setProperty("buttonRole", "profile");
     DesignTokens::applyAccessible(
         profile_btn_,
         "Cuenta de usuario",
@@ -95,10 +94,7 @@ NavSidebar::NavSidebar(QWidget *parent)
     
     // Set sidebar base background
     setAttribute(Qt::WA_StyledBackground, true);
-    setStyleSheet(QString("NavSidebar { background-color: %1; border-right: 1px solid %2; }")
-        .arg(c.bg_surface.name())
-        .arg(DesignTokens::rgba(c.border))
-    );
+    // NavSidebar background handled by base.qss
 
     // Initial auth UI state
     update_profile(false, "", "");
@@ -110,15 +106,10 @@ void NavSidebar::set_active_route(const std::string &route) {
         bool active = (nb.route == route);
         nb.btn->setChecked(active);
         
-        // Find icon label and text label to update their style/color
         auto labels = nb.btn->findChildren<QLabel*>();
         for (auto *label : labels) {
             if (label->objectName() == "nav_icon") {
                 IconProvider::setupIconLabel(label, label->text(), 20, active ? c.accent : c.text_secondary, true);
-            } else if (label->objectName() == "nav_text") {
-                label->setStyleSheet(QString("color: %1; background: transparent; font-weight: %2;")
-                    .arg(active ? c.text_primary.name() : c.text_secondary.name())
-                    .arg(active ? "600" : "500"));
             }
         }
     }
@@ -152,29 +143,12 @@ void NavSidebar::on_button_clicked(const std::string &route) {
 }
 
 void NavSidebar::update_theme() {
-    const auto &c = DesignTokens::current();
-    
-    setStyleSheet(QString("NavSidebar { background-color: %1; border-right: 1px solid %2; }")
-        .arg(c.bg_surface.name())
-        .arg(DesignTokens::rgba(c.border))
-    );
-    
-    for (auto &nb : buttons_) {
-        nb.btn->setStyleSheet(DesignTokens::navButtonStyle());
-    }
-    
-    profile_btn_->setStyleSheet(DesignTokens::profileButtonStyle());
-    
     for (auto &nb : buttons_) {
         if (nb.btn->isChecked()) {
             set_active_route(nb.route);
             break;
         }
     }
-    const bool was_compact = compact_;
-    compact_ = !was_compact;
-    set_compact(was_compact);
-
     update_profile(authenticated_, user_name_, avatar_url_);
 }
 

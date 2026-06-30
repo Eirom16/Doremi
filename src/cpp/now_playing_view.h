@@ -41,9 +41,8 @@ public:
     void setSubtitleLineSpacing(double spacing);
     void setSubtitleAutoScroll(bool enabled);
     void setSubtitleGlowEffect(bool enabled);
-
-
     void update_theme();
+
 signals:
     void close_clicked();
     void play_pause_clicked();

@@ -25,8 +25,8 @@ public:
     void set_progress(const std::string &video_id, double percent, const std::string &status);
     void set_batch_progress(const std::string &parent_id, int total, int completed, double percent);
     void clear_downloads();
-    void update_theme();
     void update_view();
+    void update_theme();
 signals:
     void play_requested(Track track);
     void playlist_requested(const std::string &playlist_id);

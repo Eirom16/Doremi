@@ -29,8 +29,6 @@ static QPixmap getRoundedPixmap(const QPixmap &src, int radius) {
 DownloadsView::DownloadsView(QWidget *parent)
     : QWidget(parent), active_tab_("songs")
 {
-    const auto &c = DesignTokens::current();
-
     auto *root = new QVBoxLayout(this);
     root->setContentsMargins(0, 0, 0, 0);
     root->setSpacing(0);
@@ -41,15 +39,12 @@ DownloadsView::DownloadsView(QWidget *parent)
 
     auto *header = new QLabel(tr_q("downloads"), this);
     header->setFont(DesignTokens::getFont("heading_lg"));
-    header->setStyleSheet(QString("color: %1; font-weight: bold; background: transparent;").arg(c.text_primary.name()));
+    header->setProperty("textRole", "heading");
     list_->addWidget(header);
 
-    // Tab bar setup
     auto *tab_bar = new QWidget(this);
     tab_bar->setFixedHeight(44);
-    tab_bar->setStyleSheet(QString("background-color: transparent; border-bottom: 1px solid %1;")
-        .arg(QString("rgba(%1, %2, %3, %4)").arg(c.border.red()).arg(c.border.green()).arg(c.border.blue()).arg(c.border.alpha() / 255.0))
-    );
+    tab_bar->setObjectName("downloadsTabBar");
     
     auto *tab_lay = new QHBoxLayout(tab_bar);
     tab_lay->setContentsMargins(0, 0, 0, 0);
@@ -76,29 +71,7 @@ DownloadsView::DownloadsView(QWidget *parent)
         btn->setFixedHeight(43);
         btn->setCursor(Qt::PointingHandCursor);
         btn->setFont(DesignTokens::getFont("body_sm"));
-        
-        QString btnStyle = QString(
-            "QPushButton {\n"
-            "    background: transparent;\n"
-            "    border: none;\n"
-            "    border-bottom: 2px solid transparent;\n"
-            "    color: %1;\n"
-            "    padding: 0 12px;\n"
-            "}\n"
-            "QPushButton:hover {\n"
-            "    color: %2;\n"
-            "}\n"
-            "QPushButton:checked {\n"
-            "    color: %3;\n"
-            "    border-bottom: 2px solid %3;\n"
-            "    font-weight: 500;\n"
-            "}\n"
-        )
-        .arg(c.text_secondary.name())
-        .arg(c.text_primary.name())
-        .arg(c.accent.name());
-        
-        btn->setStyleSheet(btnStyle);
+        btn->setObjectName("downloadsTabBtn");
         tab_lay->addWidget(btn);
         group->addButton(btn);
         tab_btns_.push_back(btn);
@@ -130,7 +103,7 @@ DownloadsView::DownloadsView(QWidget *parent)
 
     list_->addStretch(1);
     root->addLayout(list_);
-    setStyleSheet("background: transparent;");
+    setProperty("bgRole", "transparent");
 }
 
 QWidget *DownloadsView::make_download_row(const std::string &video_id, const std::string &title,
@@ -146,19 +119,6 @@ QWidget *DownloadsView::make_download_row(const std::string &video_id, const std
     QWidget *row = new QWidget(this);
     row->setObjectName("DownloadRow");
     row->setFixedHeight(is_active || is_failed ? 88 : 64);
-
-    QString rowStyle = QString(
-        "QWidget#DownloadRow {\n"
-        "    background-color: transparent;\n"
-        "    border-radius: %5px;\n"
-        "}\n"
-        "QWidget#DownloadRow:hover {\n"
-        "    background-color: %1;\n"
-        "}\n"
-    )
-    .arg(QString("rgba(%1, %2, %3, %4)").arg(c.accent_dim.red()).arg(c.accent_dim.green()).arg(c.accent_dim.blue()).arg(c.accent_dim.alpha() / 255.0))
-    .arg(DesignTokens::radius().md);
-    row->setStyleSheet(rowStyle);
 
     auto *lay = new QVBoxLayout(row);
     lay->setContentsMargins(12, 6, 12, 6);
@@ -196,19 +156,20 @@ QWidget *DownloadsView::make_download_row(const std::string &video_id, const std
     auto *t = new QLabel(QString::fromStdString(title), row);
     t->setObjectName("downloadRowTitle");
     t->setFont(DesignTokens::getFont("body_sm"));
-    QString titleColor = is_cancelled ? c.text_muted.name() : c.text_primary.name();
-    t->setStyleSheet(QString("color: %1; font-weight: bold; background: transparent;").arg(titleColor));
     if (is_cancelled) {
+        t->setProperty("textRole", "muted");
         QFont f = t->font();
         f.setStrikeOut(true);
         t->setFont(f);
+    } else {
+        t->setProperty("textRole", "primary");
     }
     vl->addWidget(t);
 
     auto *a = new QLabel(QString::fromStdString(artist), row);
     a->setObjectName("downloadRowArtist");
     a->setFont(DesignTokens::getFont("caption_sm"));
-    a->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
+    a->setProperty("textRole", "secondary");
     vl->addWidget(a);
 
     if (is_active) {
@@ -220,13 +181,13 @@ QWidget *DownloadsView::make_download_row(const std::string &video_id, const std
         else statusMsg = tr_q("downloading_status").arg(static_cast<int>(progress));
         status_text->setText(statusMsg);
         status_text->setFont(DesignTokens::getFont("caption", 10));
-        status_text->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_muted.name()));
+        status_text->setProperty("textRole", "muted");
         vl->addWidget(status_text);
     } else if (is_failed) {
         auto *err_text = new QLabel(tr_q("download_error"), row);
         err_text->setObjectName("downloadRowError");
         err_text->setFont(DesignTokens::getFont("caption", 10));
-        err_text->setStyleSheet(QString("color: %1; background: transparent;").arg(c.error.name()));
+        err_text->setObjectName("downloadRowError");
         vl->addWidget(err_text);
     }
 
@@ -239,10 +200,6 @@ QWidget *DownloadsView::make_download_row(const std::string &video_id, const std
         cancel_btn->setCursor(Qt::PointingHandCursor);
         cancel_btn->setIcon(IconProvider::getIcon("close", c.text_secondary, 14));
         cancel_btn->setIconSize(QSize(14, 14));
-        cancel_btn->setStyleSheet(QString(
-            "QPushButton { background: transparent; border: none; border-radius: %2px; }"
-            "QPushButton:hover { background: %1; }"
-        ).arg(c.bg_elevated.name()).arg(DesignTokens::radius().pill));
         std::string vid = video_id;
         connect(cancel_btn, &QPushButton::clicked, this, [vid]() {
             on_download_cancel_requested(vid);
@@ -255,10 +212,7 @@ QWidget *DownloadsView::make_download_row(const std::string &video_id, const std
         play_btn->setCursor(Qt::PointingHandCursor);
         play_btn->setIcon(IconProvider::getIcon("play_arrow", c.text_on_accent, 14));
         play_btn->setIconSize(QSize(14, 14));
-        play_btn->setStyleSheet(QString(
-            "QPushButton { background-color: %1; border: none; border-radius: %3px; }"
-            "QPushButton:hover { background-color: %2; }"
-        ).arg(c.accent.name()).arg(c.accent_bright.name()).arg(DesignTokens::radius().pill));
+        play_btn->setProperty("buttonRole", "icon");
         Track track_data;
         track_data.id = rust::String(video_id);
         track_data.title = rust::String(title);
@@ -275,10 +229,6 @@ QWidget *DownloadsView::make_download_row(const std::string &video_id, const std
         retry_btn->setCursor(Qt::PointingHandCursor);
         retry_btn->setIcon(IconProvider::getIcon("refresh", c.accent, 14));
         retry_btn->setIconSize(QSize(14, 14));
-        retry_btn->setStyleSheet(QString(
-            "QPushButton { background: transparent; border: none; border-radius: %2px; }"
-            "QPushButton:hover { background: %1; }"
-        ).arg(c.bg_elevated.name()).arg(DesignTokens::radius().pill));
         Track track_data;
         track_data.id = rust::String(video_id);
         track_data.title = rust::String(title);
@@ -298,10 +248,6 @@ QWidget *DownloadsView::make_download_row(const std::string &video_id, const std
         progress_bar->setTextVisible(false);
         progress_bar->setRange(0, 100);
         progress_bar->setValue(static_cast<int>(progress));
-        progress_bar->setStyleSheet(QString(
-            "QProgressBar { background: %1; border: none; border-radius: %3px; }"
-            "QProgressBar::chunk { background: %2; border-radius: %3px; }"
-        ).arg(c.bg_elevated.name(), c.accent.name(), QString::number(DesignTokens::radius().xs)));
         lay->addWidget(progress_bar);
     }
 
@@ -418,16 +364,6 @@ QWidget *DownloadsView::make_batch_row(const std::string &/*parent_id*/, const s
     row->setObjectName("BatchRow");
     row->setFixedHeight(80);
 
-    QString rowStyle = QString(
-        "QWidget#BatchRow { %1 }\n"
-        "QWidget#BatchRow:hover {\n"
-        "    background-color: %2;\n"
-        "}\n"
-    )
-    .arg(DesignTokens::panelStyle("elevated", 10))
-    .arg(DesignTokens::rgba(c.accent_dim));
-    row->setStyleSheet(rowStyle);
-
     auto *lay = new QVBoxLayout(row);
     lay->setContentsMargins(16, 10, 16, 10);
     lay->setSpacing(4);
@@ -448,7 +384,7 @@ QWidget *DownloadsView::make_batch_row(const std::string &/*parent_id*/, const s
     auto *title_lbl = new QLabel(QString::fromStdString(parent_title), row);
     title_lbl->setObjectName("batch_title");
     title_lbl->setFont(DesignTokens::getFont("body_sm"));
-    title_lbl->setStyleSheet(QString("color: %1; font-weight: bold; background: transparent;").arg(c.text_primary.name()));
+    title_lbl->setProperty("textRole", "primary");
     vl->addWidget(title_lbl);
 
     auto *count_lbl = new QLabel(
@@ -456,7 +392,7 @@ QWidget *DownloadsView::make_batch_row(const std::string &/*parent_id*/, const s
             .arg(completed).arg(total).arg(static_cast<int>(percent)), row);
     count_lbl->setObjectName("batch_count");
     count_lbl->setFont(DesignTokens::getFont("caption_sm"));
-    count_lbl->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
+    count_lbl->setProperty("textRole", "secondary");
     vl->addWidget(count_lbl);
 
     top->addLayout(vl, 1);
@@ -655,114 +591,29 @@ void DownloadsView::clear_downloads() {
 }
 
 void DownloadsView::update_theme() {
-    const auto &c = DesignTokens::current();
     if (status_label_) {
         status_label_->applyPanelStyle("empty");
     }
-    for (auto *btn : tab_btns_) {
-        if (!btn) continue;
-        QString btnStyle = QString(
-            "QPushButton {\n"
-            "    background: transparent;\n"
-            "    border: none;\n"
-            "    border-bottom: 2px solid transparent;\n"
-            "    color: %1;\n"
-            "    padding: 0 12px;\n"
-            "}\n"
-            "QPushButton:hover {\n"
-            "    color: %2;\n"
-            "}\n"
-            "QPushButton:checked {\n"
-            "    color: %3;\n"
-            "    border-bottom: 2px solid %3;\n"
-            "    font-weight: 500;\n"
-            "}\n"
-        )
-        .arg(c.text_secondary.name())
-        .arg(c.text_primary.name())
-        .arg(c.accent.name());
-        btn->setStyleSheet(btnStyle);
-    }
-    // Update batch rows
-    for (auto *row : findChildren<QWidget*>("BatchRow")) {
-        QString rowStyle = QString(
-            "QWidget#BatchRow { %1 }\n"
-            "QWidget#BatchRow:hover {\n"
-            "    background-color: %2;\n"
-            "}\n"
-        )
-        .arg(DesignTokens::panelStyle("elevated", 10))
-        .arg(DesignTokens::rgba(c.accent_dim));
-        row->setStyleSheet(rowStyle);
-    }
     for (auto *lbl : findChildren<QLabel*>("batch_title")) {
-        lbl->setStyleSheet(QString("color: %1; font-weight: bold; background: transparent;").arg(c.text_primary.name()));
+        lbl->setProperty("textRole", "primary");
     }
     for (auto *lbl : findChildren<QLabel*>("batch_count")) {
-        lbl->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
-    }
-    for (auto *pb : findChildren<QProgressBar*>("batch_progress")) {
-        pb->setStyleSheet(QString(
-            "QProgressBar { background: %1; border: none; border-radius: %4px; }"
-            "QProgressBar::chunk { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, "
-            "    stop:0 %2, stop:1 %3); border-radius: %4px; }"
-        ).arg(c.bg_overlay.name(), c.accent.name(), c.accent_bright.name(), QString::number(DesignTokens::radius().xs)));
-    }
-    // Update individual download rows
-    for (auto *row : findChildren<QWidget*>("DownloadRow")) {
-        QString rowStyle = QString(
-            "QWidget#DownloadRow {\n"
-            "    background-color: transparent;\n"
-            "    border-radius: %5px;\n"
-            "}\n"
-            "QWidget#DownloadRow:hover {\n"
-            "    background-color: %1;\n"
-            "}\n"
-        )
-        .arg(QString("rgba(%1, %2, %3, %4)").arg(c.accent_dim.red()).arg(c.accent_dim.green()).arg(c.accent_dim.blue()).arg(c.accent_dim.alpha() / 255.0))
-        .arg(DesignTokens::radius().md);
-        row->setStyleSheet(rowStyle);
+        lbl->setProperty("textRole", "secondary");
     }
     for (auto *lbl : findChildren<QLabel*>("downloadRowTitle")) {
         if (lbl->font().strikeOut()) {
-            lbl->setStyleSheet(QString("color: %1; font-weight: bold; background: transparent;").arg(c.text_muted.name()));
+            lbl->setProperty("textRole", "muted");
         } else {
-            lbl->setStyleSheet(QString("color: %1; font-weight: bold; background: transparent;").arg(c.text_primary.name()));
+            lbl->setProperty("textRole", "primary");
         }
     }
     for (auto *lbl : findChildren<QLabel*>("downloadRowArtist")) {
-        lbl->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
+        lbl->setProperty("textRole", "secondary");
     }
     for (auto *lbl : findChildren<QLabel*>("status_label")) {
-        lbl->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_muted.name()));
+        lbl->setProperty("textRole", "muted");
     }
     for (auto *lbl : findChildren<QLabel*>("downloadRowError")) {
-        lbl->setStyleSheet(QString("color: %1; background: transparent;").arg(c.error.name()));
-    }
-    for (auto *pb : findChildren<QProgressBar*>("progress_bar")) {
-        pb->setStyleSheet(QString(
-            "QProgressBar { background: %1; border: none; border-radius: %3px; }"
-            "QProgressBar::chunk { background: %2; border-radius: %3px; }"
-        ).arg(c.bg_elevated.name(), c.accent.name(), QString::number(DesignTokens::radius().xs)));
-    }
-    for (auto *btn : findChildren<QPushButton*>("downloadRowCancel")) {
-        btn->setStyleSheet(QString(
-            "QPushButton { background: transparent; border: none; border-radius: %2px; }"
-            "QPushButton:hover { background: %1; }"
-        ).arg(c.bg_elevated.name()).arg(DesignTokens::radius().pill));
-        btn->setIcon(IconProvider::getIcon("close", c.text_secondary, 14));
-    }
-    for (auto *btn : findChildren<QPushButton*>("downloadRowPlay")) {
-        btn->setStyleSheet(QString(
-            "QPushButton { background-color: %1; border: none; border-radius: %3px; }"
-            "QPushButton:hover { background-color: %2; }"
-        ).arg(c.accent.name()).arg(c.accent_bright.name()).arg(DesignTokens::radius().pill));
-    }
-    for (auto *btn : findChildren<QPushButton*>("downloadRowRetry")) {
-        btn->setStyleSheet(QString(
-            "QPushButton { background: transparent; border: none; border-radius: %2px; }"
-            "QPushButton:hover { background: %1; }"
-        ).arg(c.bg_elevated.name()).arg(DesignTokens::radius().pill));
-        btn->setIcon(IconProvider::getIcon("refresh", c.accent, 14));
+        lbl->setObjectName("downloadRowError");
     }
 }

@@ -18,8 +18,6 @@ HistoryView::HistoryView(QWidget *parent)
 }
 
 void HistoryView::setupLayout() {
-    const auto &c = DesignTokens::current();
-
     auto *main_vbox = new QVBoxLayout(this);
     main_vbox->setContentsMargins(0, 0, 0, 0);
     main_vbox->setSpacing(0);
@@ -33,17 +31,11 @@ void HistoryView::setupLayout() {
     auto *title = new QLabel(tr_q("history"), this);
     title->setObjectName("historyTitle");
     title->setFont(DesignTokens::getFont("heading_lg"));
-    title->setStyleSheet(QString("color: %1; font-weight: bold;").arg(c.text_primary.name()));
+    title->setProperty("textRole", "heading");
 
     auto *clear_btn = new QPushButton(tr_q("clear_history"), this);
     clear_btn->setObjectName("historyClearBtn");
     clear_btn->setCursor(Qt::PointingHandCursor);
-    clear_btn->setStyleSheet(QString(
-        "QPushButton { background: transparent; border: 1px solid %1; border-radius: %6px; padding: 0 16px; color: %2; font-size: 12px; }"
-        "QPushButton:hover { background: rgba(%3, %4, %5, 0.08); }")
-        .arg(c.border.name()).arg(c.text_secondary.name())
-        .arg(c.text_primary.red()).arg(c.text_primary.green()).arg(c.text_primary.blue())
-        .arg(DesignTokens::radius().pill));
     connect(clear_btn, &QPushButton::clicked, this, [this]() {
         auto reply = QMessageBox::question(this, tr_q("clear_history"),
             tr_q("confirm_clear_history"),
@@ -61,7 +53,7 @@ void HistoryView::setupLayout() {
     auto *subtitle = new QLabel(tr_q("recently_played"), this);
     subtitle->setObjectName("historySubtitle");
     subtitle->setFont(DesignTokens::getFont("caption", 12));
-    subtitle->setStyleSheet(QString("color: %1; margin-bottom: 12px;").arg(c.text_secondary.name()));
+    subtitle->setProperty("textRole", "secondary");
     content_layout_->addWidget(subtitle);
 
     empty_label_ = new EmptyState(this);
@@ -114,8 +106,6 @@ void HistoryView::set_history(const std::vector<Track> &tracks,
                               const std::vector<std::string> &feedback_tokens) {
     clear_history();
 
-    const auto &c = DesignTokens::current();
-
     if (tracks.empty()) {
         empty_label_ = new EmptyState(this);
         empty_label_->setObjectName("historyEmptyLabel");
@@ -139,8 +129,7 @@ void HistoryView::set_history(const std::vector<Track> &tracks,
             last_group = group;
             auto *group_lbl = new QLabel(group, this);
             group_lbl->setFont(DesignTokens::getFont("heading_sm", 13));
-            group_lbl->setStyleSheet(QString("color: %1; font-weight: bold; margin-top: 16px; margin-bottom: 4px;")
-                .arg(c.accent.name()));
+            group_lbl->setProperty("textRole", "accent-heading");
             content_layout_->addWidget(group_lbl);
         }
 
@@ -155,26 +144,4 @@ void HistoryView::set_history(const std::vector<Track> &tracks,
     content_layout_->addStretch();
 }
 
-void HistoryView::update_theme() {
-    const auto &c = DesignTokens::current();
-    if (auto *title = findChild<QLabel*>("historyTitle")) {
-        title->setStyleSheet(QString("color: %1; font-weight: bold;").arg(c.text_primary.name()));
-    }
-    if (auto *clear_btn = findChild<QPushButton*>("historyClearBtn")) {
-        clear_btn->setStyleSheet(QString(
-            "QPushButton { background: transparent; border: 1px solid %1; border-radius: %6px; padding: 0 16px; color: %2; font-size: 12px; }"
-            "QPushButton:hover { background: rgba(%3, %4, %5, 0.08); }")
-            .arg(c.border.name()).arg(c.text_secondary.name())
-            .arg(c.text_primary.red()).arg(c.text_primary.green()).arg(c.text_primary.blue())
-            .arg(DesignTokens::radius().pill));
-    }
-    if (auto *subtitle = findChild<QLabel*>("historySubtitle")) {
-        subtitle->setStyleSheet(QString("color: %1; margin-bottom: 12px;").arg(c.text_secondary.name()));
-    }
-    if (auto *empty = findChild<EmptyState*>("historyEmptyLabel")) {
-        empty->applyPanelStyle("empty");
-    }
-    for (auto *row : findChildren<HistoryRow*>()) {
-        row->update_theme();
-    }
-}
+

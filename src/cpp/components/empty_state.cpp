@@ -82,7 +82,7 @@ QPushButton *EmptyState::addButton(const QString &text) {
     auto *btn = new QPushButton(text, this);
     btn->setCursor(Qt::PointingHandCursor);
     btn->setMinimumHeight(38);
-    btn->setStyleSheet(DesignTokens::primaryButtonStyle(8));
+    btn->setProperty("buttonRole", "primary");
     layout_->addWidget(btn, 0, Qt::AlignHCenter);
     return btn;
 }

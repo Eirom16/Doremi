@@ -63,7 +63,7 @@ CreatePlaylistDialog::CreatePlaylistDialog(QWidget *parent)
     btn_layout->addWidget(cancel_btn);
 
     auto *create_btn = new QPushButton(tr_q("create"), this);
-    create_btn->setStyleSheet(DesignTokens::primaryButtonStyle(DesignTokens::radius().md));
+    create_btn->setProperty("buttonRole", "primary");
     connect(create_btn, &QPushButton::clicked, this, [this]() {
         if (name_edit_->text().trimmed().isEmpty()) {
             return;

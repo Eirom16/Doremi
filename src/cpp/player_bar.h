@@ -7,6 +7,8 @@
 #include <QSlider>
 #include <QHBoxLayout>
 
+class AnimatedProgress;
+
 class PlayerBar : public QWidget {
     Q_OBJECT
 public:
@@ -19,9 +21,9 @@ public:
     void set_shuffle(bool on);
     void set_repeat_mode(int mode); // 0=None, 1=All, 2=One
     void set_compact(bool compact);
-    void update_theme();
     bool shuffle_on() const { return shuffle_on_; }
     int  repeat_mode() const { return repeat_mode_; }
+    void update_theme();
 signals:
     void play_pause_clicked();
     void next_clicked();
@@ -40,7 +42,7 @@ private:
     QPushButton *next_btn_;
     QPushButton *shuffle_btn_;
     QPushButton *repeat_btn_;
-    QSlider    *progress_;
+    AnimatedProgress *progress_;
     QWidget    *left_container_ = nullptr;
     QWidget    *right_container_ = nullptr;
     QLabel     *track_label_;

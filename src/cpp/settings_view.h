@@ -57,7 +57,6 @@ public:
     bool discord_rpc_enabled() const;
     bool lastfm_enabled() const;
 
-    void update_theme();
 signals:
     void setting_changed(const std::string &key, const std::string &value);
     void lastfm_auth_requested(const std::string &apiKey, const std::string &apiSecret, const std::string &username, const std::string &password);

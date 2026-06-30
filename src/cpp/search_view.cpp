@@ -11,15 +11,13 @@ static void clear_layout(QVBoxLayout *lay);
 SearchView::SearchView(QWidget *parent)
     : QWidget(parent)
 {
-    const auto &c = DesignTokens::current();
-
     auto *root = new QVBoxLayout(this);
     root->setContentsMargins(DesignTokens::pagePadding());
     root->setSpacing(16);
 
     header_ = new QLabel(tr_q("results"), this);
     header_->setFont(DesignTokens::getFont("heading_lg"));
-    header_->setStyleSheet(QString("color: %1; font-weight: bold; background: transparent;").arg(c.text_primary.name()));
+    header_->setProperty("textRole", "heading");
     root->addWidget(header_);
 
     filters_ = new QHBoxLayout();
@@ -38,36 +36,7 @@ SearchView::SearchView(QWidget *parent)
         btn->setFont(DesignTokens::getFont("body", 12));
         btn->setFocusPolicy(Qt::StrongFocus);
         btn->setAccessibleName(tr_q("filter_by").arg(name));
-        
-        QString btnStyle = QString(
-            "QPushButton {\n"
-            "    background-color: %1;\n"
-            "    border: 1px solid %2;\n"
-            "    border-radius: %7px;\n"
-            "    padding: 0 16px;\n"
-            "    color: %3;\n"
-            "}\n"
-            "QPushButton:hover {\n"
-            "    background-color: %4;\n"
-            "    color: %5;\n"
-            "}\n"
-            "QPushButton:checked {\n"
-            "    background-color: %6;\n"
-            "    border-color: %6;\n"
-            "    color: %8;\n"
-            "    font-weight: 500;\n"
-            "}\n"
-        )
-        .arg(c.bg_surface.name())
-        .arg(c.border.name())
-        .arg(c.text_secondary.name())
-        .arg(QString("rgba(%1, %2, %3, %4)").arg(c.accent_dim.red()).arg(c.accent_dim.green()).arg(c.accent_dim.blue()).arg(c.accent_dim.alpha() / 255.0))
-        .arg(c.text_primary.name())
-        .arg(c.accent.name())
-        .arg(DesignTokens::radius().xl)
-        .arg(c.text_on_accent.name());
-
-        btn->setStyleSheet(btnStyle);
+        btn->setObjectName("filterBtn");
         filters_->addWidget(btn);
         filter_btns_.push_back(btn);
         btn->setProperty("filterValue", filterValue);
@@ -88,13 +57,14 @@ SearchView::SearchView(QWidget *parent)
 
     auto *placeholder = new QLabel(tr_q("type_to_search"), this);
     placeholder->setFont(DesignTokens::getFont("body", 14));
-    placeholder->setStyleSheet(QString("color: %1; padding: 24px;").arg(c.text_muted.name()));
+    placeholder->setProperty("textRole", "muted");
+    placeholder->setObjectName("stateMessage");
     placeholder->setAlignment(Qt::AlignCenter);
     results_->addWidget(placeholder);
     results_->addStretch(1);
 
     root->addLayout(results_, 1);
-    setStyleSheet("background: transparent;");
+    setProperty("bgRole", "transparent");
 }
 
 void SearchView::set_query(const std::string &query) {
@@ -131,8 +101,6 @@ void SearchView::show_results(const TopResult &top_result, bool has_top_result,
     showing_recent_ = false;
     clear_layout(results_);
 
-    const auto &c = DesignTokens::current();
-
     bool has_any = has_top_result || !songs.empty() || !videos.empty() || !artists.empty() || !albums.empty() || !playlists.empty() || !shows.empty() || !episodes.empty();
     if (!has_any) {
         auto *empty = new EmptyState(this);
@@ -149,11 +117,12 @@ void SearchView::show_results(const TopResult &top_result, bool has_top_result,
     {
         auto *sec_header = new QLabel(tr_q("top_result"), this);
         sec_header->setFont(DesignTokens::getFont("micro", 11));
-        sec_header->setStyleSheet(QString("color: %1; text-transform: uppercase; padding: 6px 12px 6px;")
-            .arg(c.accent.name()));
+        sec_header->setProperty("textRole", "accent");
+        sec_header->setObjectName("sectionHeader");
 
         ClickableItem *top = nullptr;
         if (has_top_result) {
+            // ... (same code)
             std::string label = std::string(doremi_tr("top_result"));
             if (top_result.item_type == "artist") label = std::string(doremi_tr("artist_singular"));
             else if (top_result.item_type == "album") label = std::string(doremi_tr("album_singular"));
@@ -228,7 +197,6 @@ void SearchView::show_results(const TopResult &top_result, bool has_top_result,
                 });
             }
         } else {
-            // Heuristic fallback
             if (!artists.empty()) {
                 const auto &a = artists.front();
                 top = new ClickableItem(static_cast<std::string>(a.name), "Artista", this);
@@ -288,8 +256,8 @@ void SearchView::show_results(const TopResult &top_result, bool has_top_result,
     if (!songs.empty()) {
         auto *sec_header = new QLabel(tr_q("songs"), this);
         sec_header->setFont(DesignTokens::getFont("micro", 11));
-        sec_header->setStyleSheet(QString("color: %1; text-transform: uppercase; padding: 12px 12px 6px;")
-            .arg(c.accent.name()));
+        sec_header->setProperty("textRole", "accent");
+        sec_header->setObjectName("sectionHeader");
         results_->addWidget(sec_header);
         for (const auto &track : songs) {
             auto *ci = new ClickableItem(static_cast<std::string>(track.title), static_cast<std::string>(track.artist), this);
@@ -320,8 +288,8 @@ void SearchView::show_results(const TopResult &top_result, bool has_top_result,
     if (!videos.empty()) {
         auto *sec_header = new QLabel(tr_q("videos"), this);
         sec_header->setFont(DesignTokens::getFont("micro", 11));
-        sec_header->setStyleSheet(QString("color: %1; text-transform: uppercase; padding: 12px 12px 6px;")
-            .arg(c.accent.name()));
+        sec_header->setProperty("textRole", "accent");
+        sec_header->setObjectName("sectionHeader");
         results_->addWidget(sec_header);
         for (const auto &track : videos) {
             auto *item = new ClickableItem(static_cast<std::string>(track.title),
@@ -347,8 +315,8 @@ void SearchView::show_results(const TopResult &top_result, bool has_top_result,
     if (!artists.empty()) {
         auto *sec_header = new QLabel(tr_q("artists"), this);
         sec_header->setFont(DesignTokens::getFont("micro", 11));
-        sec_header->setStyleSheet(QString("color: %1; text-transform: uppercase; padding: 12px 12px 6px;")
-            .arg(c.accent.name()));
+        sec_header->setProperty("textRole", "accent");
+        sec_header->setObjectName("sectionHeader");
         results_->addWidget(sec_header);
         for (const auto &artist : artists) {
             auto *ci = new ClickableItem(static_cast<std::string>(artist.name), tr_q("artist_singular").toStdString(), this);
@@ -372,8 +340,8 @@ void SearchView::show_results(const TopResult &top_result, bool has_top_result,
     if (!albums.empty()) {
         auto *sec_header = new QLabel(tr_q("albums"), this);
         sec_header->setFont(DesignTokens::getFont("micro", 11));
-        sec_header->setStyleSheet(QString("color: %1; text-transform: uppercase; padding: 12px 12px 6px;")
-            .arg(c.accent.name()));
+        sec_header->setProperty("textRole", "accent");
+        sec_header->setObjectName("sectionHeader");
         results_->addWidget(sec_header);
         for (const auto &album : albums) {
             auto *ci = new ClickableItem(static_cast<std::string>(album.title), static_cast<std::string>(album.artist), this);
@@ -397,8 +365,8 @@ void SearchView::show_results(const TopResult &top_result, bool has_top_result,
     if (!playlists.empty()) {
         auto *sec_header = new QLabel(tr_q("playlists"), this);
         sec_header->setFont(DesignTokens::getFont("micro", 11));
-        sec_header->setStyleSheet(QString("color: %1; text-transform: uppercase; padding: 12px 12px 6px;")
-            .arg(c.accent.name()));
+        sec_header->setProperty("textRole", "accent");
+        sec_header->setObjectName("sectionHeader");
         results_->addWidget(sec_header);
         for (const auto &playlist : playlists) {
             auto *ci = new ClickableItem(static_cast<std::string>(playlist.name),
@@ -416,8 +384,8 @@ void SearchView::show_results(const TopResult &top_result, bool has_top_result,
     if (!shows.empty()) {
         auto *sec_header = new QLabel(tr_q("shows"), this);
         sec_header->setFont(DesignTokens::getFont("micro", 11));
-        sec_header->setStyleSheet(QString("color: %1; text-transform: uppercase; padding: 12px 12px 6px;")
-            .arg(c.accent.name()));
+        sec_header->setProperty("textRole", "accent");
+        sec_header->setObjectName("sectionHeader");
         results_->addWidget(sec_header);
         for (const auto &show : shows) {
             auto *ci = new ClickableItem(
@@ -437,8 +405,8 @@ void SearchView::show_results(const TopResult &top_result, bool has_top_result,
     if (!episodes.empty()) {
         auto *sec_header = new QLabel("Episodios", this);
         sec_header->setFont(DesignTokens::getFont("micro", 11));
-        sec_header->setStyleSheet(QString("color: %1; text-transform: uppercase; padding: 12px 12px 6px;")
-            .arg(c.accent.name()));
+        sec_header->setProperty("textRole", "accent");
+        sec_header->setObjectName("sectionHeader");
         results_->addWidget(sec_header);
         for (const auto &ep : episodes) {
             auto *ci = new ClickableItem(
@@ -462,19 +430,17 @@ void SearchView::show_recent_searches(const std::vector<std::string> &queries) {
     showing_recent_ = true;
     clear_layout(results_);
 
-    const auto &c = DesignTokens::current();
-
     if (queries.empty()) {
         auto *empty = new QLabel(tr_q("no_recent_searches"), this);
         empty->setFont(DesignTokens::getFont("body", 14));
-        empty->setStyleSheet(QString("color: %1; padding: 24px;").arg(c.text_muted.name()));
+        empty->setProperty("textRole", "muted");
+        empty->setObjectName("stateMessage");
         empty->setAlignment(Qt::AlignCenter);
         results_->addWidget(empty);
         results_->addStretch(1);
         return;
     }
 
-    // Header row: title on the left, "clear all" action on the right.
     auto *header_row = new QWidget(this);
     auto *header_layout = new QHBoxLayout(header_row);
     header_layout->setContentsMargins(12, 12, 12, 6);
@@ -482,8 +448,7 @@ void SearchView::show_recent_searches(const std::vector<std::string> &queries) {
 
     auto *sec_header = new QLabel(tr_q("recent_searches"), header_row);
     sec_header->setFont(DesignTokens::getFont("micro", 11));
-    sec_header->setStyleSheet(QString("color: %1; text-transform: uppercase; background: transparent;")
-        .arg(c.accent.name()));
+    sec_header->setProperty("textRole", "accent");
     header_layout->addWidget(sec_header);
     header_layout->addStretch();
 
@@ -492,11 +457,7 @@ void SearchView::show_recent_searches(const std::vector<std::string> &queries) {
     clear_all->setFont(DesignTokens::getFont("micro", 11));
     clear_all->setFocusPolicy(Qt::StrongFocus);
     clear_all->setAccessibleName(tr_q("clear_history"));
-    clear_all->setStyleSheet(QString(
-        "QPushButton { background: transparent; border: none; color: %1; padding: 2px 6px; }\n"
-        "QPushButton:hover { color: %2; }\n"
-        "QPushButton:focus { outline: none; text-decoration: underline; }\n"
-    ).arg(c.text_muted.name()).arg(c.error.name()));
+    clear_all->setObjectName("clearAllBtn");
     connect(clear_all, &QPushButton::clicked, this, [this]() {
         emit search_history_clear_requested();
     });
@@ -515,59 +476,32 @@ void SearchView::show_recent_searches(const std::vector<std::string> &queries) {
         btn->setCursor(Qt::PointingHandCursor);
         btn->setFocusPolicy(Qt::StrongFocus);
         btn->setAccessibleName(QString::fromStdString("Buscar " + q));
+        btn->setObjectName("historySearchBtn");
 
         auto *btn_layout = new QHBoxLayout(btn);
         btn_layout->setContentsMargins(12, 0, 12, 0);
         btn_layout->setSpacing(8);
 
-        auto *history_icon = IconProvider::createIconLabel("history", 16, c.text_secondary, true, btn);
+        auto *history_icon = IconProvider::createIconLabel("history", 16, DesignTokens::current().text_secondary, true, btn);
         auto *text_label = new QLabel(QString::fromStdString(q), btn);
         text_label->setFont(DesignTokens::getFont("body_sm"));
-        text_label->setStyleSheet("color: inherit; background: transparent;");
 
         btn_layout->addWidget(history_icon);
         btn_layout->addWidget(text_label);
         btn_layout->addStretch();
         btn->setLayout(btn_layout);
 
-        QString btnStyle = QString(
-            "QPushButton {\n"
-            "    background: transparent;\n"
-            "    border: none;\n"
-            "    border-radius: %4px;\n"
-            "    color: %1;\n"
-            "}\n"
-            "QPushButton:hover {\n"
-            "    background-color: %2;\n"
-            "    color: %3;\n"
-            "}\n"
-            "QPushButton:focus {\n"
-            "    background-color: %2;\n"
-            "    color: %3;\n"
-            "}\n"
-        )
-        .arg(c.text_secondary.name())
-        .arg(QString("rgba(%1, %2, %3, %4)").arg(c.accent_dim.red()).arg(c.accent_dim.green()).arg(c.accent_dim.blue()).arg(c.accent_dim.alpha() / 255.0))
-        .arg(c.text_primary.name())
-        .arg(DesignTokens::radius().sm);
-        btn->setStyleSheet(btnStyle);
-
         connect(btn, &QPushButton::clicked, this, [this, q]() {
             emit search_requested(q, "all");
         });
         row_layout->addWidget(btn, 1);
 
-        // Per-entry delete button.
         auto *del = new QPushButton("✕", row);
         del->setFixedSize(28, 28);
         del->setCursor(Qt::PointingHandCursor);
         del->setFocusPolicy(Qt::StrongFocus);
         del->setAccessibleName(QString::fromStdString("Eliminar " + q + " del historial"));
-        del->setStyleSheet(QString(
-            "QPushButton { background: transparent; border: none; border-radius: %3px; color: %1; font-size: 12px; }\n"
-            "QPushButton:hover { background-color: rgba(239, 68, 68, 0.12); color: %2; }\n"
-            "QPushButton:focus { background-color: rgba(239, 68, 68, 0.12); color: %2; }\n"
-        ).arg(c.text_muted.name()).arg(c.error.name()).arg(DesignTokens::radius().pill));
+        del->setObjectName("historyDeleteBtn");
         connect(del, &QPushButton::clicked, this, [this, q]() {
             emit search_history_delete_requested(q);
         });
@@ -599,40 +533,4 @@ void SearchView::set_active_filter(const std::string &filter) {
     }
 }
 
-void SearchView::update_theme() {
-    const auto &c = DesignTokens::current();
-    if (header_) {
-        header_->setStyleSheet(QString("color: %1; font-weight: bold; background: transparent;").arg(c.text_primary.name()));
-    }
-    for (auto *btn : filter_btns_) {
-        if (!btn) continue;
-        QString btnStyle = QString(
-            "QPushButton {\n"
-            "    background-color: %1;\n"
-            "    border: 1px solid %2;\n"
-            "    border-radius: %7px;\n"
-            "    padding: 0 16px;\n"
-            "    color: %3;\n"
-            "}\n"
-            "QPushButton:hover {\n"
-            "    background-color: %4;\n"
-            "    color: %5;\n"
-            "}\n"
-            "QPushButton:checked {\n"
-            "    background-color: %6;\n"
-            "    border-color: %6;\n"
-            "    color: %8;\n"
-            "    font-weight: 500;\n"
-            "}\n"
-        )
-        .arg(c.bg_surface.name())
-        .arg(c.border.name())
-        .arg(c.text_secondary.name())
-        .arg(QString("rgba(%1, %2, %3, %4)").arg(c.accent_dim.red()).arg(c.accent_dim.green()).arg(c.accent_dim.blue()).arg(c.accent_dim.alpha() / 255.0))
-        .arg(c.text_primary.name())
-        .arg(c.accent.name())
-        .arg(DesignTokens::radius().xl)
-        .arg(c.text_on_accent.name());
-        btn->setStyleSheet(btnStyle);
-    }
-}
+

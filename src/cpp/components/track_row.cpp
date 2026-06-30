@@ -10,6 +10,7 @@
 #include <QPainterPath>
 #include <QMessageBox>
 #include <QDateTime>
+#include <QStyle>
 #include <QPointer>
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -27,12 +28,9 @@ TrackRow::TrackRow(Track track, TrackRowConfig config, QWidget *parent)
     layout_->setSpacing(14);
 
     setObjectName("TrackRow");
-    setStyleSheet(QString("QWidget#TrackRow { background-color: transparent; border-radius: %1px; }")
-        .arg(config_.corner_radius));
 }
 
 QWidget* TrackRow::createTextContainer(const QString &title, const QString &subtitle) {
-    const auto &c = DesignTokens::current();
     bool unavailable = track_.id.empty();
 
     auto *text = new QWidget(this);
@@ -43,13 +41,16 @@ QWidget* TrackRow::createTextContainer(const QString &title, const QString &subt
     title_label_ = new QLabel(title, this);
     title_label_->setObjectName("titleLabel");
     title_label_->setFont(DesignTokens::getFont("body_sm"));
-    QString title_color = unavailable ? c.text_muted.name() : c.text_primary.name();
-    title_label_->setStyleSheet(QString("color: %1; font-weight: 600;").arg(title_color));
+    if (unavailable) {
+        title_label_->setProperty("textRole", "muted");
+    } else {
+        title_label_->setProperty("textRole", "primary");
+    }
 
     subtitle_label_ = new QLabel(unavailable ? "" : subtitle, this);
     subtitle_label_->setObjectName("subtitleLabel");
     subtitle_label_->setFont(DesignTokens::getFont("caption_sm"));
-    subtitle_label_->setStyleSheet(QString("color: %1;").arg(c.text_muted.name()));
+    subtitle_label_->setProperty("textRole", "muted");
 
     text_l->addWidget(title_label_);
     text_l->addWidget(subtitle_label_);
@@ -68,7 +69,7 @@ void TrackRow::addFavButton() {
     fav_btn_->setIcon(IconProvider::getIcon(
         is_fav ? "favorite" : "favorite_border",
         is_fav ? c.accent : c.text_muted, 16));
-    fav_btn_->setStyleSheet("QPushButton { background: transparent; border: none; }");
+    fav_btn_->setProperty("buttonRole", "icon");
     connect(fav_btn_, &QPushButton::clicked, this, [this, is_fav]() {
         if (is_fav) {
             on_remove_favorite(static_cast<std::string>(track_.id));
@@ -80,7 +81,6 @@ void TrackRow::addFavButton() {
 }
 
 void TrackRow::setupCommonWidgets(const QString &title, const QString &subtitle, const QString &duration) {
-    const auto &c = DesignTokens::current();
     bool unavailable = track_.id.empty();
 
     // Title + subtitle
@@ -94,7 +94,7 @@ void TrackRow::setupCommonWidgets(const QString &title, const QString &subtitle,
         duration_label_ = new QLabel(duration, this);
         duration_label_->setObjectName("durationLabel");
         duration_label_->setFont(DesignTokens::getFont("caption_sm"));
-        duration_label_->setStyleSheet(QString("color: %1;").arg(c.text_muted.name()));
+        duration_label_->setProperty("textRole", "muted");
         duration_label_->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
         layout_->addWidget(duration_label_);
     }
@@ -155,17 +155,17 @@ void TrackRow::contextMenuEvent(QContextMenuEvent *event) {
 void TrackRow::enterEvent(QEnterEvent *event) {
     QWidget::enterEvent(event);
     hovered_ = true;
-    const auto &c = DesignTokens::current();
-    setStyleSheet(QString("QWidget#TrackRow { background-color: rgba(%1, %2, %3, 0.06); border-radius: %4px; }")
-        .arg(c.text_primary.red()).arg(c.text_primary.green()).arg(c.text_primary.blue())
-        .arg(config_.corner_radius));
+    setProperty("bgRole", "elevated");
+    style()->unpolish(this);
+    style()->polish(this);
 }
 
 void TrackRow::leaveEvent(QEvent *event) {
     QWidget::leaveEvent(event);
     hovered_ = false;
-    setStyleSheet(QString("QWidget#TrackRow { background-color: transparent; border-radius: %1px; }")
-        .arg(config_.corner_radius));
+    setProperty("bgRole", "transparent");
+    style()->unpolish(this);
+    style()->polish(this);
 }
 
 void TrackRow::update_theme() {
@@ -173,14 +173,17 @@ void TrackRow::update_theme() {
     bool unavailable = track_.id.empty();
 
     if (title_label_) {
-        QString title_color = unavailable ? c.text_muted.name() : c.text_primary.name();
-        title_label_->setStyleSheet(QString("color: %1; font-weight: 600;").arg(title_color));
+        if (unavailable) {
+            title_label_->setProperty("textRole", "muted");
+        } else {
+            title_label_->setProperty("textRole", "primary");
+        }
     }
     if (subtitle_label_) {
-        subtitle_label_->setStyleSheet(QString("color: %1;").arg(c.text_muted.name()));
+        subtitle_label_->setProperty("textRole", "muted");
     }
     if (duration_label_) {
-        duration_label_->setStyleSheet(QString("color: %1;").arg(c.text_muted.name()));
+        duration_label_->setProperty("textRole", "muted");
     }
     if (fav_btn_) {
         bool is_fav = get_track_favorite_state(static_cast<std::string>(track_.id));
@@ -202,13 +205,12 @@ AlbumTrackRow::AlbumTrackRow(int num, const QString &title, const QString &artis
     setIndex(num - 1);
 
     // Track number
-    const auto &c = DesignTokens::current();
     auto *num_lbl = new QLabel(QString::number(num), this);
     num_lbl->setObjectName("numLabel");
     num_lbl->setFont(DesignTokens::getFont("caption", 12));
     num_lbl->setFixedWidth(24);
     num_lbl->setAlignment(Qt::AlignCenter);
-    num_lbl->setStyleSheet(QString("color: %1;").arg(c.text_muted.name()));
+    num_lbl->setProperty("textRole", "muted");
     layout_->addWidget(num_lbl);
 
     setupCommonWidgets(title, artist, duration);
@@ -226,15 +228,13 @@ PlaylistTrackRow::PlaylistTrackRow(int num, const QString &title, const QString 
     config_.drag_drop = true;
     setIndex(num - 1);
 
-    const auto &c = DesignTokens::current();
-
     // Track number
     auto *num_lbl = new QLabel(QString::number(num), this);
     num_lbl->setObjectName("numLabel");
     num_lbl->setFont(DesignTokens::getFont("caption", 12));
     num_lbl->setFixedWidth(24);
     num_lbl->setAlignment(Qt::AlignCenter);
-    num_lbl->setStyleSheet(QString("color: %1;").arg(c.text_muted.name()));
+    num_lbl->setProperty("textRole", "muted");
     layout_->addWidget(num_lbl);
 
     setupCommonWidgets(title, artist, duration);
@@ -329,10 +329,9 @@ ArtistTrackRow::ArtistTrackRow(const QString &title, const QString &album,
     : TrackRow(std::move(track), {}, parent)
 {
     config_.height = 52;
-    const auto &c = DesignTokens::current();
 
     // Play icon instead of track number
-    auto *play = IconProvider::createIconLabel("play_arrow", 16, c.text_muted, false, this);
+    auto *play = IconProvider::createIconLabel("play_arrow", 16, DesignTokens::current().text_muted, false, this);
     play->setObjectName("playIcon");
     layout_->addWidget(play);
 
@@ -377,7 +376,7 @@ HistoryRow::HistoryRow(const Track &track,
         duration_label_ = new QLabel(dur, this);
         duration_label_->setObjectName("durationLabel");
         duration_label_->setFont(DesignTokens::getFont("caption_sm"));
-        duration_label_->setStyleSheet(QString("color: %1;").arg(c.text_muted.name()));
+        duration_label_->setProperty("textRole", "muted");
         duration_label_->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
         layout_->addWidget(duration_label_);
     }
@@ -400,7 +399,7 @@ HistoryRow::HistoryRow(const Track &track,
             time_ago_label_ = new QLabel(ago, this);
             time_ago_label_->setObjectName("agoLabel");
             time_ago_label_->setFont(DesignTokens::getFont("caption", 10));
-            time_ago_label_->setStyleSheet(QString("color: %1;").arg(c.text_muted.name()));
+            time_ago_label_->setProperty("textRole", "muted");
             time_ago_label_->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
             time_ago_label_->setFixedWidth(50);
             layout_->addWidget(time_ago_label_);
@@ -413,10 +412,7 @@ HistoryRow::HistoryRow(const Track &track,
     delete_btn_->setFixedSize(28, 28);
     delete_btn_->setCursor(Qt::PointingHandCursor);
     delete_btn_->setFlat(true);
-    delete_btn_->setStyleSheet(QString(
-        "QPushButton { background: transparent; border: none; border-radius: %4px; }"
-        "QPushButton:hover { background: rgba(%1, %2, %3, 0.1); }"
-    ).arg(c.text_primary.red()).arg(c.text_primary.green()).arg(c.text_primary.blue()).arg(DesignTokens::radius().sm));
+    delete_btn_->setProperty("buttonRole", "icon");
     delete_btn_->setIcon(IconProvider::getIcon("delete", c.text_muted, 18));
     delete_btn_->setToolTip(tr_q("remove_from_history"));
     connect(delete_btn_, &QPushButton::clicked, this, [this]() {
@@ -506,25 +502,21 @@ void HistoryRow::update_theme() {
     const auto &c = DesignTokens::current();
 
     if (title_label_) {
-        title_label_->setStyleSheet(QString("color: %1; font-weight: 600;").arg(c.text_primary.name()));
+        title_label_->setProperty("textRole", "primary");
     }
     if (subtitle_label_) {
-        subtitle_label_->setStyleSheet(QString("color: %1;").arg(c.text_secondary.name()));
+        subtitle_label_->setProperty("textRole", "secondary");
     }
     if (duration_label_) {
-        duration_label_->setStyleSheet(QString("color: %1;").arg(c.text_muted.name()));
+        duration_label_->setProperty("textRole", "muted");
     }
     if (time_ago_label_) {
-        time_ago_label_->setStyleSheet(QString("color: %1;").arg(c.text_muted.name()));
+        time_ago_label_->setProperty("textRole", "muted");
     }
     if (thumb_label_) {
         thumb_label_->setStyleSheet(QString("background-color: %1; border-radius: %2px;").arg(c.bg_elevated.name()).arg(DesignTokens::radius().sm));
     }
     if (delete_btn_) {
-        delete_btn_->setStyleSheet(QString(
-            "QPushButton { background: transparent; border: none; border-radius: %4px; }"
-            "QPushButton:hover { background: rgba(%1, %2, %3, 0.1); }"
-        ).arg(c.text_primary.red()).arg(c.text_primary.green()).arg(c.text_primary.blue()).arg(DesignTokens::radius().sm));
         delete_btn_->setIcon(IconProvider::getIcon("delete", c.text_muted, 18));
     }
 }
@@ -540,27 +532,25 @@ EpisodeRow::EpisodeRow(const QString &title, const QString &description,
     setFixedHeight(72);
     setCursor(Qt::PointingHandCursor);
 
-    const auto &c = DesignTokens::current();
-
     auto *row = new QHBoxLayout(this);
     row->setContentsMargins(12, 8, 12, 8);
 
     auto *info = new QVBoxLayout;
     auto *title_lbl = new QLabel(title);
     title_lbl->setObjectName("titleLabel");
-    title_lbl->setStyleSheet(QString("font-size: 14px; font-weight: 600; color: %1;").arg(c.text_primary.name()));
+    title_lbl->setProperty("textRole", "primary");
     title_lbl->setWordWrap(false);
     title_lbl->setFixedHeight(20);
 
     auto *desc_lbl = new QLabel(description);
     desc_lbl->setObjectName("descLabel");
-    desc_lbl->setStyleSheet(QString("font-size: 12px; color: %1;").arg(c.text_secondary.name()));
+    desc_lbl->setProperty("textRole", "secondary");
     desc_lbl->setWordWrap(false);
     desc_lbl->setFixedHeight(16);
 
     auto *duration_lbl = new QLabel(duration);
     duration_lbl->setObjectName("durationLabel");
-    duration_lbl->setStyleSheet(QString("font-size: 11px; color: %1;").arg(c.text_muted.name()));
+    duration_lbl->setProperty("textRole", "muted");
 
     info->addWidget(title_lbl);
     info->addWidget(desc_lbl);
@@ -618,25 +608,28 @@ void EpisodeRow::contextMenuEvent(QContextMenuEvent *event) {
 }
 
 void EpisodeRow::enterEvent(QEnterEvent *event) {
-    setStyleSheet(QString("background: %1;").arg(DesignTokens::current().bg_elevated.name()));
+    setProperty("bgRole", "elevated");
+    style()->unpolish(this);
+    style()->polish(this);
     QWidget::enterEvent(event);
 }
 
 void EpisodeRow::leaveEvent(QEvent *event) {
-    setStyleSheet("");
+    setProperty("bgRole", "transparent");
+    style()->unpolish(this);
+    style()->polish(this);
     QWidget::leaveEvent(event);
 }
 
 void EpisodeRow::update_theme() {
-    const auto &c = DesignTokens::current();
     if (auto *title_lbl = findChild<QLabel*>("titleLabel")) {
-        title_lbl->setStyleSheet(QString("font-size: 14px; font-weight: 600; color: %1;").arg(c.text_primary.name()));
+        title_lbl->setProperty("textRole", "primary");
     }
     if (auto *desc_lbl = findChild<QLabel*>("descLabel")) {
-        desc_lbl->setStyleSheet(QString("font-size: 12px; color: %1;").arg(c.text_secondary.name()));
+        desc_lbl->setProperty("textRole", "secondary");
     }
     if (auto *duration_lbl = findChild<QLabel*>("durationLabel")) {
-        duration_lbl->setStyleSheet(QString("font-size: 11px; color: %1;").arg(c.text_muted.name()));
+        duration_lbl->setProperty("textRole", "muted");
     }
 }
 
@@ -659,7 +652,7 @@ TopTrackRow::TopTrackRow(int rank, const Track &track,
     auto *rank_lbl = new QLabel(QString("#%1").arg(rank), this);
     rank_lbl->setFont(DesignTokens::getFont("heading_sm", 12));
     rank_lbl->setFixedWidth(24);
-    rank_lbl->setStyleSheet(QString("color: %1; font-weight: bold;").arg(c.accent.name()));
+    rank_lbl->setProperty("textRole", "accent");
     layout->addWidget(rank_lbl);
 
     auto *thumb_lbl = new QLabel(this);
@@ -694,11 +687,11 @@ TopTrackRow::TopTrackRow(int rank, const Track &track,
 
     auto *title_lbl = new QLabel(QString::fromStdString(static_cast<std::string>(track.title)), this);
     title_lbl->setFont(DesignTokens::getFont("body_sm"));
-    title_lbl->setStyleSheet(QString("color: %1; font-weight: bold;").arg(c.text_primary.name()));
+    title_lbl->setProperty("textRole", "primary");
 
     auto *artist_lbl = new QLabel(QString::fromStdString(static_cast<std::string>(track.artist)), this);
     artist_lbl->setFont(DesignTokens::getFont("caption_sm"));
-    artist_lbl->setStyleSheet(QString("color: %1;").arg(c.text_secondary.name()));
+    artist_lbl->setProperty("textRole", "secondary");
 
     text_layout->addWidget(title_lbl);
     text_layout->addWidget(artist_lbl);
@@ -712,7 +705,7 @@ TopTrackRow::TopTrackRow(int rank, const Track &track,
 
     auto *plays_lbl = new QLabel(QString("%1 reproducciones").arg(plays), this);
     plays_lbl->setFont(DesignTokens::getFont("caption", 10));
-    plays_lbl->setStyleSheet(QString("color: %1;").arg(c.text_secondary.name()));
+    plays_lbl->setProperty("textRole", "secondary");
     plays_lbl->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
 
     auto *bar = new QWidget(this);
@@ -735,7 +728,6 @@ TopTrackRow::TopTrackRow(int rank, const Track &track,
     setLayout(layout);
 
     setObjectName("TopTrackRow");
-    setStyleSheet(QString("QWidget#TopTrackRow { background-color: transparent; border-radius: %1px; }").arg(DesignTokens::radius().sm));
 }
 
 void TopTrackRow::mousePressEvent(QMouseEvent *event) {
@@ -747,14 +739,14 @@ void TopTrackRow::mousePressEvent(QMouseEvent *event) {
 
 void TopTrackRow::enterEvent(QEnterEvent *event) {
     QWidget::enterEvent(event);
-    setStyleSheet(QString("QWidget#TopTrackRow { background-color: %1; }")
-        .arg(QString("rgba(%1, %2, %3, 0.06)").arg(DesignTokens::current().text_primary.red())
-                                                .arg(DesignTokens::current().text_primary.green())
-                                                .arg(DesignTokens::current().text_primary.blue())));
+    setProperty("bgRole", "elevated");
+    style()->unpolish(this);
+    style()->polish(this);
 }
 
 void TopTrackRow::leaveEvent(QEvent *event) {
     QWidget::leaveEvent(event);
-    setStyleSheet("QWidget#TopTrackRow { background-color: transparent; }");
+    setProperty("bgRole", "transparent");
+    style()->unpolish(this);
+    style()->polish(this);
 }
-

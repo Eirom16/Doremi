@@ -35,16 +35,41 @@ void AnimatedProgress::leaveEvent(QEvent *) {
     m_hoverAnim->start();
 }
 
+bool AnimatedProgress::isSliderDown() const {
+    return m_isDragging || QSlider::isSliderDown();
+}
+
 void AnimatedProgress::mousePressEvent(QMouseEvent *event) {
     if (event->button() == Qt::LeftButton) {
         qreal pct = static_cast<qreal>(event->position().x()) / width();
         int val = minimum() + static_cast<int>((maximum() - minimum()) * pct);
         setValue(val);
-        emit sliderMoved(val);
+        m_isDragging = true;
         event->accept();
         return;
     }
     QSlider::mousePressEvent(event);
+}
+
+void AnimatedProgress::mouseMoveEvent(QMouseEvent *event) {
+    if (m_isDragging) {
+        qreal pct = static_cast<qreal>(event->position().x()) / width();
+        int val = minimum() + static_cast<int>((maximum() - minimum()) * pct);
+        setValue(val);
+        event->accept();
+        return;
+    }
+    QSlider::mouseMoveEvent(event);
+}
+
+void AnimatedProgress::mouseReleaseEvent(QMouseEvent *event) {
+    if (m_isDragging && event->button() == Qt::LeftButton) {
+        m_isDragging = false;
+        emit sliderReleased();
+        event->accept();
+        return;
+    }
+    QSlider::mouseReleaseEvent(event);
 }
 
 void AnimatedProgress::paintEvent(QPaintEvent *) {

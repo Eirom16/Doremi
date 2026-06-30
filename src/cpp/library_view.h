@@ -34,7 +34,6 @@ public:
     void set_library_state(const std::string &state, const std::string &message);
     void set_authenticated(bool authenticated);
     std::string current_tab() const;
-    void update_theme();
 signals:
     void tab_changed(const std::string &tab);
     void play_requested(Track track);

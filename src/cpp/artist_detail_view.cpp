@@ -42,16 +42,13 @@ void ArtistDetailView::setupLayout() {
     auto *back_text = new QLabel("Volver", back_btn);
     back_text->setObjectName("backText");
     back_text->setFont(DesignTokens::getFont("caption", 12));
-    back_text->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
+    back_text->setProperty("textRole", "secondary");
     back_layout->addWidget(back_icon);
     back_layout->addWidget(back_text);
     back_btn->setLayout(back_layout);
     back_btn->setFixedHeight(32);
     back_btn->setCursor(Qt::PointingHandCursor);
-    back_btn->setStyleSheet(QString(
-        "QPushButton { background: transparent; border: none; border-radius: %4px; }"
-        "QPushButton:hover { background: rgba(%1, %2, %3, 0.08); }")
-        .arg(c.text_primary.red()).arg(c.text_primary.green()).arg(c.text_primary.blue()).arg(DesignTokens::radius().sm));
+    back_btn->setObjectName("backBtn");
     connect(back_btn, &QPushButton::clicked, this, &ArtistDetailView::back_requested);
     content_layout_->addWidget(back_btn, 0, Qt::AlignLeft);
 
@@ -71,23 +68,23 @@ void ArtistDetailView::setupLayout() {
     auto *type_lbl = new QLabel("ARTISTA", this);
     type_lbl->setObjectName("typeLabel");
     type_lbl->setFont(DesignTokens::getFont("caption", 10));
-    type_lbl->setStyleSheet(QString("color: %1; font-weight: bold; letter-spacing: 2px;").arg(c.text_muted.name()));
+    type_lbl->setProperty("textRole", "muted");
     info->addWidget(type_lbl);
 
     name_label_ = new QLabel("Artista", this);
     name_label_->setFont(DesignTokens::getFont("heading_lg"));
-    name_label_->setStyleSheet(QString("color: %1; font-weight: bold;").arg(c.text_primary.name()));
+    name_label_->setProperty("textRole", "heading");
     name_label_->setWordWrap(true);
     info->addWidget(name_label_);
 
     meta_label_ = new QLabel("", this);
     meta_label_->setFont(DesignTokens::getFont("caption", 12));
-    meta_label_->setStyleSheet(QString("color: %1;").arg(c.text_muted.name()));
+    meta_label_->setProperty("textRole", "muted");
     info->addWidget(meta_label_);
 
     desc_label_ = new QLabel("", this);
     desc_label_->setFont(DesignTokens::getFont("caption_sm"));
-    desc_label_->setStyleSheet(QString("color: %1;").arg(c.text_secondary.name()));
+    desc_label_->setProperty("textRole", "secondary");
     desc_label_->setWordWrap(true);
     desc_label_->setMaximumWidth(500);
     desc_label_->hide();
@@ -101,7 +98,7 @@ void ArtistDetailView::setupLayout() {
     auto *sep = new QWidget(this);
     sep->setObjectName("separator");
     sep->setFixedHeight(1);
-    sep->setStyleSheet(QString("background-color: %1;").arg(c.border.name()));
+    sep->setProperty("boxRole", "separator");
     content_layout_->addSpacing(12);
     content_layout_->addWidget(sep);
     content_layout_->addSpacing(4);
@@ -110,12 +107,12 @@ void ArtistDetailView::setupLayout() {
     auto *tracks_header = new QLabel("Canciones populares", this);
     tracks_header->setObjectName("tracksHeader");
     tracks_header->setFont(DesignTokens::getFont("heading_sm", 14));
-    tracks_header->setStyleSheet(QString("color: %1; font-weight: bold;").arg(c.text_primary.name()));
+    tracks_header->setProperty("textRole", "heading");
     content_layout_->addWidget(tracks_header);
 
     // Tracks container
     tracks_widget_ = new QWidget(this);
-    tracks_widget_->setStyleSheet("background: transparent;");
+    tracks_widget_->setProperty("bgRole", "transparent");
     tracks_layout_ = new QVBoxLayout(tracks_widget_);
     tracks_layout_->setContentsMargins(0, 0, 0, 0);
     tracks_layout_->setSpacing(2);
@@ -190,11 +187,10 @@ void ArtistDetailView::set_artist_tracks(const std::vector<Track> &tracks,
     }
 
     if (tracks.empty()) {
-        const auto &c = DesignTokens::current();
         auto *empty = new QLabel("No se encontraron canciones de este artista.", tracks_widget_);
         empty->setAlignment(Qt::AlignCenter);
         empty->setFont(DesignTokens::getFont("caption", 12));
-        empty->setStyleSheet(QString("color: %1; padding: 30px;").arg(c.text_muted.name()));
+        empty->setProperty("textRole", "muted");
         tracks_layout_->addWidget(empty);
     }
 
@@ -210,8 +206,6 @@ void ArtistDetailView::set_artist_tracks(const std::vector<Track> &tracks,
         singles_container_ = nullptr;
     }
 
-    const auto &c = DesignTokens::current();
-
     // Albums section
     if (!albums.empty()) {
         albums_container_ = new QWidget(this);
@@ -222,7 +216,7 @@ void ArtistDetailView::set_artist_tracks(const std::vector<Track> &tracks,
         auto *header = new QLabel("Álbumes", albums_container_);
         header->setObjectName("sectionHeader");
         header->setFont(DesignTokens::getFont("heading_sm", 14));
-        header->setStyleSheet(QString("color: %1; font-weight: bold; background: transparent;").arg(c.text_primary.name()));
+        header->setProperty("textRole", "heading");
         lay->addWidget(header);
         
         auto *carousel = new HorizontalCarousel(albums_container_);
@@ -254,7 +248,7 @@ void ArtistDetailView::set_artist_tracks(const std::vector<Track> &tracks,
         auto *header = new QLabel("Singles y EPs", singles_container_);
         header->setObjectName("sectionHeader");
         header->setFont(DesignTokens::getFont("heading_sm", 14));
-        header->setStyleSheet(QString("color: %1; font-weight: bold; background: transparent;").arg(c.text_primary.name()));
+        header->setProperty("textRole", "heading");
         lay->addWidget(header);
         
         auto *carousel = new HorizontalCarousel(singles_container_);
@@ -275,6 +269,7 @@ void ArtistDetailView::set_artist_tracks(const std::vector<Track> &tracks,
         lay->addWidget(carousel);
         content_layout_->addWidget(singles_container_);
     }
+    updateGeometry();
 }
 
 void ArtistDetailView::clear() {
@@ -300,43 +295,7 @@ void ArtistDetailView::clear() {
 }
 
 void ArtistDetailView::update_theme() {
-    const auto &c = DesignTokens::current();
-    if (avatar_label_) {
-        avatar_label_->setStyleSheet(QString("background-color: %1; border-radius: %2px;").arg(c.bg_elevated.name()).arg(DesignTokens::radius().pill));
-    }
-    if (name_label_) {
-        name_label_->setStyleSheet(QString("color: %1; font-weight: bold;").arg(c.text_primary.name()));
-    }
-    if (meta_label_) {
-        meta_label_->setStyleSheet(QString("color: %1;").arg(c.text_muted.name()));
-    }
-    if (desc_label_) {
-        desc_label_->setStyleSheet(QString("color: %1;").arg(c.text_secondary.name()));
-    }
-    if (auto *back_btn = findChild<QPushButton*>("backBtn")) {
-        back_btn->setStyleSheet(QString(
-            "QPushButton { background: transparent; border: none; border-radius: %4px; }\n"
-            "QPushButton:hover { background: rgba(%1, %2, %3, 0.08); }")
-            .arg(c.text_primary.red()).arg(c.text_primary.green()).arg(c.text_primary.blue()).arg(DesignTokens::radius().sm));
-    }
-    if (auto *back_text = findChild<QLabel*>("backText")) {
-        back_text->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
-    }
-    if (auto *type_lbl = findChild<QLabel*>("typeLabel")) {
-        type_lbl->setStyleSheet(QString("color: %1; font-weight: bold; letter-spacing: 2px;").arg(c.text_muted.name()));
-    }
-    if (auto *sep = findChild<QWidget*>("separator")) {
-        sep->setStyleSheet(QString("background-color: %1;").arg(c.border.name()));
-    }
-    if (auto *th = findChild<QLabel*>("tracksHeader")) {
-        th->setStyleSheet(QString("color: %1; font-weight: bold;").arg(c.text_primary.name()));
-    }
-    for (auto *h : findChildren<QLabel*>("sectionHeader")) {
-        h->setStyleSheet(QString("color: %1; font-weight: bold; background: transparent;").arg(c.text_primary.name()));
-    }
     for (auto *row : findChildren<ArtistTrackRow*>()) {
         row->update_theme();
     }
 }
-
-

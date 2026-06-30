@@ -39,8 +39,6 @@ void NowPlayingView::setupLayout() {
     close_btn->setFixedSize(40, 40);
     close_btn->setCursor(Qt::PointingHandCursor);
     close_btn->setIcon(IconProvider::getIcon("expand_more", c.text_primary, 24));
-    close_btn->setStyleSheet(QString("QPushButton { background: rgba(255,255,255,0.06); border: none; border-radius: %1px; }"
-                             "QPushButton:hover { background: rgba(255,255,255,0.12); }").arg(DesignTokens::radius().xl));
     header_layout->addWidget(close_btn);
     header_layout->addStretch();
     
@@ -68,12 +66,12 @@ void NowPlayingView::setupLayout() {
 
     title_label_ = new QLabel(tr_q("no_playback"), this);
     title_label_->setFont(DesignTokens::getFont("heading_lg"));
-    title_label_->setStyleSheet(QString("color: %1; font-weight: bold;").arg(c.text_primary.name()));
+    title_label_->setProperty("textRole", "primary");
     title_label_->setAlignment(Qt::AlignCenter);
 
     artist_label_ = new QLabel(tr_q("no_track"), this);
     artist_label_->setFont(DesignTokens::getFont("body_sm"));
-    artist_label_->setStyleSheet(QString("color: %1;").arg(c.text_secondary.name()));
+    artist_label_->setProperty("textRole", "secondary");
     artist_label_->setAlignment(Qt::AlignCenter);
 
     meta_layout->addWidget(title_label_);
@@ -90,7 +88,7 @@ void NowPlayingView::setupLayout() {
     like_btn_->setCursor(Qt::PointingHandCursor);
     like_btn_->setIcon(IconProvider::getIcon("favorite_border", c.text_secondary, 18));
     like_btn_->setToolTip(tr_q("add_favorite"));
-    like_btn_->setStyleSheet(DesignTokens::iconButtonStyle(16));
+    like_btn_->setProperty("buttonRole", "icon");
     connect(like_btn_, &QPushButton::clicked, this, [this]() {
         std::string track_id = static_cast<std::string>(current_track_.id);
         if (track_id.empty()) return;
@@ -109,7 +107,7 @@ void NowPlayingView::setupLayout() {
     download_btn_->setCursor(Qt::PointingHandCursor);
     download_btn_->setIcon(IconProvider::getIcon("download", c.text_secondary, 18));
     download_btn_->setToolTip(tr_q("download"));
-    download_btn_->setStyleSheet(DesignTokens::iconButtonStyle(16));
+    download_btn_->setProperty("buttonRole", "icon");
     connect(download_btn_, &QPushButton::clicked, this, [this]() {
         emit download_clicked(current_track_);
     });
@@ -132,7 +130,7 @@ void NowPlayingView::setupLayout() {
     
     time_label_ = new QLabel("0:00 / 0:00", this);
     time_label_->setFont(DesignTokens::getFont("caption_sm"));
-    time_label_->setStyleSheet(QString("color: %1;").arg(c.text_muted.name()));
+    time_label_->setProperty("textRole", "muted");
     time_label_->setAlignment(Qt::AlignCenter);
 
     progress_layout->addWidget(progress_bar_);
@@ -148,31 +146,31 @@ void NowPlayingView::setupLayout() {
     shuffle_btn_->setFixedSize(36, 36);
     shuffle_btn_->setCursor(Qt::PointingHandCursor);
     shuffle_btn_->setIcon(IconProvider::getIcon("shuffle", c.text_secondary, 20));
-    shuffle_btn_->setStyleSheet(DesignTokens::iconButtonStyle());
+    shuffle_btn_->setProperty("buttonRole", "icon");
 
     prev_btn_ = new QPushButton(this);
     prev_btn_->setFixedSize(40, 40);
     prev_btn_->setCursor(Qt::PointingHandCursor);
     prev_btn_->setIcon(IconProvider::getIcon("skip_previous", c.text_primary, 24));
-    prev_btn_->setStyleSheet(DesignTokens::iconButtonStyle());
+    prev_btn_->setProperty("buttonRole", "icon");
 
     play_btn_ = new QPushButton(this);
     play_btn_->setFixedSize(56, 56);
     play_btn_->setCursor(Qt::PointingHandCursor);
     play_btn_->setIcon(IconProvider::getIcon("play_arrow", c.text_on_accent, 32));
-    play_btn_->setStyleSheet(DesignTokens::primaryButtonStyle(28));
+    play_btn_->setProperty("buttonRole", "primary");
 
     next_btn_ = new QPushButton(this);
     next_btn_->setFixedSize(40, 40);
     next_btn_->setCursor(Qt::PointingHandCursor);
     next_btn_->setIcon(IconProvider::getIcon("skip_next", c.text_primary, 24));
-    next_btn_->setStyleSheet(DesignTokens::iconButtonStyle());
+    next_btn_->setProperty("buttonRole", "icon");
 
     repeat_btn_ = new QPushButton(this);
     repeat_btn_->setFixedSize(36, 36);
     repeat_btn_->setCursor(Qt::PointingHandCursor);
     repeat_btn_->setIcon(IconProvider::getIcon("repeat", c.text_secondary, 20));
-    repeat_btn_->setStyleSheet(DesignTokens::iconButtonStyle());
+    repeat_btn_->setProperty("buttonRole", "icon");
 
     controls_layout->addWidget(shuffle_btn_);
     controls_layout->addWidget(prev_btn_);
@@ -198,16 +196,19 @@ void NowPlayingView::setupLayout() {
     lyrics_tab_btn_->setCursor(Qt::PointingHandCursor);
     lyrics_tab_btn_->setCheckable(true);
     lyrics_tab_btn_->setChecked(true);
+    lyrics_tab_btn_->setObjectName("tabBtn");
     
     queue_tab_btn_ = new QPushButton(tr_q("queue"), this);
     queue_tab_btn_->setFont(DesignTokens::getFont("heading_sm", 13));
     queue_tab_btn_->setCursor(Qt::PointingHandCursor);
     queue_tab_btn_->setCheckable(true);
+    queue_tab_btn_->setObjectName("tabBtn");
 
     related_tab_btn_ = new QPushButton(tr_q("related"), this);
     related_tab_btn_->setFont(DesignTokens::getFont("heading_sm", 13));
     related_tab_btn_->setCursor(Qt::PointingHandCursor);
     related_tab_btn_->setCheckable(true);
+    related_tab_btn_->setObjectName("tabBtn");
 
     tabs_bar->addWidget(lyrics_tab_btn_);
     tabs_bar->addWidget(queue_tab_btn_);
@@ -216,7 +217,7 @@ void NowPlayingView::setupLayout() {
 
     // Stacked widget containing lyrics and queue
     tabs_stack_ = new QStackedWidget(this);
-    tabs_stack_->setStyleSheet("background: transparent;");
+    tabs_stack_->setProperty("bgRole", "transparent");
 
     lyrics_widget_ = new LyricsWidget(this);
     queue_panel_ = new QueuePanel(this);
@@ -251,7 +252,9 @@ void NowPlayingView::setupLayout() {
         emit repeat_cycled();
     });
 
-    connect(progress_bar_, &QSlider::sliderMoved, this, &NowPlayingView::seek_requested);
+    connect(progress_bar_, &QSlider::sliderReleased, this, [this]() {
+        emit seek_requested(progress_bar_->value());
+    });
     connect(lyrics_widget_, &LyricsWidget::seek_requested, this, &NowPlayingView::seek_requested);
 
 
@@ -429,6 +432,9 @@ void NowPlayingView::updateLikeButtonState(bool is_favorite) {
 }
 
 void NowPlayingView::setPlaybackState(int32_t, int32_t position_ms, int32_t duration_ms) {
+    if (progress_bar_->isSliderDown()) {
+        return;
+    }
     if (duration_ms > 0) {
         progress_bar_->blockSignals(true);
         progress_bar_->setRange(0, duration_ms);
@@ -521,23 +527,5 @@ void NowPlayingView::setSubtitleGlowEffect(bool enabled) {
 }
 
 void NowPlayingView::update_theme() {
-    const auto &c = DesignTokens::current();
-    title_label_->setStyleSheet(QString("color: %1; font-weight: bold;").arg(c.text_primary.name()));
-    artist_label_->setStyleSheet(QString("color: %1;").arg(c.text_secondary.name()));
-    time_label_->setStyleSheet(QString("color: %1;").arg(c.text_muted.name()));
-
-    if (auto *close_btn = findChild<QPushButton*>("closeBtn")) {
-        close_btn->setStyleSheet(QString(
-            "QPushButton { background: rgba(255,255,255,0.06); border: none; border-radius: %1px; }"
-            "QPushButton:hover { background: rgba(255,255,255,0.12); }"
-        ).arg(DesignTokens::radius().xl));
-        close_btn->setIcon(IconProvider::getIcon("expand_more", c.text_primary, 24));
-    }
-
-    prev_btn_->setIcon(IconProvider::getIcon("skip_previous", c.text_primary, 24));
-    next_btn_->setIcon(IconProvider::getIcon("skip_next", c.text_primary, 24));
-
-    play_btn_->setStyleSheet(DesignTokens::primaryButtonStyle(28));
-
     updateButtonsStyle();
 }

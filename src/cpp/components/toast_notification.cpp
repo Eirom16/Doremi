@@ -73,7 +73,7 @@ ToastNotification::ToastNotification(QWidget *parent,
         m_actionButton = new QPushButton(m_actionLabel, this);
         m_actionButton->setCursor(Qt::PointingHandCursor);
         m_actionButton->setFocusPolicy(Qt::StrongFocus);
-        m_actionButton->setStyleSheet(DesignTokens::primaryButtonStyle(12));
+        m_actionButton->setProperty("buttonRole", "primary");
         m_actionButton->setMinimumWidth(76);
         DesignTokens::applyAccessible(
             m_actionButton,

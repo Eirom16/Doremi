@@ -42,7 +42,6 @@ WelcomeView::WelcomeView(QWidget *parent)
         logo_->setPixmap(pix.scaledToWidth(180, Qt::SmoothTransformation));
         logo_->setAlignment(Qt::AlignCenter);
         
-        // Colorize effect for the logo matching accent color
         auto *effect = new QGraphicsColorizeEffect(logo_);
         effect->setColor(c.accent);
         effect->setStrength(1.0);
@@ -50,7 +49,6 @@ WelcomeView::WelcomeView(QWidget *parent)
         
         layout->addWidget(logo_);
     } else {
-        // Fallback logo icon
         logo_ = IconProvider::createIconLabel("album", 80, c.accent, true, this);
         logo_->setAlignment(Qt::AlignCenter);
         layout->addWidget(logo_);
@@ -58,13 +56,13 @@ WelcomeView::WelcomeView(QWidget *parent)
 
     title_ = new QLabel("Doremi", this);
     title_->setFont(DesignTokens::getFont("heading_lg"));
-    title_->setStyleSheet(QString("color: %1; background: transparent; font-weight: bold;").arg(c.accent.name()));
+    title_->setProperty("textRole", "accent-heading");
     title_->setAlignment(Qt::AlignCenter);
     layout->addWidget(title_);
 
     subtitle_ = new QLabel(tr_q("welcome_subtitle"), this);
     subtitle_->setFont(DesignTokens::getFont("body", 14));
-    subtitle_->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
+    subtitle_->setProperty("textRole", "secondary");
     subtitle_->setAlignment(Qt::AlignCenter);
     layout->addWidget(subtitle_);
 
@@ -83,13 +81,13 @@ WelcomeView::WelcomeView(QWidget *parent)
 
     welcome_text_ = new QLabel(tr_q("welcome_title"), card_);
     welcome_text_->setFont(DesignTokens::getFont("heading_lg", 20));
-    welcome_text_->setStyleSheet(QString("color: %1; background: transparent; font-weight: bold;").arg(c.text_primary.name()));
+    welcome_text_->setProperty("textRole", "heading");
     welcome_text_->setAlignment(Qt::AlignCenter);
     card_layout->addWidget(welcome_text_);
 
     desc_text_ = new QLabel(tr_q("welcome_desc"), card_);
     desc_text_->setFont(DesignTokens::getFont("body_sm"));
-    desc_text_->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
+    desc_text_->setProperty("textRole", "secondary");
     desc_text_->setAlignment(Qt::AlignCenter);
     card_layout->addWidget(desc_text_);
 
@@ -101,50 +99,30 @@ WelcomeView::WelcomeView(QWidget *parent)
 
     status_label_ = new QLabel("", card_);
     status_label_->setFont(DesignTokens::getFont("body_sm"));
-    status_label_->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
+    status_label_->setProperty("textRole", "secondary");
     status_label_->setAlignment(Qt::AlignCenter);
     status_label_->setVisible(false);
     card_layout->addWidget(status_label_);
 
     progress_ = new QLabel("", card_);
     progress_->setFont(DesignTokens::getFont("body", 12));
-    progress_->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_muted.name()));
+    progress_->setProperty("textRole", "muted");
     progress_->setAlignment(Qt::AlignCenter);
     progress_->setVisible(false);
     card_layout->addWidget(progress_);
 
     layout->addWidget(card_);
     layout->addStretch();
-
-    setStyleSheet("background: transparent;");
-    update_theme();
 }
 
 void WelcomeView::update_theme() {
     const auto &c = DesignTokens::current();
-    title_->setStyleSheet(QString("color: %1; background: transparent; font-weight: bold;").arg(c.accent.name()));
-    subtitle_->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
-    
     if (logo_) {
         auto *effect = qobject_cast<QGraphicsColorizeEffect*>(logo_->graphicsEffect());
         if (effect) {
             effect->setColor(c.accent);
-        } else {
-            // IconProvider label fallback color update
-            logo_->setStyleSheet(QString("color: %1; background: transparent;").arg(c.accent.name()));
         }
     }
-
-    card_->setStyleSheet(
-        "GlassPanel#welcomeCard {"
-        "    background-color: transparent;"
-        "    border: none;"
-        "}");
-
-    welcome_text_->setStyleSheet(QString("color: %1; background: transparent; font-weight: bold;").arg(c.text_primary.name()));
-    desc_text_->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
-    status_label_->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
-    progress_->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_muted.name()));
 }
 
 void WelcomeView::on_login_clicked() {

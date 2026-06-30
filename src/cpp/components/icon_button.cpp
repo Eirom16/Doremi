@@ -9,7 +9,7 @@ IconButton::IconButton(const QString &iconName, QWidget *parent, int iconSize)
     setFixedSize(iconSize + 16, iconSize + 16);
     setCursor(Qt::PointingHandCursor);
     setFocusPolicy(Qt::StrongFocus);
-    setStyleSheet(DesignTokens::iconButtonStyle(6));
+    setProperty("buttonRole", "icon");
 
     QString label = iconName;
     label.replace('_', ' ');

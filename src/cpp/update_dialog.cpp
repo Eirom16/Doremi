@@ -74,15 +74,7 @@ void UpdateDialog::build_ui() {
 
     panel_ = new QFrame(this);
     panel_->setObjectName("updatePanel");
-    panel_->setStyleSheet(QString(
-        "#updatePanel {"
-        "    background-color: %1;"
-        "    border-radius: %5px;"
-        "    border: 1px solid rgba(%2, %3, %4, 0.25);"
-        "}"
-    ).arg(c.bg_elevated.name())
-     .arg(c.accent.red()).arg(c.accent.green()).arg(c.accent.blue())
-     .arg(DesignTokens::radius().xl));
+    panel_->setProperty("boxRole", "panel");
 
     auto *shadow = new QGraphicsDropShadowEffect(panel_);
     shadow->setBlurRadius(48);
@@ -103,11 +95,11 @@ void UpdateDialog::build_ui() {
 
     title_lbl_ = new QLabel(tr_q("update_available_title"), panel_);
     title_lbl_->setFont(DesignTokens::getFont("heading_lg"));
-    title_lbl_->setStyleSheet(QString("color: %1; background: transparent; font-weight: bold;").arg(c.text_primary.name()));
+    title_lbl_->setProperty("textRole", "heading");
 
     version_lbl_ = new QLabel(panel_);
     version_lbl_->setFont(DesignTokens::getFont("body_sm"));
-    version_lbl_->setStyleSheet(QString("color: %1; background: transparent; font-family: monospace;").arg(c.accent.name()));
+    version_lbl_->setProperty("textRole", "accent");
 
     title_col->addWidget(title_lbl_);
     title_col->addWidget(version_lbl_);
@@ -130,31 +122,20 @@ void UpdateDialog::build_ui() {
     // Separator line
     auto *sep = new QFrame(panel_);
     sep->setFrameShape(QFrame::HLine);
-    sep->setStyleSheet(QString("color: rgba(%1, %2, %3, 0.10);").arg(c.accent.red()).arg(c.accent.green()).arg(c.accent.blue()));
+    sep->setProperty("boxRole", "separator");
     layout->addWidget(sep);
 
     // Release Notes Box
     notes_label_ = new QLabel(tr_q("update_notes_label"), panel_);
     notes_label_->setFont(DesignTokens::getFont("body", 12));
-    notes_label_->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
+    notes_label_->setProperty("textRole", "secondary");
     layout->addWidget(notes_label_);
 
     notes_box_ = new QTextEdit(panel_);
     notes_box_->setReadOnly(true);
     notes_box_->setFont(DesignTokens::getFont("body_sm"));
     notes_box_->setFixedHeight(140);
-    notes_box_->setStyleSheet(QString(
-        "QTextEdit {"
-        "    background: %1;"
-        "    border: 1px solid rgba(%2, %3, %4, 0.08);"
-        "    border-radius: %6px;"
-        "    color: %5;"
-        "    padding: 10px;"
-        "}"
-    ).arg(c.bg_surface.name())
-     .arg(c.accent.red()).arg(c.accent.green()).arg(c.accent.blue())
-     .arg(c.text_secondary.name())
-     .arg(DesignTokens::radius().lg));
+    notes_box_->setProperty("boxRole", "card");
     layout->addWidget(notes_box_);
 
     // Progress Bar Container (hidden until downloading)
@@ -182,7 +163,7 @@ void UpdateDialog::build_ui() {
 
     progress_label_ = new QLabel(tr_q("update_preparing"), progress_container_);
     progress_label_->setFont(DesignTokens::getFont("body", 12));
-    progress_label_->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
+    progress_label_->setProperty("textRole", "secondary");
 
     prog_layout->addWidget(progress_bar_);
     prog_layout->addWidget(progress_label_);

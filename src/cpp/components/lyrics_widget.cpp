@@ -82,7 +82,7 @@ LyricsWidget::LyricsWidget(QWidget *parent)
     scroll_area_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     scroll_area_->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     scroll_area_->setFrameShape(QFrame::NoFrame);
-    scroll_area_->setStyleSheet(DesignTokens::scrollAreaStyle());
+    // style handled by base.qss global QScrollArea selector
 
     container_ = new QWidget(scroll_area_);
     container_->setStyleSheet("background: transparent;");

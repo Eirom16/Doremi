@@ -13,8 +13,7 @@ WebLoginDialog::WebLoginDialog(QWidget *parent)
     setWindowTitle(tr_q("login_title"));
     resize(1000, 700);
 
-    const auto &c = DesignTokens::current();
-    setStyleSheet(QString("background-color: %1;").arg(c.bg_base.name()));
+    setProperty("bgRole", "surface");
 
     layout_ = new QVBoxLayout(this);
     layout_->setContentsMargins(0, 0, 0, 0);
@@ -23,16 +22,14 @@ WebLoginDialog::WebLoginDialog(QWidget *parent)
     // Header bar
     auto *header = new QWidget(this);
     header->setFixedHeight(32);
-    header->setStyleSheet(QString(
-        "background-color: %1; border-bottom: 1px solid %2;"
-    ).arg(c.bg_elevated.name()).arg(c.border.name()));
+    header->setObjectName("loginHeader");
 
     auto *header_layout = new QHBoxLayout(header);
     header_layout->setContentsMargins(12, 0, 8, 0);
 
     auto *hint = new QLabel(tr_q("login_hint"), header);
     hint->setFont(DesignTokens::getFont("body", 11));
-    hint->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_muted.name()));
+    hint->setProperty("textRole", "muted");
     hint_ = hint;
     header_layout->addWidget(hint);
     header_layout->addStretch();
@@ -43,20 +40,7 @@ WebLoginDialog::WebLoginDialog(QWidget *parent)
     btn_close_->setAutoDefault(false);
     btn_close_->setDefault(false);
     btn_close_->setFocusPolicy(Qt::NoFocus);
-    btn_close_->setStyleSheet(QString(
-        "QPushButton {"
-        "    background-color: transparent;"
-        "    color: %1;"
-        "    border: none;"
-        "    border-radius: %3px;"
-        "    font-size: 14px;"
-        "    font-weight: bold;"
-        "}"
-        "QPushButton:hover {"
-        "    color: %2;"
-        "    background-color: rgba(239, 68, 68, 0.1);"
-        "}"
-    ).arg(c.text_secondary.name()).arg(c.error.name()).arg(DesignTokens::radius().lg));
+    btn_close_->setObjectName("closeBtn");
 
     connect(btn_close_, &QPushButton::clicked, this, &QDialog::reject);
     header_layout->addWidget(btn_close_);
@@ -243,4 +227,3 @@ void WebLoginDialog::set_status(const QString &message) {
         hint_->setText(message);
     }
 }
-

@@ -22,10 +22,10 @@ public:
     explicit TrackRow(Track track, TrackRowConfig config = TrackRowConfig(), QWidget *parent = nullptr);
     virtual ~TrackRow() = default;
 
-    virtual void update_theme();
 
     int index() const { return index_; }
     void setIndex(int idx) { index_ = idx; }
+    void update_theme();
 
 signals:
     void play_requested(Track track);
@@ -102,8 +102,7 @@ public:
                const std::string &played_at,
                const std::string &feedback_token,
                QWidget *parent = nullptr);
-
-    void update_theme() override;
+    void update_theme();
 
 signals:
     void delete_requested(const std::string &track_id, const std::string &feedback_token);
@@ -126,8 +125,8 @@ public:
     EpisodeRow(const QString &title, const QString &description,
                const QString &duration, Episode episode,
                QWidget *parent = nullptr);
-
     void update_theme();
+
 signals:
     void play_requested(Episode episode);
 

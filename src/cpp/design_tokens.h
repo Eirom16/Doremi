@@ -89,17 +89,6 @@ public:
     static QMargins pagePadding();
     static QMargins pagePaddingNarrow();
     
-    // QSS generators
-    static QString getGlobalStyleSheet();
-    static QString iconButtonStyle(int radius = -1);
-    static QString primaryButtonStyle(int radius = -1);
-    static QString navButtonStyle();
-    static QString profileButtonStyle();
-    static QString textInputStyle();
-    static QString sliderStyle(bool prominent);
-    static QString textStyle(const QString &level, const QString &customColor = QString());
-    static QString panelStyle(const QString &type = "surface", int radiusValue = -1);
-    static QString scrollAreaStyle();
     static void applyAccessible(QWidget *widget,
                                 const QString &name,
                                 const QString &description = QString(),

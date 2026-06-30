@@ -19,7 +19,6 @@ public:
                      const std::vector<std::string> &played_at,
                      const std::vector<std::string> &feedback_tokens);
     void clear_history();
-    void update_theme();
 
 signals:
     void play_requested(Track track);

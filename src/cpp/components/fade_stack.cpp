@@ -11,6 +11,7 @@ FadeStack::FadeStack(QWidget *parent)
 void FadeStack::setCurrentIndex(int index) {
     if (index == currentIndex() || m_isTransitioning) {
         QStackedWidget::setCurrentIndex(index);
+        updateGeometry();
         return;
     }
     
@@ -18,6 +19,7 @@ void FadeStack::setCurrentIndex(int index) {
     QWidget *nextW = widget(index);
     if (!currentW || !nextW) {
         QStackedWidget::setCurrentIndex(index);
+        updateGeometry();
         return;
     }
 
@@ -27,6 +29,7 @@ void FadeStack::setCurrentIndex(int index) {
     if (DesignTokens::reducedMotion()) {
         m_isTransitioning = false;
         QStackedWidget::setCurrentIndex(index);
+        updateGeometry();
         return;
     }
     
@@ -48,6 +51,7 @@ void FadeStack::setCurrentIndex(int index) {
         
         // 2. Change page
         QStackedWidget::setCurrentIndex(index);
+        updateGeometry();
         
         // 3. Fade in next widget
         QGraphicsOpacityEffect *inEffect = new QGraphicsOpacityEffect(nextW);
@@ -69,4 +73,18 @@ void FadeStack::setCurrentIndex(int index) {
     });
     
     outAnim->start();
+}
+
+QSize FadeStack::sizeHint() const {
+    if (QWidget *curr = currentWidget()) {
+        return curr->sizeHint();
+    }
+    return QStackedWidget::sizeHint();
+}
+
+QSize FadeStack::minimumSizeHint() const {
+    if (QWidget *curr = currentWidget()) {
+        return curr->minimumSizeHint();
+    }
+    return QStackedWidget::minimumSizeHint();
 }

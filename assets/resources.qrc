@@ -1,5 +1,6 @@
 <RCC>
     <qresource prefix="/assets">
         <file alias="fonts/MaterialSymbolsRounded.ttf">fonts/MaterialSymbolsRounded.ttf</file>
+        <file alias="styles/base.qss">styles/base.qss</file>
     </qresource>
 </RCC>

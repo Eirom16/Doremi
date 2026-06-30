@@ -47,6 +47,7 @@
 #include "trending_view.h"
 #include "downloads_view.h"
 #include "design_tokens.h"
+#include "style_manager.h"
 #include "now_playing_view.h"
 #include "stats_view.h"
 #include "history_view.h"
@@ -130,7 +131,8 @@ DoremiMainWindow::DoremiMainWindow(QWidget *parent)
     // Index 0
     auto *placeholder = new QLabel("Selecciona una sección", stack_);
     placeholder->setAlignment(Qt::AlignCenter);
-    placeholder->setStyleSheet(QString("color: %1; font-size: 16px;").arg(DesignTokens::current().text_muted.name()));
+    placeholder->setProperty("textRole", "muted");
+    placeholder->setStyleSheet("font-size: 16px;");
     
     int idx_placeholder = stack_->addWidget(placeholder);
     int idx_home = stack_->addWidget(home_view_);
@@ -174,7 +176,7 @@ DoremiMainWindow::DoremiMainWindow(QWidget *parent)
     body_scroll_ = new QScrollArea(right_container);
     body_scroll_->setWidgetResizable(true);
     body_scroll_->setFrameShape(QFrame::NoFrame);
-    body_scroll_->setStyleSheet(DesignTokens::scrollAreaStyle());
+    body_scroll_->setStyleSheet("QScrollArea { background: transparent; border: none; }");
     body_scroll_->setWidget(stack_);
     right_layout->addWidget(body_scroll_, 1);
 
@@ -182,7 +184,7 @@ DoremiMainWindow::DoremiMainWindow(QWidget *parent)
 
     player_shell_ = new QWidget(right_container);
     player_shell_->setAttribute(Qt::WA_StyledBackground, true);
-    player_shell_->setStyleSheet("background: transparent;");
+    player_shell_->setProperty("bgRole", "transparent");
     player_shell_layout_ = new QHBoxLayout(player_shell_);
     player_shell_layout_->setContentsMargins(16, 0, 16, 12);
     player_shell_layout_->setSpacing(0);
@@ -235,7 +237,7 @@ DoremiMainWindow::DoremiMainWindow(QWidget *parent)
     if (auto *app = qobject_cast<QApplication *>(QApplication::instance()))
         app->setWindowIcon(win_icon);
 
-    setStyleSheet(DesignTokens::getGlobalStyleSheet());
+    StyleManager::applyTheme();
     update_responsive_layout();
     connect_signals();
 

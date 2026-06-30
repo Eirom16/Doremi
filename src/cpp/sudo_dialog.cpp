@@ -50,15 +50,7 @@ void SudoPasswordDialog::build_ui() {
 
     panel_ = new QFrame(this);
     panel_->setObjectName("sudoPanel");
-    panel_->setStyleSheet(QString(
-        "#sudoPanel {"
-        "    background-color: %1;"
-        "    border-radius: %5px;"
-        "    border: 1px solid rgba(%2, %3, %4, 0.25);"
-        "}"
-    ).arg(c.bg_elevated.name())
-     .arg(c.accent.red()).arg(c.accent.green()).arg(c.accent.blue())
-     .arg(DesignTokens::radius().xl));
+    panel_->setProperty("boxRole", "panel");
 
     auto *shadow = new QGraphicsDropShadowEffect(panel_);
     shadow->setBlurRadius(48);
@@ -80,11 +72,11 @@ void SudoPasswordDialog::build_ui() {
     
     title_lbl_ = new QLabel(tr_q("sudo_title"), panel_);
     title_lbl_->setFont(DesignTokens::getFont("heading_sm"));
-    title_lbl_->setStyleSheet(QString("color: %1; background: transparent; font-weight: bold;").arg(c.text_primary.name()));
+    title_lbl_->setProperty("textRole", "heading");
     
     subtitle_lbl_ = new QLabel(tr_q("sudo_subtitle"), panel_);
     subtitle_lbl_->setFont(DesignTokens::getFont("body", 12));
-    subtitle_lbl_->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
+    subtitle_lbl_->setProperty("textRole", "secondary");
     
     title_col->addWidget(title_lbl_);
     title_col->addWidget(subtitle_lbl_);
@@ -107,14 +99,14 @@ void SudoPasswordDialog::build_ui() {
     // Separator line
     auto *sep = new QFrame(panel_);
     sep->setFrameShape(QFrame::HLine);
-    sep->setStyleSheet(QString("color: rgba(%1, %2, %3, 0.10);").arg(c.accent.red()).arg(c.accent.green()).arg(c.accent.blue()));
+    sep->setProperty("boxRole", "separator");
     layout->addWidget(sep);
 
     // Prompt Label
     prompt_lbl_ = new QLabel(tr_q("sudo_prompt"), panel_);
     prompt_lbl_->setWordWrap(true);
     prompt_lbl_->setFont(DesignTokens::getFont("body_sm"));
-    prompt_lbl_->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
+    prompt_lbl_->setProperty("textRole", "secondary");
     layout->addWidget(prompt_lbl_);
 
     // Password input Row
@@ -127,23 +119,7 @@ void SudoPasswordDialog::build_ui() {
     password_input_->setEchoMode(QLineEdit::Password);
     password_input_->setPlaceholderText(tr_q("sudo_placeholder"));
     password_input_->setMinimumHeight(42);
-    password_input_->setStyleSheet(QString(
-        "QLineEdit {"
-        "    background-color: %1;"
-        "    border: 1px solid rgba(%2, %3, %4, 0.15);"
-        "    border-radius: %7px;"
-        "    padding: 6px 14px;"
-        "    color: %5;"
-        "    font-size: 14px;"
-        "}"
-        "QLineEdit:focus {"
-        "    border: 1px solid %6;"
-        "}"
-    ).arg(c.bg_surface.name())
-     .arg(c.accent.red()).arg(c.accent.green()).arg(c.accent.blue())
-     .arg(c.text_primary.name())
-     .arg(c.accent.name())
-     .arg(DesignTokens::radius().lg));
+    password_input_->setObjectName("sudoPasswordInput");
     
     connect(password_input_, &QLineEdit::returnPressed, this, &SudoPasswordDialog::on_accept);
     input_layout->addWidget(password_input_);
@@ -161,7 +137,7 @@ void SudoPasswordDialog::build_ui() {
     error_lbl_ = new QLabel("", panel_);
     error_lbl_->setWordWrap(true);
     error_lbl_->setFont(DesignTokens::getFont("body", 12));
-    error_lbl_->setStyleSheet(QString("color: %1; background: transparent;").arg(c.error.name()));
+    error_lbl_->setProperty("textRole", "error");
     error_lbl_->hide();
     layout->addWidget(error_lbl_);
 

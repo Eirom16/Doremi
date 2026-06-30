@@ -122,7 +122,7 @@ RelatedTracksWidget::RelatedTracksWidget(QWidget *parent)
     setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     setFrameShape(QFrame::NoFrame);
-    setStyleSheet(DesignTokens::scrollAreaStyle());
+    // style handled by base.qss global QScrollArea selector
 
     container_ = new QWidget(this);
     container_->setStyleSheet("background: transparent;");

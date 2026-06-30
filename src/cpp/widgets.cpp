@@ -38,12 +38,11 @@ QPushButton* create_icon_button(QWidget *parent, const std::string &icon_text,
     btn->setObjectName(object_name);
     btn->setFixedSize(size, size);
     btn->setCursor(Qt::PointingHandCursor);
+    btn->setProperty("buttonRole", "ghost");
     
-    // Set icon from ligand text
     const auto &c = DesignTokens::current();
     btn->setIcon(IconProvider::getIcon(QString::fromStdString(icon_text), c.text_primary, size - 8));
     btn->setIconSize(QSize(size - 8, size - 8));
-    btn->setStyleSheet("QPushButton { background: transparent; border: none; }");
     return btn;
 }
 
@@ -51,32 +50,7 @@ QSlider* create_seek_slider(QWidget *parent) {
     auto *slider = new QSlider(Qt::Horizontal, parent);
     slider->setRange(0, 1000);
     slider->setValue(0);
-    
-    const auto &c = DesignTokens::current();
-    QString style = QString(
-        "QSlider::groove:horizontal {\n"
-        "    height: 4px;\n"
-        "    background: rgba(255, 255, 255, 0.1);\n"
-        "    border-radius: %3px;\n"
-        "}\n"
-        "QSlider::sub-page:horizontal {\n"
-        "    background: %1;\n"
-        "    border-radius: %3px;\n"
-        "}\n"
-        "QSlider::handle:horizontal {\n"
-        "    background: %2;\n"
-        "    width: 10px;\n"
-        "    height: 10px;\n"
-        "    margin: -3px 0;\n"
-        "    border-radius: %4px;\n"
-        "}\n"
-    )
-    .arg(c.accent.name())
-    .arg(c.accent_bright.name())
-    .arg(DesignTokens::radius().xs)
-    .arg(DesignTokens::radius().sm);
-    slider->setStyleSheet(style);
-    
+    slider->setProperty("sliderRole", "prominent");
     return slider;
 }
 
@@ -108,7 +82,7 @@ ClickableItem::ClickableItem(const std::string &title, const std::string &subtit
     // Left artwork placeholder
     artwork_label_ = new QLabel(this);
     artwork_label_->setFixedSize(36, 36);
-    artwork_label_->setStyleSheet(QString("background-color: %1; border-radius: %2px;").arg(c.bg_elevated.name(), QString::number(DesignTokens::radius().sm)));
+    artwork_label_->setProperty("boxRole", "thumb");
     artwork_label_->setPixmap(IconProvider::getIcon("music_note", c.text_secondary, 18).pixmap(36, 36));
     artwork_label_->setAlignment(Qt::AlignCenter);
     lay->addWidget(artwork_label_);
@@ -119,18 +93,16 @@ ClickableItem::ClickableItem(const std::string &title, const std::string &subtit
     
     title_label_ = new QLabel(QString::fromStdString(title), this);
     title_label_->setFont(DesignTokens::getFont("body_sm"));
-    title_label_->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_primary.name()));
+    title_label_->setProperty("textRole", "primary");
     vl->addWidget(title_label_);
 
     if (!subtitle.empty()) {
         sub_label_ = new QLabel(QString::fromStdString(subtitle), this);
         sub_label_->setFont(DesignTokens::getFont("caption_sm"));
-        sub_label_->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
+        sub_label_->setProperty("textRole", "secondary");
         vl->addWidget(sub_label_);
     }
     lay->addLayout(vl, 1);
-
-    setStyleSheet(QString("ClickableItem { background: transparent; border-radius: %1px; }").arg(DesignTokens::radius().sm));
 
     connect(this, &QWidget::customContextMenuRequested, this, [this](const QPoint &pos) {
         show_context_menu(mapToGlobal(pos));
@@ -173,19 +145,6 @@ void ClickableItem::mousePressEvent(QMouseEvent *event) {
     QWidget::mousePressEvent(event);
 }
 
-void ClickableItem::enterEvent(QEnterEvent *) {
-    const auto &c = DesignTokens::current();
-    QString hover_bg = QString("rgba(%1, %2, %3, %4)")
-        .arg(c.accent_dim.red()).arg(c.accent_dim.green()).arg(c.accent_dim.blue()).arg(c.accent_dim.alpha() / 255.0);
-    setStyleSheet(QString("ClickableItem { background: %1; border-radius: %2px; }").arg(hover_bg).arg(DesignTokens::radius().sm));
-}
-
-void ClickableItem::leaveEvent(QEvent *) {
-    if (!hasFocus()) {
-        setStyleSheet(QString("ClickableItem { background: transparent; border-radius: %1px; }").arg(DesignTokens::radius().sm));
-    }
-}
-
 void ClickableItem::keyPressEvent(QKeyEvent *event) {
     switch (event->key()) {
     case Qt::Key_Return:
@@ -201,17 +160,6 @@ void ClickableItem::keyPressEvent(QKeyEvent *event) {
     default:
         QWidget::keyPressEvent(event);
     }
-}
-
-void ClickableItem::focusInEvent(QFocusEvent *) {
-    const auto &c = DesignTokens::current();
-    setStyleSheet(QString(
-        "ClickableItem { background: transparent; border-radius: %1px; border: 1px solid %2; }"
-    ).arg(DesignTokens::radius().sm).arg(c.accent.name()));
-}
-
-void ClickableItem::focusOutEvent(QFocusEvent *) {
-    setStyleSheet(QString("ClickableItem { background: transparent; border-radius: %1px; }").arg(DesignTokens::radius().sm));
 }
 
 void ClickableItem::show_context_menu(const QPoint &global_pos) {

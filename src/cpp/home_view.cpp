@@ -12,9 +12,7 @@
 HomeView::HomeView(QWidget *parent)
     : QWidget(parent)
 {
-    const auto &c = DesignTokens::current();
-
-    setStyleSheet("background: transparent;");
+    // HomeView background handled by base.qss
     content_ = new QVBoxLayout(this);
     content_->setContentsMargins(DesignTokens::pagePadding());
     content_->setSpacing(28);
@@ -22,8 +20,7 @@ HomeView::HomeView(QWidget *parent)
     welcome_label_ = new QLabel("¡Bienvenido a Doremi!", this);
     welcome_label_->setObjectName("homeWelcome");
     welcome_label_->setFont(DesignTokens::getFont("heading_lg"));
-    welcome_label_->setStyleSheet(QString("font-weight: bold; color: %1; background: transparent;")
-        .arg(c.text_primary.name()));
+    welcome_label_->setProperty("textRole", "heading");
     content_->addWidget(welcome_label_);
 
     // Sections are added dynamically via add_section() from Rust.
@@ -41,8 +38,6 @@ void HomeView::set_welcome_message(const std::string &msg) {
 
 QWidget *HomeView::add_section_widget(const std::string &title,
                                        const std::vector<HomeCard> &items) {
-    const auto &c = DesignTokens::current();
-
     auto *section = new QWidget(this);
     auto *lay = new QVBoxLayout(section);
     lay->setContentsMargins(0, 0, 0, 0);
@@ -51,8 +46,7 @@ QWidget *HomeView::add_section_widget(const std::string &title,
     auto *header = new QLabel(QString::fromStdString(title), section);
     header->setObjectName("sectionHeader");
     header->setFont(DesignTokens::getFont("heading_sm"));
-    header->setStyleSheet(QString("color: %1; font-weight: bold; background: transparent;")
-        .arg(c.text_primary.name()));
+    header->setProperty("textRole", "heading");
     lay->addWidget(header);
 
     // Modern horizontal carousel for cards
@@ -167,7 +161,7 @@ void HomeView::set_state(const std::string &state, const std::string &message) {
             auto *retry = new QPushButton(tr_q("retry"), state_widget_);
             retry->setCursor(Qt::PointingHandCursor);
             retry->setFixedWidth(140);
-            retry->setStyleSheet(DesignTokens::primaryButtonStyle(DesignTokens::radius().md));
+                retry->setProperty("buttonRole", "primary");
             connect(retry, &QPushButton::clicked, this, &HomeView::retry_requested);
             layout->addWidget(retry, 0, Qt::AlignHCenter);
         }
@@ -175,18 +169,4 @@ void HomeView::set_state(const std::string &state, const std::string &message) {
     content_->insertWidget(1, state_widget_);
 }
 
-void HomeView::update_theme() {
-    const auto &c = DesignTokens::current();
-    if (welcome_label_) {
-        welcome_label_->setStyleSheet(QString("font-weight: bold; color: %1; background: transparent;")
-            .arg(c.text_primary.name()));
-    }
-    for (auto *label : findChildren<QLabel *>()) {
-        if (label->objectName() == "sectionHeader") {
-            label->setStyleSheet(QString("color: %1; font-weight: bold; background: transparent;")
-                .arg(c.text_primary.name()));
-        } else if (label->objectName() == "stateMessage") {
-            label->setStyleSheet(QString("color: %1; padding: 36px;").arg(c.text_muted.name()));
-        }
-    }
-}
+

@@ -213,7 +213,7 @@ QueuePanel::QueuePanel(QWidget *parent)
     setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     setFrameShape(QFrame::NoFrame);
-    setStyleSheet(DesignTokens::scrollAreaStyle());
+    // style handled by base.qss global QScrollArea selector
     viewport()->setAcceptDrops(true);
     viewport()->installEventFilter(this);
 

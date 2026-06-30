@@ -1,0 +1,939 @@
+/* ═══════════════════════════════════════════════════════════════════════════════
+   Doremi — Base StyleSheet
+   Placeholders are replaced at runtime by StyleManager:
+   {{accent}}, {{text_primary}}, {{text_secondary}}, {{text_muted}},
+   {{bg_base}}, {{bg_surface}}, {{bg_elevated}}, {{bg_overlay}},
+   {{border}}, {{border_accent}}, {{accent_dim}}, {{accent_glow}},
+   {{text_on_accent}}, {{surface}}, {{surface_raised}}, {{surface_selected}},
+   {{r-sm}}, {{r-md}}, {{sp-md}}, etc.
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+/* ── Global ─────────────────────────────────────────────────────────────────── */
+
+QMainWindow {
+    background-color: {{bg_base}};
+    color: {{text_primary}};
+}
+
+QWidget {
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    color: {{text_primary}};
+}
+
+QWidget:disabled {
+    color: {{text_muted}};
+}
+
+QPushButton:focus, QToolButton:focus, QLineEdit:focus, QComboBox:focus, QSlider:focus {
+    outline: none;
+    border-color: {{accent}};
+}
+
+/* ── Property-based text roles ─────────────────────────────────────────────── */
+
+QWidget[textRole="primary"] {
+    color: {{text_primary}};
+    background: transparent;
+}
+
+QWidget[textRole="secondary"] {
+    color: {{text_secondary}};
+    background: transparent;
+}
+
+QWidget[textRole="muted"] {
+    color: {{text_muted}};
+    background: transparent;
+}
+
+QWidget[textRole="accent"] {
+    color: {{accent}};
+    background: transparent;
+}
+
+QWidget[textRole="error"] {
+    color: {{text_on_accent}};
+    background: transparent;
+    font-weight: 600;
+}
+
+QWidget[textRole="heading"] {
+    color: {{text_primary}};
+    font-weight: bold;
+    background: transparent;
+}
+
+QWidget[textRole="accent-heading"] {
+    color: {{accent}};
+    font-weight: bold;
+    background: transparent;
+}
+
+QWidget[textRole="mono"] {
+    color: {{accent}};
+    font-family: monospace;
+    background: transparent;
+}
+
+/* ── Property-based background roles ────────────────────────────────────────── */
+
+QWidget[bgRole="transparent"] {
+    background: transparent;
+}
+
+QWidget[bgRole="surface"] {
+    background-color: {{bg_surface}};
+}
+
+QWidget[bgRole="elevated"] {
+    background-color: {{bg_elevated}};
+}
+
+QWidget[bgRole="base"] {
+    background-color: {{bg_base}};
+}
+
+/* ── Property-based box styles ──────────────────────────────────────────────── */
+
+QWidget[boxRole="card"] {
+    background-color: {{bg_elevated}};
+    border: none;
+    border-radius: {{r-sm}}px;
+}
+
+QWidget[boxRole="panel"] {
+    background-color: {{bg_surface}};
+    border: 1px solid {{border}};
+    border-radius: {{r-md}}px;
+}
+
+QWidget[boxRole="separator"] {
+    background-color: {{border}};
+}
+
+QWidget[boxRole="thumb"] {
+    background-color: {{bg_elevated}};
+    border-radius: {{r-sm}}px;
+}
+
+QWidget[boxRole="pill"] {
+    background-color: {{bg_elevated}};
+    border-radius: {{r-pill}}px;
+}
+
+/* ── Premium Scrollbar ──────────────────────────────────────────────────────── */
+
+QScrollBar:vertical {
+    border: none;
+    background: transparent;
+    width: 6px;
+    margin: 0px 0px 0px 0px;
+}
+
+QScrollBar::handle:vertical {
+    background: {{text_muted}};
+    border-radius: 3px;
+    min-height: 20px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background: {{accent}};
+}
+
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0px;
+    background: none;
+}
+
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+    background: transparent;
+}
+
+QScrollBar:horizontal {
+    border: none;
+    background: transparent;
+    height: 6px;
+    margin: 0px 0px 0px 0px;
+}
+
+QScrollBar::handle:horizontal {
+    background: {{text_muted}};
+    border-radius: 3px;
+    min-width: 20px;
+}
+
+QScrollBar::handle:horizontal:hover {
+    background: {{accent}};
+}
+
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+    width: 0px;
+    background: none;
+}
+
+QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
+    background: transparent;
+}
+
+QScrollArea {
+    background: transparent;
+    border: none;
+}
+
+/* ── Tooltips ───────────────────────────────────────────────────────────────── */
+
+QToolTip {
+    background-color: {{bg_surface}};
+    color: {{text_primary}};
+    border: 1px solid {{border}};
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 12px;
+}
+
+/* ── Glass Context Menus ────────────────────────────────────────────────────── */
+
+QMenu {
+    background-color: {{bg_surface}};
+    border: 1px solid {{border}};
+    border-radius: 10px;
+    padding: 6px 0px;
+}
+
+QMenu::item {
+    padding: 8px 20px 8px 12px;
+    color: {{text_secondary}};
+    font-size: 13px;
+}
+
+QMenu::item:selected {
+    background-color: {{accent_dim}};
+    color: {{text_primary}};
+}
+
+QMenu::separator {
+    height: 1px;
+    background: {{border}};
+    margin: 6px 0px;
+}
+
+/* ── QLineEdit ──────────────────────────────────────────────────────────────── */
+
+QLineEdit {
+    background-color: {{bg_base}};
+    border: 1px solid {{border}};
+    border-radius: {{r-md}}px;
+    padding: 6px 12px 6px 36px;
+    color: {{text_primary}};
+    selection-background-color: {{accent_dim}};
+}
+
+QLineEdit:hover {
+    border-color: {{text_secondary}};
+}
+
+QLineEdit:focus {
+    border: 2px solid {{accent}};
+    background-color: {{bg_elevated}};
+}
+
+QLineEdit:disabled {
+    color: {{text_muted}};
+    background-color: {{border}};
+}
+
+QLineEdit[inputRole="search"] {
+    padding: 8px 12px 8px 36px;
+}
+
+/* ── Slider ─────────────────────────────────────────────────────────────────── */
+
+QSlider {
+    background: transparent;
+}
+
+QSlider::groove:horizontal {
+    height: 3px;
+    background: {{border}};
+    border-radius: 1px;
+}
+
+QSlider::sub-page:horizontal {
+    background: {{text_secondary}};
+    border-radius: 1px;
+}
+
+QSlider::handle:horizontal {
+    background: {{text_primary}};
+    width: 10px;
+    height: 10px;
+    margin: -3px 0;
+    border-radius: 5px;
+}
+
+QSlider::handle:horizontal:hover {
+    background: {{accent_bright}};
+}
+
+/* ── Prominent slider (playback progress) ───────────────────────────────────── */
+
+QSlider[sliderRole="prominent"]::groove:horizontal {
+    height: 4px;
+    background: {{border}};
+    border-radius: 2px;
+}
+
+QSlider[sliderRole="prominent"]::sub-page:horizontal {
+    background: {{accent}};
+    border-radius: 2px;
+}
+
+QSlider[sliderRole="prominent"]::handle:horizontal {
+    background: {{accent_bright}};
+    width: 12px;
+    height: 12px;
+    margin: -4px 0;
+    border-radius: 6px;
+}
+
+QSlider[sliderRole="prominent"]::handle:horizontal:hover {
+    background: {{accent_bright}};
+}
+
+/* ── Primary Button ─────────────────────────────────────────────────────────── */
+
+QPushButton[buttonRole="primary"] {
+    background-color: {{accent}};
+    border: 1px solid {{accent}};
+    border-radius: {{r-pill}}px;
+    color: {{text_on_accent}};
+    font-weight: 600;
+}
+
+QPushButton[buttonRole="primary"]:hover {
+    background-color: {{accent_bright}};
+    border-color: {{accent_bright}};
+}
+
+QPushButton[buttonRole="primary"]:pressed {
+    background-color: {{accent_dim}};
+    border-color: {{accent_dim}};
+}
+
+QPushButton[buttonRole="primary"]:focus {
+    border: 2px solid {{text_primary}};
+}
+
+QPushButton[buttonRole="primary"]:disabled {
+    background-color: {{border_accent}};
+    border-color: {{border_accent}};
+    color: {{text_muted}};
+}
+
+/* ── Icon Button ────────────────────────────────────────────────────────────── */
+
+QPushButton[buttonRole="icon"] {
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: {{r-md}}px;
+    color: {{text_secondary}};
+}
+
+QPushButton[buttonRole="icon"]:hover {
+    background: {{accent_dim}};
+    border-color: {{border}};
+    color: {{text_primary}};
+}
+
+QPushButton[buttonRole="icon"]:pressed {
+    background: {{accent_glow}};
+    border-color: {{accent}};
+}
+
+QPushButton[buttonRole="icon"]:checked {
+    background: {{accent_dim}};
+    border-color: {{accent}};
+    color: {{accent}};
+}
+
+QPushButton[buttonRole="icon"]:focus {
+    border: 2px solid {{accent}};
+}
+
+QPushButton[buttonRole="icon"]:disabled {
+    color: {{text_muted}};
+    background: transparent;
+}
+
+/* ── Nav Button ─────────────────────────────────────────────────────────────── */
+
+QPushButton[buttonRole="nav"] {
+    background: transparent;
+    border: none;
+    border-radius: 0px;
+    border-left: 3px solid transparent;
+    color: {{text_secondary}};
+    text-align: left;
+    padding-left: 0px;
+}
+
+QPushButton[buttonRole="nav"]:hover {
+    background: {{accent_dim}};
+    color: {{text_primary}};
+}
+
+QPushButton[buttonRole="nav"]:pressed {
+    background: {{accent_glow}};
+}
+
+QPushButton[buttonRole="nav"]:checked {
+    background: {{accent_dim}};
+    color: {{accent}};
+    border-left: 3px solid {{accent}};
+}
+
+QPushButton[buttonRole="nav"]:focus {
+    border: 2px solid {{accent}};
+    border-left: 3px solid {{accent}};
+}
+
+QPushButton[buttonRole="nav"]:disabled {
+    color: {{text_muted}};
+}
+
+QPushButton[buttonRole="nav"] QLabel#nav_text {
+    color: {{text_secondary}};
+    background: transparent;
+    font-weight: 500;
+}
+
+QPushButton[buttonRole="nav"]:hover QLabel#nav_text,
+QPushButton[buttonRole="nav"]:checked QLabel#nav_text {
+    color: {{text_primary}};
+    font-weight: 600;
+}
+
+/* ── Profile Button ─────────────────────────────────────────────────────────── */
+
+QPushButton[buttonRole="profile"] {
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: {{r-lg}}px;
+    text-align: left;
+    padding-left: 20px;
+    margin: 4px 8px;
+    font-weight: bold;
+    color: {{text_secondary}};
+}
+
+QPushButton[buttonRole="profile"]:hover {
+    background: {{accent_dim}};
+    color: {{text_primary}};
+}
+
+QPushButton[buttonRole="profile"]:pressed {
+    background: {{accent_glow}};
+}
+
+QPushButton[buttonRole="profile"]:focus {
+    border: 2px solid {{accent}};
+}
+
+/* ── Plain transparent button (no visual chrome) ────────────────────────────── */
+
+QPushButton[buttonRole="ghost"] {
+    background: transparent;
+    border: none;
+}
+
+/* ── ClickableItem ──────────────────────────────────────────────────────────── */
+
+ClickableItem {
+    background: transparent;
+    border-radius: {{r-sm}}px;
+}
+
+ClickableItem:hover {
+    background: {{accent_dim}};
+}
+
+ClickableItem:focus {
+    border: 1px solid {{accent}};
+    background: transparent;
+}
+
+/* ── NavSidebar ─────────────────────────────────────────────────────────────── */
+
+TitleBar {
+    background-color: {{bg_surface}};
+    border-bottom: 1px solid {{border}};
+}
+
+NavSidebar {
+    background-color: {{bg_surface}};
+    border-right: 1px solid {{border}};
+}
+
+/* ── PlayerBar ──────────────────────────────────────────────────────────────── */
+
+PlayerBar {
+    background-color: {{bg_surface}};
+    border-top: 1px solid {{border}};
+    border-radius: 16px 16px 0 0;
+}
+
+/* ── LoginDialog ────────────────────────────────────────────────────────────── */
+
+LoginDialog {
+    background-color: {{bg_base}};
+}
+
+/* ── SudoDialog ─────────────────────────────────────────────────────────────── */
+
+SudoDialog {
+    background-color: {{bg_base}};
+}
+
+/* ── WelcomeView ────────────────────────────────────────────────────────────── */
+
+WelcomeView {
+    background: transparent;
+}
+
+WelcomeView QLabel[textRole="status"] {
+    color: {{text_secondary}};
+    background: transparent;
+}
+
+WelcomeView QLabel[textRole="progress"] {
+    color: {{text_muted}};
+    background: transparent;
+}
+
+/* ── TrendingView ───────────────────────────────────────────────────────────── */
+
+TrendingView {
+    background: transparent;
+}
+
+QWidget[boxRole="trending-card"] {
+    background: transparent;
+    border-radius: {{r-md}}px;
+}
+
+QWidget[boxRole="trending-card"]:hover {
+    background: {{accent_dim}};
+}
+
+QLabel[textRole="trending-title"] {
+    color: {{text_primary}};
+    font-weight: bold;
+    background: transparent;
+}
+
+QLabel[textRole="trending-muted-padded"] {
+    color: {{text_muted}};
+    padding: 36px;
+}
+
+/* ── ArtistDetailView ───────────────────────────────────────────────────────── */
+
+ArtistDetailView {
+    background: transparent;
+}
+
+ArtistDetailView QLabel[textRole="artist-type"] {
+    color: {{text_muted}};
+    font-weight: bold;
+    letter-spacing: 2px;
+}
+
+ArtistDetailView QLabel[textRole="artist-name"] {
+    color: {{text_primary}};
+    font-weight: bold;
+}
+
+ArtistDetailView QLabel[textRole="artist-meta"] {
+    color: {{text_muted}};
+}
+
+ArtistDetailView QLabel[textRole="artist-desc"] {
+    color: {{text_secondary}};
+}
+
+/* ── HistoryView ────────────────────────────────────────────────────────────── */
+
+HistoryView QLabel[textRole="history-empty"] {
+    color: {{text_muted}};
+    padding: 36px;
+}
+
+HistoryView QLabel[textRole="history-group"] {
+    color: {{text_secondary}};
+    background: transparent;
+    margin-top: 16px;
+    margin-bottom: 4px;
+}
+
+/* ── HomeView ───────────────────────────────────────────────────────────────── */
+
+HomeView {
+    background: transparent;
+}
+
+/* ── SongCard ───────────────────────────────────────────────────────────────── */
+
+SongCard {
+    background: transparent;
+}
+
+SongCard:hover {
+    background: {{accent_dim}};
+}
+
+/* ── AlbumCard ───────────────────────────────────────────────────────────────── */
+
+AlbumCard {
+    background: transparent;
+}
+
+/* ── ArtistCard ─────────────────────────────────────────────────────────────── */
+
+ArtistCard {
+    background: transparent;
+}
+
+/* ── HorizontalCarousel ─────────────────────────────────────────────────────── */
+
+HorizontalCarousel {
+    background: transparent;
+}
+
+/* ── GlassPanel ─────────────────────────────────────────────────────────────── */
+
+GlassPanel {
+    background: transparent;
+}
+
+/* ── LyricsWidget ───────────────────────────────────────────────────────────── */
+
+LyricsWidget {
+    background: transparent;
+}
+
+/* ── QueuePanel ─────────────────────────────────────────────────────────────── */
+
+QueuePanel {
+    background: transparent;
+}
+
+/* ── NowPlayingView ─────────────────────────────────────────────────────────── */
+
+NowPlayingView {
+    background: transparent;
+}
+
+/* ── StatsView ──────────────────────────────────────────────────────────────── */
+
+StatsView {
+    background: transparent;
+}
+
+/* ── SettingsView ───────────────────────────────────────────────────────────── */
+
+SettingsView {
+    background: transparent;
+}
+
+/* ── LibraryView ────────────────────────────────────────────────────────────── */
+
+LibraryView {
+    background: transparent;
+}
+
+/* ── SearchView ─────────────────────────────────────────────────────────────── */
+
+SearchView {
+    background: transparent;
+}
+
+/* ── DownloadsView ──────────────────────────────────────────────────────────── */
+
+DownloadsView {
+    background: transparent;
+}
+
+/* ── AlbumDetailView ────────────────────────────────────────────────────────── */
+
+AlbumDetailView {
+    background: transparent;
+}
+
+/* ── PlaylistDetailView ──────────────────────────────────────────────────────── */
+
+PlaylistDetailView {
+    background: transparent;
+}
+
+/* ── ShowDetailView ──────────────────────────────────────────────────────────── */
+
+ShowDetailView {
+    background: transparent;
+}
+
+/* ── Dialog panels ──────────────────────────────────────────────────────────── */
+
+PanelWidget {
+    background-color: {{bg_surface}};
+    border: 1px solid {{border}};
+    border-radius: {{r-md}}px;
+}
+
+/* ── Object-name selectors ──────────────────────────────────────────────────── */
+
+QLabel#sectionHeader {
+    color: {{accent}};
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    background: transparent;
+}
+
+QLabel#stateMessage {
+    color: {{text_muted}};
+    padding: 36px;
+    background: transparent;
+}
+
+QPushButton#filterBtn {
+    background: transparent;
+    border: 1px solid {{border}};
+    border-radius: {{r-pill}}px;
+    color: {{text_secondary}};
+    padding: 4px 14px;
+    font-size: 12px;
+}
+
+QPushButton#filterBtn:hover {
+    background: {{accent_dim}};
+    color: {{text_primary}};
+    border-color: {{accent}};
+}
+
+QPushButton#filterBtn:checked {
+    background: {{accent}};
+    color: {{text_on_accent}};
+    border-color: {{accent}};
+}
+
+QPushButton#clearAllBtn,
+QPushButton#historyClearBtn,
+QPushButton#historySearchBtn,
+QPushButton#historyDeleteBtn,
+QPushButton#closeBtn,
+QPushButton#statsRangeBtn,
+QPushButton#statsExportBtn,
+QPushButton#backBtn,
+QPushButton#shuffleBtn,
+QPushButton#dlBtn,
+QPushButton#dlAllBtn,
+QPushButton#editBtn,
+QPushButton#playAllBtn {
+    background: transparent;
+    border: 1px solid {{border}};
+    border-radius: {{r-md}}px;
+    color: {{text_secondary}};
+    padding: 6px 14px;
+}
+
+QPushButton#clearAllBtn:hover,
+QPushButton#historyClearBtn:hover,
+QPushButton#historySearchBtn:hover,
+QPushButton#historyDeleteBtn:hover,
+QPushButton#closeBtn:hover,
+QPushButton#statsRangeBtn:hover,
+QPushButton#statsExportBtn:hover,
+QPushButton#backBtn:hover,
+QPushButton#shuffleBtn:hover,
+QPushButton#dlBtn:hover,
+QPushButton#dlAllBtn:hover,
+QPushButton#editBtn:hover,
+QPushButton#playAllBtn:hover {
+    background: {{accent_dim}};
+    color: {{text_primary}};
+    border-color: {{accent}};
+}
+
+QPushButton#closeBtn {
+    border: none;
+    border-radius: {{r-sm}}px;
+    padding: 4px;
+}
+
+/* ── Tab bars ───────────────────────────────────────────────────────────────── */
+
+QWidget#libraryTabBar QPushButton,
+QWidget#downloadsTabBar QPushButton {
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    border-radius: 0px;
+    color: {{text_secondary}};
+    padding: 8px 16px;
+    font-size: 13px;
+}
+
+QWidget#libraryTabBar QPushButton:hover,
+QWidget#downloadsTabBar QPushButton:hover {
+    color: {{text_primary}};
+    border-bottom-color: {{text_muted}};
+}
+
+QWidget#libraryTabBar QPushButton:checked,
+QWidget#downloadsTabBar QPushButton:checked {
+    color: {{accent}};
+    border-bottom-color: {{accent}};
+    font-weight: 600;
+}
+
+/* ── Comboboxes in settings / library ───────────────────────────────────────── */
+
+QComboBox#settingsCombo,
+QComboBox#libraryCombo {
+    background-color: {{bg_base}};
+    border: 1px solid {{border}};
+    border-radius: {{r-sm}}px;
+    padding: 6px 10px;
+    color: {{text_primary}};
+    min-width: 160px;
+}
+
+QComboBox#settingsCombo:hover,
+QComboBox#libraryCombo:hover {
+    border-color: {{text_secondary}};
+}
+
+QComboBox#settingsCombo:focus,
+QComboBox#libraryCombo:focus {
+    border: 2px solid {{accent}};
+}
+
+QComboBox#settingsCombo::drop-down,
+QComboBox#libraryCombo::drop-down {
+    border: none;
+    padding-right: 8px;
+}
+
+/* ── Input fields (Last.fm, download location, sudo password) ───────────────── */
+
+QLineEdit#lastfmInput,
+QLineEdit#downloadLocationInput,
+QLineEdit#sudoPasswordInput {
+    background-color: {{bg_base}};
+    border: 1px solid {{border}};
+    border-radius: {{r-md}}px;
+    padding: 8px 12px;
+    color: {{text_primary}};
+}
+
+QLineEdit#lastfmInput:focus,
+QLineEdit#downloadLocationInput:focus,
+QLineEdit#sudoPasswordInput:focus {
+    border: 2px solid {{accent}};
+    background-color: {{bg_elevated}};
+}
+
+/* ── Batch / Download rows ──────────────────────────────────────────────────── */
+
+QWidget#DownloadRow {
+    background: transparent;
+    border-radius: {{r-sm}}px;
+}
+
+QWidget#DownloadRow:hover {
+    background: {{accent_dim}};
+}
+
+QWidget#BatchRow {
+    background: {{bg_surface}};
+    border: 1px solid {{border}};
+    border-radius: {{r-md}}px;
+}
+
+/* ── Stats specific ─────────────────────────────────────────────────────────── */
+
+QLabel#statsChartHeader,
+QLabel#statsTopHeader {
+    color: {{text_primary}};
+    font-weight: bold;
+    font-size: 16px;
+    background: transparent;
+}
+
+/* ── Login dialog ───────────────────────────────────────────────────────────── */
+
+QLabel#loginHeader {
+    font-size: 22px;
+    font-weight: bold;
+    color: {{text_primary}};
+    background: transparent;
+}
+
+/* ── Show detail ────────────────────────────────────────────────────────────── */
+
+QLabel#showTitle {
+    color: {{text_primary}};
+    font-weight: bold;
+    background: transparent;
+}
+
+QLabel#episodesHeader {
+    color: {{text_primary}};
+    font-weight: bold;
+    background: transparent;
+}
+
+/* ── Artist detail ──────────────────────────────────────────────────────────── */
+
+QLabel#typeLabel {
+    color: {{text_muted}};
+    font-weight: bold;
+    letter-spacing: 2px;
+    background: transparent;
+}
+
+QLabel#tracksHeader {
+    color: {{text_primary}};
+    font-weight: bold;
+    background: transparent;
+}
+
+/* ── History ────────────────────────────────────────────────────────────────── */
+
+QLabel#historyTitle {
+    color: {{text_primary}};
+    font-weight: bold;
+    font-size: 22px;
+    background: transparent;
+}
+
+QLabel#historySubtitle {
+    color: {{text_secondary}};
+    background: transparent;
+}
+
+QLabel#historyEmptyLabel {
+    color: {{text_muted}};
+    padding: 36px;
+    background: transparent;
+}
+
+/* ── Welcome / Home ─────────────────────────────────────────────────────────── */
+
+QLabel#homeWelcome {
+    color: {{text_primary}};
+    font-weight: bold;
+    font-size: 28px;
+    background: transparent;
+}

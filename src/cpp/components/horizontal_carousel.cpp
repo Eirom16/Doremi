@@ -24,7 +24,7 @@ void HorizontalCarousel::init() {
     m_scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_scrollArea->setFrameShape(QFrame::NoFrame);
     m_scrollArea->setWidgetResizable(true);
-    m_scrollArea->setStyleSheet(DesignTokens::scrollAreaStyle());
+    // style handled by base.qss global QScrollArea selector
 
     m_contentWidget = new QWidget(m_scrollArea);
     m_contentWidget->setStyleSheet("background: transparent;");

@@ -2,6 +2,7 @@
 #include "design_tokens.h"
 #include "icon_provider.h"
 #include "components/artwork_loader.h"
+#include "components/animated_progress.h"
 #include "doremi/src/bridge.rs.h"
 #include <QPainter>
 #include <QPainterPath>
@@ -29,7 +30,7 @@ PlayerBar::PlayerBar(QWidget *parent)
     const auto &c = DesignTokens::current();
 
     auto *main_layout = new QHBoxLayout(this);
-    main_layout->setContentsMargins(18, 8, 18, 8);
+    main_layout->setContentsMargins(18, 10, 18, 10);
     main_layout->setSpacing(16);
 
     // ── LEFT: Track Info & Artwork ─────────────────────────────────────────
@@ -52,7 +53,7 @@ PlayerBar::PlayerBar(QWidget *parent)
     track_label_->setFont(DesignTokens::getFont("body_sm"));
     track_label_->setText("<b>" + tr_q("no_playback") + "</b><br><font color=\"" + c.text_muted.name() + "\">" + tr_q("no_track_selected") + "</font>");
     track_label_->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-    track_label_->setStyleSheet("background: transparent;");
+    track_label_->setProperty("bgRole", "transparent");
     track_label_->setAccessibleName(tr_q("current_track"));
 
     artwork_label_->setAttribute(Qt::WA_TransparentForMouseEvents);
@@ -79,7 +80,7 @@ PlayerBar::PlayerBar(QWidget *parent)
     controls_layout->setContentsMargins(0, 0, 0, 0);
     controls_layout->setSpacing(16);
     controls_layout->addStretch();
-    controls_widget->setFixedHeight(38);
+    controls_widget->setFixedHeight(40);
 
     // Shuffle Button
     shuffle_btn_ = new QPushButton(this);
@@ -93,7 +94,7 @@ PlayerBar::PlayerBar(QWidget *parent)
         tr_q("shuffle"),
         tr_q("shuffle_accessible_desc"),
         tr_q("shuffle"));
-    shuffle_btn_->setStyleSheet(DesignTokens::iconButtonStyle());
+    shuffle_btn_->setProperty("buttonRole", "icon");
 
     // Previous Button
     prev_btn_ = new QPushButton(this);
@@ -106,7 +107,7 @@ PlayerBar::PlayerBar(QWidget *parent)
         tr_q("previous_track"),
         tr_q("previous_track_desc"),
         tr_q("previous_accessible_name"));
-    prev_btn_->setStyleSheet(DesignTokens::iconButtonStyle());
+    prev_btn_->setProperty("buttonRole", "icon");
 
     // Play/Pause Button (Solid Rounded Circle)
     play_btn_ = new QPushButton(this);
@@ -119,7 +120,7 @@ PlayerBar::PlayerBar(QWidget *parent)
         tr_q("play"),
         tr_q("play_accessible_desc"),
         tr_q("play_accessible_name"));
-    play_btn_->setStyleSheet(DesignTokens::primaryButtonStyle(20));
+    play_btn_->setProperty("buttonRole", "primary");
 
     // Next Button
     next_btn_ = new QPushButton(this);
@@ -132,7 +133,7 @@ PlayerBar::PlayerBar(QWidget *parent)
         tr_q("next_track"),
         tr_q("next_track_desc"),
         tr_q("next_accessible_name"));
-    next_btn_->setStyleSheet(DesignTokens::iconButtonStyle());
+    next_btn_->setProperty("buttonRole", "icon");
 
     // Repeat Button
     repeat_btn_ = new QPushButton(this);
@@ -145,7 +146,7 @@ PlayerBar::PlayerBar(QWidget *parent)
         tr_q("repeat_disabled_desc"),
         tr_q("repeat_mode_desc"),
         tr_q("repeat_disabled_tooltip"));
-    repeat_btn_->setStyleSheet(DesignTokens::iconButtonStyle());
+    repeat_btn_->setProperty("buttonRole", "icon");
 
     controls_layout->addWidget(shuffle_btn_);
     controls_layout->addWidget(prev_btn_);
@@ -163,7 +164,7 @@ PlayerBar::PlayerBar(QWidget *parent)
     progress_layout->setSpacing(8);
     progress_widget->setFixedHeight(22);
 
-    progress_ = new QSlider(Qt::Horizontal, this);
+    progress_ = new AnimatedProgress(Qt::Horizontal, this);
     progress_->setRange(0, 0);
     progress_->setCursor(Qt::PointingHandCursor);
     progress_->setFocusPolicy(Qt::StrongFocus);
@@ -171,12 +172,12 @@ PlayerBar::PlayerBar(QWidget *parent)
         progress_,
         tr_q("playback_progress"),
         tr_q("playback_progress_desc"),
-        tr_q("playback_progress_keys"));
-    progress_->setStyleSheet(DesignTokens::sliderStyle(true));
+        tr_q("    playback_progress_keys"));
+    progress_->setProperty("sliderRole", "prominent");
 
     time_label_ = new QLabel("0:00 / 0:00", this);
     time_label_->setFont(DesignTokens::getFont("caption_sm"));
-    time_label_->setStyleSheet(QString("color: %1;").arg(c.text_muted.name()));
+    time_label_->setProperty("textRole", "muted");
 
     progress_layout->addWidget(progress_, 1);
     progress_layout->addWidget(time_label_);
@@ -206,20 +207,20 @@ PlayerBar::PlayerBar(QWidget *parent)
         tr_q("volume"),
         tr_q("volume_accessible_desc"),
         tr_q("volume_accessible_keys"));
-    volume_slider_->setStyleSheet(DesignTokens::sliderStyle(false));
-
-    right_layout->addWidget(volume_icon);
+    // Volume slider uses default QSlider styling from base.qss
+ 
+     right_layout->addWidget(volume_icon);
     right_layout->addWidget(volume_slider_);
     right_container_->setLayout(right_layout);
     right_container_->setFixedWidth(150);
     main_layout->addWidget(right_container_);
 
     setLayout(main_layout);
-    setFixedHeight(78);
+    setFixedHeight(88);
 
     // Set panel background
     setAttribute(Qt::WA_StyledBackground, true);
-    setStyleSheet(QString("PlayerBar { %1 }").arg(DesignTokens::panelStyle("surface", 16)));
+    // PlayerBar background handled by base.qss
 
     QWidget::setTabOrder({shuffle_btn_, prev_btn_, play_btn_, next_btn_, repeat_btn_, progress_, volume_slider_});
 
@@ -227,7 +228,9 @@ PlayerBar::PlayerBar(QWidget *parent)
     connect(play_btn_, &QPushButton::clicked, this, &PlayerBar::play_pause_clicked);
     connect(next_btn_, &QPushButton::clicked, this, &PlayerBar::next_clicked);
     connect(prev_btn_, &QPushButton::clicked, this, &PlayerBar::previous_clicked);
-    connect(progress_, &QSlider::sliderMoved, this, &PlayerBar::seek_requested);
+    connect(progress_, &AnimatedProgress::sliderReleased, this, [this]() {
+        emit seek_requested(progress_->value());
+    });
     connect(volume_slider_, &QSlider::valueChanged, this, &PlayerBar::volume_set);
     
     connect(shuffle_btn_, &QPushButton::toggled, this, [this](bool on) {
@@ -281,6 +284,9 @@ void PlayerBar::set_track_info(const std::string &title, const std::string &arti
 }
 
 void PlayerBar::set_progress(int32_t pos_ms, int32_t dur_ms) {
+    if (progress_->isSliderDown()) {
+        return;
+    }
     if (dur_ms > 0) {
         progress_->blockSignals(true);
         progress_->setRange(0, dur_ms);
@@ -391,25 +397,10 @@ void PlayerBar::mousePressEvent(QMouseEvent *event) {
 void PlayerBar::update_theme() {
     const auto &c = DesignTokens::current();
     
-    artwork_label_->setStyleSheet(QString("background-color: %1; border-radius: %2px;")
-        .arg(c.bg_elevated.name()).arg(DesignTokens::radius().sm));
-    
-    play_btn_->setStyleSheet(DesignTokens::primaryButtonStyle(20));
-    progress_->setStyleSheet(DesignTokens::sliderStyle(true));
-    
-    time_label_->setStyleSheet(QString("color: %1;").arg(c.text_muted.name()));
-    
     shuffle_btn_->setIcon(IconProvider::getIcon("shuffle", shuffle_on_ ? c.accent : c.text_secondary, 20));
     prev_btn_->setIcon(IconProvider::getIcon("skip_previous", c.text_primary, 22));
     next_btn_->setIcon(IconProvider::getIcon("skip_next", c.text_primary, 22));
     
     QColor rep_color = repeat_mode_ > 0 ? c.accent : c.text_secondary;
     repeat_btn_->setIcon(IconProvider::getIcon(repeat_mode_ == 2 ? "repeat_one" : "repeat", rep_color, 20));
-    
-    setStyleSheet(QString("PlayerBar { %1 }").arg(DesignTokens::panelStyle("surface", 16)));
-    shuffle_btn_->setStyleSheet(DesignTokens::iconButtonStyle());
-    prev_btn_->setStyleSheet(DesignTokens::iconButtonStyle());
-    next_btn_->setStyleSheet(DesignTokens::iconButtonStyle());
-    repeat_btn_->setStyleSheet(DesignTokens::iconButtonStyle());
-    volume_slider_->setStyleSheet(DesignTokens::sliderStyle(false));
 }

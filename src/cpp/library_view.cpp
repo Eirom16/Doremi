@@ -28,20 +28,14 @@ constexpr LibraryTabSpec kLibraryTabs[] = {
 LibraryView::LibraryView(QWidget *parent)
     : QWidget(parent), active_tab_(""), authenticated_(false)
 {
-    const auto &c = DesignTokens::current();
-
     auto *root = new QVBoxLayout(this);
     root->setContentsMargins(0, 0, 0, 0);
     root->setSpacing(0);
 
     auto *tab_bar = new QWidget(this);
     tab_bar->setFixedHeight(44);
-    
-    // Bottom border under tab bar
-    tab_bar->setStyleSheet(QString("background-color: transparent; border-bottom: 1px solid %1;")
-        .arg(QString("rgba(%1, %2, %3, %4)").arg(c.border.red()).arg(c.border.green()).arg(c.border.blue()).arg(c.border.alpha() / 255.0))
-    );
-    
+    tab_bar->setObjectName("libraryTabBar");
+
     auto *tab_lay = new QHBoxLayout(tab_bar);
     tab_lay->setContentsMargins(24, 0, 24, 0);
     tab_lay->setSpacing(8);
@@ -53,32 +47,10 @@ LibraryView::LibraryView(QWidget *parent)
             tab_bar);
         btn->setProperty("tabKey", QString::fromStdString(key));
         btn->setCheckable(true);
-        btn->setFixedHeight(43); // 1px less to overlap with border-bottom
+        btn->setFixedHeight(43);
         btn->setCursor(Qt::PointingHandCursor);
         btn->setFont(DesignTokens::getFont("body_sm"));
-        
-        QString btnStyle = QString(
-            "QPushButton {\n"
-            "    background: transparent;\n"
-            "    border: none;\n"
-            "    border-bottom: 2px solid transparent;\n"
-            "    color: %1;\n"
-            "    padding: 0 12px;\n"
-            "}\n"
-            "QPushButton:hover {\n"
-            "    color: %2;\n"
-            "}\n"
-            "QPushButton:checked {\n"
-            "    color: %3;\n"
-            "    border-bottom: 2px solid %3;\n"
-            "    font-weight: 500;\n"
-            "}\n"
-        )
-        .arg(c.text_secondary.name())
-        .arg(c.text_primary.name())
-        .arg(c.accent.name());
-        
-        btn->setStyleSheet(btnStyle);
+        btn->setObjectName("libraryTabBtn");
         tab_lay->addWidget(btn);
         tab_btns_.push_back(btn);
         connect(btn, &QPushButton::clicked, this, [this, key]() { emit tab_changed(key); });
@@ -86,7 +58,6 @@ LibraryView::LibraryView(QWidget *parent)
     tab_lay->addStretch(1);
     root->addWidget(tab_bar);
 
-    // Search bar + sort combo
     auto *search_row = new QHBoxLayout();
     search_row->setContentsMargins(24, 8, 24, 4);
     search_row->setSpacing(8);
@@ -102,13 +73,14 @@ LibraryView::LibraryView(QWidget *parent)
 
     auto *placeholder = new QLabel(tr_q("library_empty_title"), this);
     placeholder->setFont(DesignTokens::getFont("body", 14));
-    placeholder->setStyleSheet(QString("color: %1; padding: 24px;").arg(c.text_muted.name()));
+    placeholder->setProperty("textRole", "muted");
+    placeholder->setObjectName("stateMessage");
     placeholder->setAlignment(Qt::AlignCenter);
     list_->addWidget(placeholder);
     list_->addStretch(1);
 
     root->addLayout(list_, 1);
-    setStyleSheet("background: transparent;");
+    setProperty("bgRole", "transparent");
 }
 
 QWidget *LibraryView::make_list_item(const std::string &text, const std::string &sub, const std::string &id, const std::string &thumbnail) {
@@ -177,16 +149,12 @@ QWidget *LibraryView::make_song_item(const Track &track) {
 }
 
 void LibraryView::setup_search_bar() {
-    const auto &c = DesignTokens::current();
 
     search_box_ = new QLineEdit(this);
     search_box_->setPlaceholderText(tr_q("search_library_placeholder"));
     search_box_->setClearButtonEnabled(true);
     search_box_->setFixedHeight(36);
-    search_box_->setStyleSheet(QString(
-        "QLineEdit { background: %1; border: 1px solid %2; border-radius: %5px; padding: 0 16px; color: %3; font-size: 13px; }"
-        "QLineEdit:focus { border-color: %4; }")
-        .arg(c.bg_elevated.name()).arg(c.border.name()).arg(c.text_primary.name()).arg(c.accent.name()).arg(DesignTokens::radius().md));
+    search_box_->setProperty("inputRole", "search");
 
     source_combo_ = new QComboBox(this);
     source_combo_->addItem(tr_q("source_all"), 0);
@@ -194,10 +162,7 @@ void LibraryView::setup_search_bar() {
     source_combo_->addItem(tr_q("source_downloads"), 2);
     source_combo_->addItem(tr_q("source_local"), 3);
     source_combo_->setFixedHeight(32);
-    source_combo_->setStyleSheet(QString(
-        "QComboBox { background: %1; border: 1px solid %2; border-radius: %4px; padding: 0 12px; color: %3; font-size: 12px; }"
-        "QComboBox::drop-down { border: none; width: 20px; }")
-        .arg(c.bg_elevated.name()).arg(c.border.name()).arg(c.text_primary.name()).arg(DesignTokens::radius().xl));
+    source_combo_->setObjectName("libraryCombo");
 
     sort_combo_ = new QComboBox(this);
     sort_combo_->addItem(tr_q("sort_name_asc"), "name_asc");
@@ -205,10 +170,7 @@ void LibraryView::setup_search_bar() {
     sort_combo_->addItem(tr_q("sort_recent"), "recent");
     sort_combo_->addItem(tr_q("sort_oldest"), "oldest");
     sort_combo_->setFixedHeight(32);
-    sort_combo_->setStyleSheet(QString(
-        "QComboBox { background: %1; border: 1px solid %2; border-radius: %4px; padding: 0 12px; color: %3; font-size: 12px; }"
-        "QComboBox::drop-down { border: none; width: 20px; }")
-        .arg(c.bg_elevated.name()).arg(c.border.name()).arg(c.text_primary.name()).arg(DesignTokens::radius().xl));
+    sort_combo_->setObjectName("libraryCombo");
 
     connect(search_box_, &QLineEdit::textChanged, this, [this](const QString &text) {
         emit search_requested(active_tab_, text.toStdString(), sort_combo_->currentData().toString().toStdString());
@@ -236,10 +198,9 @@ void LibraryView::clear_list() {
 void LibraryView::set_playlists(const std::vector<Playlist> &playlists) {
     active_tab_ = "playlists";
     clear_list();
-    const auto &c = DesignTokens::current();
     auto *create_btn = new QPushButton(tr_q("new_playlist"), this);
     create_btn->setCursor(Qt::PointingHandCursor);
-    create_btn->setStyleSheet(DesignTokens::primaryButtonStyle(DesignTokens::radius().md));
+    create_btn->setProperty("buttonRole", "primary");
     connect(create_btn, &QPushButton::clicked, this, [this]() {
         CreatePlaylistDialog dlg(this);
         if (dlg.exec() == QDialog::Accepted) {
@@ -255,7 +216,8 @@ void LibraryView::set_playlists(const std::vector<Playlist> &playlists) {
     if (playlists.empty()) {
         auto *lbl = new QLabel(tr_q("no_playlists_message"), this);
         lbl->setFont(DesignTokens::getFont("body_sm"));
-        lbl->setStyleSheet(QString("color: %1; padding: 12px;").arg(c.text_muted.name()));
+        lbl->setProperty("textRole", "muted");
+        lbl->setObjectName("stateMessage");
         list_->addWidget(lbl);
     } else {
         for (const auto &p : playlists) {
@@ -382,10 +344,9 @@ void LibraryView::set_search_results(
             list_->addWidget(make_list_item(static_cast<std::string>(a.name), "", static_cast<std::string>(a.id), static_cast<std::string>(a.thumbnail)));
         }
     } else if (tab == "playlists") {
-        const auto &c = DesignTokens::current();
         auto *create_btn = new QPushButton(tr_q("new_playlist"), this);
         create_btn->setCursor(Qt::PointingHandCursor);
-        create_btn->setStyleSheet(DesignTokens::primaryButtonStyle(DesignTokens::radius().md));
+        create_btn->setProperty("buttonRole", "primary");
         connect(create_btn, &QPushButton::clicked, this, [this]() {
             CreatePlaylistDialog dlg(this);
             if (dlg.exec() == QDialog::Accepted) {
@@ -401,7 +362,8 @@ void LibraryView::set_search_results(
         if (playlists.empty()) {
             auto *lbl = new QLabel(tr_q("no_playlists_message"), this);
             lbl->setFont(DesignTokens::getFont("body_sm"));
-            lbl->setStyleSheet(QString("color: %1; padding: 12px;").arg(c.text_muted.name()));
+            lbl->setProperty("textRole", "muted");
+            lbl->setObjectName("stateMessage");
             list_->addWidget(lbl);
         } else {
             for (const auto &p : playlists) {
@@ -470,33 +432,4 @@ void LibraryView::show_not_authenticated_state() {
     set_library_state("not_authenticated", std::string(doremi_tr("library_not_auth_title")));
 }
 
-void LibraryView::update_theme() {
-    const auto &c = DesignTokens::current();
-    if (search_box_) search_box_->setStyleSheet(DesignTokens::textInputStyle());
-    if (source_combo_) source_combo_->setStyleSheet(DesignTokens::textInputStyle());
-    if (sort_combo_) sort_combo_->setStyleSheet(DesignTokens::textInputStyle());
-    for (auto *btn : tab_btns_) {
-        if (!btn) continue;
-        QString btnStyle = QString(
-            "QPushButton {\n"
-            "    background: transparent;\n"
-            "    border: none;\n"
-            "    border-bottom: 2px solid transparent;\n"
-            "    color: %1;\n"
-            "    padding: 0 12px;\n"
-            "}\n"
-            "QPushButton:hover {\n"
-            "    color: %2;\n"
-            "}\n"
-            "QPushButton:checked {\n"
-            "    color: %3;\n"
-            "    border-bottom: 2px solid %3;\n"
-            "    font-weight: 500;\n"
-            "}\n"
-        )
-        .arg(c.text_secondary.name())
-        .arg(c.text_primary.name())
-        .arg(c.accent.name());
-        btn->setStyleSheet(btnStyle);
-    }
-}
+

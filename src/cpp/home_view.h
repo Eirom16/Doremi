@@ -15,7 +15,6 @@ public:
     void add_section(const std::string &title, const std::vector<HomeCard> &items);
     void clear_sections();
     void set_state(const std::string &state, const std::string &message);
-    void update_theme();
 signals:
     void play_requested(Track track);
     void album_requested(const std::string &browse_id);
