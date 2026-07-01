@@ -83,6 +83,10 @@ void OfflineBannerWidget::applyStyle() {
     }
 }
 
+void OfflineBannerWidget::update_theme() {
+    applyStyle();
+}
+
 void OfflineBannerWidget::changeEvent(QEvent *event) {
     if (event->type() == QEvent::PaletteChange || event->type() == QEvent::StyleChange) {
         applyStyle();

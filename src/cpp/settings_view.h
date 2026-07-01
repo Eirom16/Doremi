@@ -17,6 +17,7 @@ class SettingsView : public QWidget {
     Q_OBJECT
 public:
     explicit SettingsView(QWidget *parent = nullptr);
+    void update_theme();
 
     void set_theme(const std::string &mode);
     void set_accent(const std::string &color);
@@ -121,6 +122,8 @@ private:
     QWidget *check_row(const std::string &label, AnimatedToggle *cb);
     QWidget *input_row(const std::string &label, QLineEdit *input);
     QWidget *storage_row(const std::string &label, QLabel *val_lbl, RippleButton *btn);
+
+    std::vector<QPushButton *> tab_btns_;
 };
 
 #endif

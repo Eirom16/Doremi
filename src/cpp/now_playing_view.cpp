@@ -7,6 +7,7 @@
 #include <QPainter>
 #include <QGraphicsOpacityEffect>
 #include "doremi/src/bridge.rs.h"
+#include <QStyle>
 
 
 NowPlayingView::NowPlayingView(QWidget *parent)
@@ -528,4 +529,6 @@ void NowPlayingView::setSubtitleGlowEffect(bool enabled) {
 
 void NowPlayingView::update_theme() {
     updateButtonsStyle();
+    style()->unpolish(this);
+    style()->polish(this);
 }

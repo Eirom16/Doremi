@@ -20,6 +20,7 @@ public:
     explicit RippleButton(QWidget *parent = nullptr, Variant variant = Variant::Secondary);
     
     void setVariant(Variant var);
+    void updateStyle();
     
     qreal rippleRadius() const { return m_rippleRadius; }
     void setRippleRadius(qreal r) { m_rippleRadius = r; update(); }
@@ -40,5 +41,4 @@ private:
     QVariantAnimation *m_opacityAnim = nullptr;
     
     void init();
-    void updateStyle();
 };

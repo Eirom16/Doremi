@@ -5,6 +5,7 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <QPushButton>
+#include <QStyle>
 #include <QPointer>
 #include "doremi/src/bridge.rs.h"
 #include "components/loading_state.h"
@@ -22,24 +23,31 @@ AlbumDetailView::AlbumDetailView(QWidget *parent)
 }
 
 void AlbumDetailView::setupLayout() {
-    const auto &c = DesignTokens::current();
+    const auto &s = DesignTokens::spacing();
 
-    auto *main_vbox = new QVBoxLayout(this);
-    main_vbox->setContentsMargins(0, 0, 0, 0);
-    main_vbox->setSpacing(0);
+    auto *root = new QVBoxLayout(this);
+    root->setContentsMargins(0, 0, 0, 0);
+    root->setSpacing(0);
 
-    content_layout_ = new QVBoxLayout();
+    scroll_area_ = new QScrollArea(this);
+    scroll_area_->setWidgetResizable(true);
+    scroll_area_->setFrameShape(QFrame::NoFrame);
+    scroll_area_->setStyleSheet("QScrollArea { background: transparent; border: none; }");
+
+    auto *scroll_content = new QWidget(scroll_area_);
+    scroll_content->setObjectName("albumScrollContent");
+    content_layout_ = new QVBoxLayout(scroll_content);
     content_layout_->setContentsMargins(DesignTokens::pagePaddingNarrow());
-    content_layout_->setSpacing(8);
+    content_layout_->setSpacing(s.md);
     content_layout_->setAlignment(Qt::AlignTop);
 
     // Back button
-    auto *back_btn = new QPushButton(this);
+    auto *back_btn = new QPushButton(scroll_content);
     back_btn->setObjectName("backBtn");
     auto *back_layout = new QHBoxLayout(back_btn);
     back_layout->setContentsMargins(8, 4, 12, 4);
     back_layout->setSpacing(6);
-    auto *back_icon = IconProvider::createIconLabel("arrow_back", 18, c.text_secondary, false, back_btn);
+    auto *back_icon = IconProvider::createIconLabel("arrow_back", 18, DesignTokens::current().text_secondary, false, back_btn);
     auto *back_text = new QLabel(tr_q("go_back"), back_btn);
     back_text->setObjectName("backText");
     back_text->setFont(DesignTokens::getFont("caption", 12));
@@ -53,44 +61,48 @@ void AlbumDetailView::setupLayout() {
     connect(back_btn, &QPushButton::clicked, this, &AlbumDetailView::back_requested);
     content_layout_->addWidget(back_btn, 0, Qt::AlignLeft);
 
-    // Header layout: cover + info
-    auto *header = new QHBoxLayout();
+    // Header card: cover + info
+    auto *header_card = new QWidget(scroll_content);
+    header_card->setProperty("boxRole", "card");
+    auto *header = new QHBoxLayout(header_card);
+    int m = s.lg;
+    header->setContentsMargins(m, m, m, m);
     header->setSpacing(24);
 
-    cover_label_ = new QLabel(this);
+    cover_label_ = new QLabel(header_card);
     cover_label_->setFixedSize(180, 180);
-    cover_label_->setStyleSheet(QString("background-color: %1; border-radius: %2px;").arg(c.bg_elevated.name()).arg(DesignTokens::radius().lg));
+    cover_label_->setStyleSheet(QString("background-color: %1; border-radius: %2px;").arg(DesignTokens::current().bg_elevated.name()).arg(DesignTokens::radius().lg));
     cover_label_->setAlignment(Qt::AlignCenter);
     header->addWidget(cover_label_);
 
     auto *info = new QVBoxLayout();
     info->setSpacing(6);
 
-    title_label_ = new QLabel(tr_q("album_singular"), this);
+    title_label_ = new QLabel(tr_q("album_singular"), header_card);
     title_label_->setFont(DesignTokens::getFont("heading_lg"));
     title_label_->setProperty("textRole", "heading");
     title_label_->setWordWrap(true);
     info->addWidget(title_label_);
 
-    artist_label_ = new QLabel(tr_q("artist_singular"), this);
+    artist_label_ = new QLabel(tr_q("artist_singular"), header_card);
     artist_label_->setFont(DesignTokens::getFont("body", 14));
     artist_label_->setProperty("textRole", "secondary");
     artist_label_->setCursor(Qt::PointingHandCursor);
     artist_label_->installEventFilter(this);
     info->addWidget(artist_label_);
 
-    meta_label_ = new QLabel("", this);
+    meta_label_ = new QLabel("", header_card);
     meta_label_->setFont(DesignTokens::getFont("caption", 12));
     meta_label_->setProperty("textRole", "muted");
     info->addWidget(meta_label_);
 
     // Play all button
-    auto *play_all_btn = new QPushButton(this);
+    auto *play_all_btn = new QPushButton(header_card);
     play_all_btn->setObjectName("playAllBtn");
     auto *play_all_layout = new QHBoxLayout(play_all_btn);
     play_all_layout->setContentsMargins(16, 8, 20, 8);
     play_all_layout->setSpacing(8);
-    auto *play_icon = IconProvider::createIconLabel("play_arrow", 20, c.text_on_accent, false, play_all_btn);
+    auto *play_icon = IconProvider::createIconLabel("play_arrow", 20, DesignTokens::current().text_on_accent, false, play_all_btn);
     auto *play_text = new QLabel(tr_q("play_all"), play_all_btn);
     play_text->setFont(DesignTokens::getFont("body_sm"));
     play_text->setProperty("textRole", "primary");
@@ -108,12 +120,12 @@ void AlbumDetailView::setupLayout() {
     info->addWidget(play_all_btn, 0, Qt::AlignLeft);
 
     // Download all button
-    auto *dl_all_btn = new QPushButton(this);
+    auto *dl_all_btn = new QPushButton(header_card);
     dl_all_btn->setObjectName("dlAllBtn");
     auto *dl_layout = new QHBoxLayout(dl_all_btn);
     dl_layout->setContentsMargins(16, 8, 20, 8);
     dl_layout->setSpacing(8);
-    auto *dl_icon = IconProvider::createIconLabel("download", 18, c.accent, false, dl_all_btn);
+    auto *dl_icon = IconProvider::createIconLabel("download", 18, DesignTokens::current().accent, false, dl_all_btn);
     dl_icon->setObjectName("dlIcon");
     auto *dl_text = new QLabel(tr_q("download_all"), dl_all_btn);
     dl_text->setObjectName("dlText");
@@ -137,29 +149,26 @@ void AlbumDetailView::setupLayout() {
 
     info->addSpacing(8);
     info->addWidget(dl_all_btn, 0, Qt::AlignLeft);
-    info->addStretch();
 
     header->addLayout(info, 1);
-    content_layout_->addLayout(header);
+    content_layout_->addWidget(header_card);
 
     // Separator
-    auto *sep = new QWidget(this);
+    auto *sep = new QWidget(scroll_content);
     sep->setFixedHeight(1);
     sep->setProperty("boxRole", "separator");
-    content_layout_->addSpacing(8);
     content_layout_->addWidget(sep);
-    content_layout_->addSpacing(4);
 
     // Tracks container
-    tracks_widget_ = new QWidget(this);
+    tracks_widget_ = new QWidget(scroll_content);
     tracks_widget_->setProperty("bgRole", "transparent");
     tracks_layout_ = new QVBoxLayout(tracks_widget_);
     tracks_layout_->setContentsMargins(0, 0, 0, 0);
     tracks_layout_->setSpacing(2);
     content_layout_->addWidget(tracks_widget_);
 
-    main_vbox->addLayout(content_layout_);
-    setLayout(main_vbox);
+    scroll_area_->setWidget(scroll_content);
+    root->addWidget(scroll_area_);
 }
 
 void AlbumDetailView::set_album_info(const Album &album) {
@@ -247,10 +256,12 @@ void AlbumDetailView::clear() {
         if (item->widget()) item->widget()->deleteLater();
         delete item;
     }
+    // Show loading skeleton immediately
     auto *loading = new LoadingState(LoadingState::ListRows, tracks_widget_);
     loading->setRowCount(4);
     loading->setRowHeight(48);
     tracks_layout_->addWidget(loading);
+    updateGeometry();
 }
 
 bool AlbumDetailView::eventFilter(QObject *obj, QEvent *event) {
@@ -267,7 +278,13 @@ bool AlbumDetailView::eventFilter(QObject *obj, QEvent *event) {
 }
 
 void AlbumDetailView::update_theme() {
+    const auto &c = DesignTokens::current();
+    if (cover_label_) {
+        cover_label_->setStyleSheet(QString("background-color: %1; border-radius: %2px;").arg(c.bg_elevated.name()).arg(DesignTokens::radius().lg));
+    }
     for (auto *row : findChildren<AlbumTrackRow*>()) {
         row->update_theme();
     }
+    style()->unpolish(this);
+    style()->polish(this);
 }

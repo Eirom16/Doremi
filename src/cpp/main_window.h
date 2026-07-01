@@ -121,6 +121,7 @@ public:
     PlaylistDetailView* playlist_detail_view() const { return playlist_detail_view_; }
     ShowDetailView* show_detail_view() const { return show_detail_view_; }
     WelcomeView* welcome_view() const { return welcome_view_; }
+    OfflineBannerWidget* offline_banner() const { return offline_banner_; }
     ThemeTransitionOverlay* theme_transition() const { return theme_transition_; }
     ShortcutManager* shortcut_manager() const { return shortcut_manager_; }
     TrayController* tray_controller() const { return tray_controller_; }

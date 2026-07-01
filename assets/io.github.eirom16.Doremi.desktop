@@ -1,0 +1,32 @@
+[Desktop Entry]
+Type=Application
+Name=Doremi
+GenericName=Music Player
+GenericName[es]=Reproductor de Música
+Comment=Desktop client for YouTube Music
+Comment[es]=Cliente de escritorio para YouTube Music
+Exec=doremi %U
+Icon=io.github.eirom16.Doremi
+Terminal=false
+Categories=AudioVideo;Audio;Music;Player;Qt;
+Keywords=music;youtube;streaming;player;audio;
+Keywords[es]=música;youtube;streaming;reproductor;audio;
+StartupNotify=true
+StartupWMClass=doremi
+MimeType=x-scheme-handler/doremi;
+Actions=PlayPause;Next;Previous;
+
+[Desktop Action PlayPause]
+Name=Play/Pause
+Name[es]=Reproducir/Pausar
+Exec=doremi --play-pause
+
+[Desktop Action Next]
+Name=Next Track
+Name[es]=Siguiente pista
+Exec=doremi --next
+
+[Desktop Action Previous]
+Name=Previous Track
+Name[es]=Pista anterior
+Exec=doremi --previous

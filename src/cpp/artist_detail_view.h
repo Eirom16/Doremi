@@ -6,6 +6,7 @@
 #include <QLabel>
 #include <QHBoxLayout>
 #include <QPushButton>
+#include <QScrollArea>
 #include <vector>
 #include <string>
 #include "components/track_row.h"
@@ -48,6 +49,7 @@ private:
     // Dynamic section containers
     QWidget *albums_container_ = nullptr;
     QWidget *singles_container_ = nullptr;
+    QScrollArea *scroll_area_ = nullptr;
 };
 
 #endif

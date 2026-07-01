@@ -1,0 +1,106 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-and-release:
+    name: Build & Package
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            pkg-config \
+            qt6-base-dev \
+            qt6-webengine-dev \
+            libqt6webenginewidgets6 \
+            libvlc-dev \
+            libdbus-1-dev \
+            dpkg-dev \
+            fakeroot
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-release-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-release-
+
+      - name: Build release binary
+        run: cargo build --release
+
+      - name: Extract version
+        id: version
+        run: |
+          VERSION=$(grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Building version: $VERSION"
+
+      - name: Build Debian package
+        run: |
+          chmod +x scripts/build-deb.sh
+          scripts/build-deb.sh "${{ steps.version.outputs.version }}"
+
+      - name: Create tarball
+        run: |
+          mkdir -p dist
+          TARBALL="dist/doremi-${{ steps.version.outputs.version }}-linux-x86_64.tar.gz"
+          tar czf "$TARBALL" \
+            -C target/release doremi \
+            -C "$GITHUB_WORKSPACE" \
+            assets/io.github.eirom16.Doremi.desktop \
+            assets/io.github.eirom16.Doremi.metainfo.xml \
+            assets/icons/io.github.eirom16.Doremi.svg \
+            README.md
+          echo "Created $TARBALL"
+
+      - name: Generate checksums
+        run: |
+          cd dist
+          sha256sum * > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          generate_release_notes: true
+          files: |
+            dist/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-arch:
+    name: Arch PKGBUILD Validation
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          pacman -Syu --noconfirm
+          pacman -S --noconfirm base-devel namcap
+
+      - name: Validate PKGBUILD
+        run: |
+          cd packaging/arch
+          namcap PKGBUILD || true
+          echo "PKGBUILD validation complete"

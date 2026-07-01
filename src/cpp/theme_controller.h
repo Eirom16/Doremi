@@ -11,6 +11,7 @@ class ThemeController : public QObject {
 public:
     explicit ThemeController(DoremiMainWindow *window);
     void apply_theme(const std::string &theme_mode, const std::string &accent_color);
+    void refresh_all_views();
 private:
     DoremiMainWindow *window_;
 };

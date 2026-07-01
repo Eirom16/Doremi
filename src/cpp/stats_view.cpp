@@ -12,6 +12,7 @@
 #include <QButtonGroup>
 #include <QFile>
 #include <QFileDialog>
+#include <QStyle>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QPointer>
@@ -338,4 +339,6 @@ void StatsView::update_theme() {
     if (card_time_) card_time_->update_theme();
     if (card_plays_) card_plays_->update_theme();
     if (card_artists_) card_artists_->update_theme();
+    style()->unpolish(this);
+    style()->polish(this);
 }

@@ -577,6 +577,7 @@ void set_album_detail(Album album, rust::Vec<Track> tracks) {
     for (const auto &x : tracks) tt.push_back(x);
     mutate_main_window("set_album_detail", [album = std::move(album), tt = std::move(tt)](DoremiMainWindow &window) {
         if (!window.album_detail_view()) return;
+        window.album_detail_view()->clear();
         window.album_detail_view()->set_album_info(album);
         window.album_detail_view()->set_album_tracks(tt);
         window.navigate_to("album_detail");
@@ -595,6 +596,7 @@ void set_artist_detail(Artist artist, rust::Vec<Track> tracks, rust::Vec<Album> 
     for (const auto &x : singles) si.push_back(x);
     mutate_main_window("set_artist_detail", [artist = std::move(artist), tt = std::move(tt), al = std::move(al), si = std::move(si)](DoremiMainWindow &window) {
         if (!window.artist_detail_view()) return;
+        window.artist_detail_view()->clear();
         window.artist_detail_view()->set_artist_info(artist);
         window.artist_detail_view()->set_artist_tracks(tt, al, si);
         window.navigate_to("artist_detail");
@@ -607,6 +609,7 @@ void set_playlist_detail(Playlist playlist, rust::Vec<Track> tracks) {
     for (const auto &x : tracks) tt.push_back(x);
     mutate_main_window("set_playlist_detail", [playlist = std::move(playlist), tt = std::move(tt)](DoremiMainWindow &window) {
         if (!window.playlist_detail_view()) return;
+        window.playlist_detail_view()->clear();
         window.playlist_detail_view()->set_playlist_info(playlist);
         window.playlist_detail_view()->set_playlist_tracks(tt);
         window.navigate_to("playlist_detail");

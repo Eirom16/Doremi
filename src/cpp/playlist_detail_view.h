@@ -10,6 +10,7 @@
 #include <QMessageBox>
 #include <QPoint>
 #include <QFrame>
+#include <QScrollArea>
 #include <vector>
 #include <string>
 #include "components/track_row.h"
@@ -65,6 +66,7 @@ private:
     QFrame *drop_indicator_;
     std::vector<Track> tracks_;
     Playlist current_playlist_;
+    QScrollArea *scroll_area_ = nullptr;
 };
 
 #endif

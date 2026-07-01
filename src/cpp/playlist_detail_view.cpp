@@ -4,6 +4,7 @@
 #include "components/artwork_loader.h"
 #include <QApplication>
 #include <QDrag>
+#include <QStyle>
 #include <QDragEnterEvent>
 #include <QDragMoveEvent>
 #include <QDropEvent>
@@ -28,24 +29,31 @@ PlaylistDetailView::PlaylistDetailView(QWidget *parent)
 }
 
 void PlaylistDetailView::setupLayout() {
-    const auto &c = DesignTokens::current();
+    const auto &s = DesignTokens::spacing();
 
-    auto *main_vbox = new QVBoxLayout(this);
-    main_vbox->setContentsMargins(0, 0, 0, 0);
-    main_vbox->setSpacing(0);
+    auto *root = new QVBoxLayout(this);
+    root->setContentsMargins(0, 0, 0, 0);
+    root->setSpacing(0);
 
-    content_layout_ = new QVBoxLayout();
+    scroll_area_ = new QScrollArea(this);
+    scroll_area_->setWidgetResizable(true);
+    scroll_area_->setFrameShape(QFrame::NoFrame);
+    scroll_area_->setStyleSheet("QScrollArea { background: transparent; border: none; }");
+
+    auto *scroll_content = new QWidget(scroll_area_);
+    scroll_content->setObjectName("playlistScrollContent");
+    content_layout_ = new QVBoxLayout(scroll_content);
     content_layout_->setContentsMargins(DesignTokens::pagePaddingNarrow());
-    content_layout_->setSpacing(8);
+    content_layout_->setSpacing(s.md);
     content_layout_->setAlignment(Qt::AlignTop);
 
     // Back button
-    auto *back_btn = new QPushButton(this);
+    auto *back_btn = new QPushButton(scroll_content);
     back_btn->setObjectName("backBtn");
     auto *back_layout = new QHBoxLayout(back_btn);
     back_layout->setContentsMargins(8, 4, 12, 4);
     back_layout->setSpacing(6);
-    auto *back_icon = IconProvider::createIconLabel("arrow_back", 18, c.text_secondary, false, back_btn);
+    auto *back_icon = IconProvider::createIconLabel("arrow_back", 18, DesignTokens::current().text_secondary, false, back_btn);
     auto *back_text = new QLabel(tr_q("go_back"), back_btn);
     back_text->setObjectName("backText");
     back_text->setFont(DesignTokens::getFont("caption", 12));
@@ -59,32 +67,36 @@ void PlaylistDetailView::setupLayout() {
     connect(back_btn, &QPushButton::clicked, this, &PlaylistDetailView::back_requested);
     content_layout_->addWidget(back_btn, 0, Qt::AlignLeft);
 
-    // Header: cover + info
-    auto *header = new QHBoxLayout();
+    // Header card: cover + info
+    auto *header_card = new QWidget(scroll_content);
+    header_card->setProperty("boxRole", "card");
+    auto *header = new QHBoxLayout(header_card);
+    int m = s.lg;
+    header->setContentsMargins(m, m, m, m);
     header->setSpacing(24);
 
-    cover_label_ = new QLabel(this);
+    cover_label_ = new QLabel(header_card);
     cover_label_->setFixedSize(160, 160);
-    cover_label_->setStyleSheet(QString("background-color: %1; border-radius: %2px;").arg(c.bg_elevated.name()).arg(DesignTokens::radius().lg));
+    cover_label_->setStyleSheet(QString("background-color: %1; border-radius: %2px;").arg(DesignTokens::current().bg_elevated.name()).arg(DesignTokens::radius().lg));
     cover_label_->setAlignment(Qt::AlignCenter);
     header->addWidget(cover_label_);
 
     auto *info = new QVBoxLayout();
     info->setSpacing(6);
 
-    auto *type_lbl = new QLabel(tr_q("playlist_singular").toUpper(), this);
+    auto *type_lbl = new QLabel(tr_q("playlist_singular").toUpper(), header_card);
     type_lbl->setObjectName("typeLabel");
     type_lbl->setFont(DesignTokens::getFont("caption", 10));
     type_lbl->setProperty("textRole", "muted");
     info->addWidget(type_lbl);
 
-    title_label_ = new QLabel(tr_q("playlist_singular"), this);
+    title_label_ = new QLabel(tr_q("playlist_singular"), header_card);
     title_label_->setFont(DesignTokens::getFont("heading_lg"));
     title_label_->setProperty("textRole", "heading");
     title_label_->setWordWrap(true);
     info->addWidget(title_label_);
 
-    desc_label_ = new QLabel("", this);
+    desc_label_ = new QLabel("", header_card);
     desc_label_->setFont(DesignTokens::getFont("caption_sm"));
     desc_label_->setProperty("textRole", "secondary");
     desc_label_->setWordWrap(true);
@@ -92,7 +104,7 @@ void PlaylistDetailView::setupLayout() {
     desc_label_->hide();
     info->addWidget(desc_label_);
 
-    meta_label_ = new QLabel("", this);
+    meta_label_ = new QLabel("", header_card);
     meta_label_->setFont(DesignTokens::getFont("caption", 12));
     meta_label_->setProperty("textRole", "muted");
     info->addWidget(meta_label_);
@@ -102,12 +114,12 @@ void PlaylistDetailView::setupLayout() {
     actions->setSpacing(10);
 
     // Play all
-    auto *play_btn = new QPushButton(this);
+    auto *play_btn = new QPushButton(header_card);
     play_btn->setObjectName("playBtn");
     auto *play_l = new QHBoxLayout(play_btn);
     play_l->setContentsMargins(16, 8, 20, 8);
     play_l->setSpacing(8);
-    play_l->addWidget(IconProvider::createIconLabel("play_arrow", 20, c.text_on_accent, false, play_btn));
+    play_l->addWidget(IconProvider::createIconLabel("play_arrow", 20, DesignTokens::current().text_on_accent, false, play_btn));
     auto *play_t = new QLabel(tr_q("play"), play_btn);
     play_t->setFont(DesignTokens::getFont("body_sm"));
     play_t->setProperty("textRole", "primary");
@@ -122,12 +134,12 @@ void PlaylistDetailView::setupLayout() {
     actions->addWidget(play_btn);
 
     // Shuffle
-    auto *shuffle_btn = new QPushButton(this);
+    auto *shuffle_btn = new QPushButton(header_card);
     shuffle_btn->setObjectName("shuffleBtn");
     auto *shuffle_l = new QHBoxLayout(shuffle_btn);
     shuffle_l->setContentsMargins(16, 8, 20, 8);
     shuffle_l->setSpacing(8);
-    shuffle_l->addWidget(IconProvider::createIconLabel("shuffle", 18, c.text_primary, false, shuffle_btn));
+    shuffle_l->addWidget(IconProvider::createIconLabel("shuffle", 18, DesignTokens::current().text_primary, false, shuffle_btn));
     auto *shuffle_t = new QLabel(tr_q("shuffle"), shuffle_btn);
     shuffle_t->setObjectName("shuffleText");
     shuffle_t->setFont(DesignTokens::getFont("body_sm"));
@@ -143,12 +155,12 @@ void PlaylistDetailView::setupLayout() {
     actions->addWidget(shuffle_btn);
 
     // Download all
-    auto *dl_btn = new QPushButton(this);
+    auto *dl_btn = new QPushButton(header_card);
     dl_btn->setObjectName("dlBtn");
     auto *dl_l = new QHBoxLayout(dl_btn);
     dl_l->setContentsMargins(16, 8, 20, 8);
     dl_l->setSpacing(8);
-    auto *dl_icon = IconProvider::createIconLabel("download", 18, c.accent, false, dl_btn);
+    auto *dl_icon = IconProvider::createIconLabel("download", 18, DesignTokens::current().accent, false, dl_btn);
     dl_icon->setObjectName("dlIcon");
     dl_l->addWidget(dl_icon);
     auto *dl_t = new QLabel(tr_q("download_all"), dl_btn);
@@ -172,11 +184,11 @@ void PlaylistDetailView::setupLayout() {
     actions->addWidget(dl_btn);
 
     // Edit
-    edit_btn_ = new QPushButton(this);
+    edit_btn_ = new QPushButton(header_card);
     edit_btn_->setFixedSize(36, 36);
     edit_btn_->setCursor(Qt::PointingHandCursor);
     edit_btn_->setToolTip(tr_q("edit_playlist"));
-    edit_btn_->setIcon(IconProvider::getIcon("edit", c.text_secondary, 18));
+    edit_btn_->setIcon(IconProvider::getIcon("edit", DesignTokens::current().text_secondary, 18));
     edit_btn_->setObjectName("editBtn");
     connect(edit_btn_, &QPushButton::clicked, this, [this]() {
         bool ok;
@@ -198,11 +210,11 @@ void PlaylistDetailView::setupLayout() {
     actions->addWidget(edit_btn_);
 
     // Delete
-    delete_btn_ = new QPushButton(this);
+    delete_btn_ = new QPushButton(header_card);
     delete_btn_->setFixedSize(36, 36);
     delete_btn_->setCursor(Qt::PointingHandCursor);
     delete_btn_->setToolTip(tr_q("delete_playlist"));
-    delete_btn_->setIcon(IconProvider::getIcon("delete", c.error, 18));
+    delete_btn_->setIcon(IconProvider::getIcon("delete", DesignTokens::current().error, 18));
     delete_btn_->setObjectName("deleteBtn");
     connect(delete_btn_, &QPushButton::clicked, this, [this]() {
         auto reply = QMessageBox::question(this, tr_q("delete_playlist"),
@@ -218,21 +230,18 @@ void PlaylistDetailView::setupLayout() {
 
     info->addSpacing(8);
     info->addLayout(actions);
-    info->addStretch();
 
     header->addLayout(info, 1);
-    content_layout_->addLayout(header);
+    content_layout_->addWidget(header_card);
 
     // Separator
-    auto *sep = new QWidget(this);
+    auto *sep = new QWidget(scroll_content);
     sep->setFixedHeight(1);
     sep->setProperty("boxRole", "separator");
-    content_layout_->addSpacing(8);
     content_layout_->addWidget(sep);
-    content_layout_->addSpacing(4);
 
     // Tracks container
-    tracks_widget_ = new QWidget(this);
+    tracks_widget_ = new QWidget(scroll_content);
     tracks_widget_->setProperty("bgRole", "transparent");
     tracks_widget_->setAcceptDrops(true);
     tracks_widget_->installEventFilter(this);
@@ -242,14 +251,14 @@ void PlaylistDetailView::setupLayout() {
 
     drop_indicator_ = new QFrame(tracks_widget_);
     drop_indicator_->setFixedHeight(2);
-    drop_indicator_->setStyleSheet(QString("background-color: %1; border-radius: 1px;") // indicator: keep 1px
-        .arg(c.accent.name()));
+    drop_indicator_->setStyleSheet(QString("background-color: %1; border-radius: 1px;")
+        .arg(DesignTokens::current().accent.name()));
     drop_indicator_->hide();
 
     content_layout_->addWidget(tracks_widget_);
 
-    main_vbox->addLayout(content_layout_);
-    setLayout(main_vbox);
+    scroll_area_->setWidget(scroll_content);
+    root->addWidget(scroll_area_);
 }
 
 void PlaylistDetailView::set_playlist_info(const Playlist &playlist) {
@@ -352,24 +361,23 @@ void PlaylistDetailView::rebuild_tracks() {
 
     if (tracks_.empty()) {
         const QString title = title_label_ ? title_label_->text() : QString();
-        if (title.contains("Cargando", Qt::CaseInsensitive)) {
+        // Loading state: no metadata yet (owner, privacy, count all empty)
+        bool is_loading = meta_label_ && meta_label_->text().isEmpty();
+        bool is_error = title.contains("No se pudo", Qt::CaseInsensitive);
+        if (is_loading) {
             auto *loading = new LoadingState(LoadingState::ListRows, tracks_widget_);
             loading->setRowCount(4);
             loading->setRowHeight(48);
             tracks_layout_->addWidget(loading);
         } else {
             auto *empty = new EmptyState(tracks_widget_);
-            bool is_error = title.contains("No se pudo", Qt::CaseInsensitive);
             empty->setIcon(is_error ? "error" : "playlist_play");
             empty->setTitle(is_error ? "Error" : "Playlist vacía");
             empty->applyPanelStyle(is_error ? "error" : "empty");
             
-            QString message = "Esta playlist está vacía.";
-            if (is_error) {
-                message = desc_label_ && desc_label_->isVisible()
-                    ? desc_label_->text()
-                    : "No se pudo cargar esta playlist.";
-            }
+            QString message = is_error
+                ? (desc_label_ && desc_label_->isVisible() ? desc_label_->text() : "No se pudo cargar esta playlist.")
+                : "Esta playlist está vacía.";
             empty->setDescription(message);
             tracks_layout_->addWidget(empty);
         }
@@ -468,10 +476,25 @@ void PlaylistDetailView::clear() {
         if (item->widget()) item->widget()->deleteLater();
         delete item;
     }
+    // Show loading skeleton immediately
+    auto *loading = new LoadingState(LoadingState::ListRows, tracks_widget_);
+    loading->setRowCount(4);
+    loading->setRowHeight(48);
+    tracks_layout_->addWidget(loading);
+    updateGeometry();
 }
 
 void PlaylistDetailView::update_theme() {
+    const auto &c = DesignTokens::current();
+    if (cover_label_) {
+        cover_label_->setStyleSheet(QString("background-color: %1; border-radius: %2px;").arg(c.bg_elevated.name()).arg(DesignTokens::radius().lg));
+    }
+    if (drop_indicator_) {
+        drop_indicator_->setStyleSheet(QString("background-color: %1; border-radius: 1px;").arg(c.accent.name()));
+    }
     for (auto *row : findChildren<PlaylistTrackRow*>()) {
         row->update_theme();
     }
+    style()->unpolish(this);
+    style()->polish(this);
 }

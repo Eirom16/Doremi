@@ -75,3 +75,9 @@ void AnimatedToggle::paintEvent(QPaintEvent *) {
     painter.setBrush(c.text_on_accent);
     painter.drawEllipse(QRectF(thumbX, thumbY, thumbDiam, thumbDiam));
 }
+
+void AnimatedToggle::updateTheme() {
+    const auto &c = DesignTokens::current();
+    m_trackColor = isChecked() ? c.accent : c.bg_elevated;
+    update();
+}

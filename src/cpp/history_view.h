@@ -14,6 +14,7 @@ class HistoryView : public QWidget {
     Q_OBJECT
 public:
     explicit HistoryView(QWidget *parent = nullptr);
+    void update_theme();
 
     void set_history(const std::vector<Track> &tracks,
                      const std::vector<std::string> &played_at,

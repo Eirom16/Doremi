@@ -2,10 +2,13 @@
 #include "design_tokens.h"
 #include "icon_provider.h"
 #include "components/artwork_loader.h"
+#include "components/loading_state.h"
 #include <QPainter>
 #include <QPainterPath>
 #include <QPushButton>
+#include <QStyle>
 #include <QPointer>
+#include <QScrollArea>
 #include "components/album_card.h"
 #include "components/horizontal_carousel.h"
 #include "doremi/src/bridge.rs.h"
@@ -23,17 +26,24 @@ ArtistDetailView::ArtistDetailView(QWidget *parent)
 void ArtistDetailView::setupLayout() {
     const auto &c = DesignTokens::current();
 
-    auto *main_vbox = new QVBoxLayout(this);
-    main_vbox->setContentsMargins(0, 0, 0, 0);
-    main_vbox->setSpacing(0);
+    auto *root = new QVBoxLayout(this);
+    root->setContentsMargins(0, 0, 0, 0);
+    root->setSpacing(0);
 
-    content_layout_ = new QVBoxLayout();
+    scroll_area_ = new QScrollArea(this);
+    scroll_area_->setWidgetResizable(true);
+    scroll_area_->setFrameShape(QFrame::NoFrame);
+    scroll_area_->setStyleSheet("QScrollArea { background: transparent; border: none; }");
+
+    auto *scroll_content = new QWidget(scroll_area_);
+    scroll_content->setObjectName("artistScrollContent");
+    content_layout_ = new QVBoxLayout(scroll_content);
     content_layout_->setContentsMargins(DesignTokens::pagePaddingNarrow());
-    content_layout_->setSpacing(8);
+    content_layout_->setSpacing(DesignTokens::spacing().md);
     content_layout_->setAlignment(Qt::AlignTop);
 
     // Back button
-    auto *back_btn = new QPushButton(this);
+    auto *back_btn = new QPushButton(scroll_content);
     back_btn->setObjectName("backBtn");
     auto *back_layout = new QHBoxLayout(back_btn);
     back_layout->setContentsMargins(8, 4, 12, 4);
@@ -52,37 +62,41 @@ void ArtistDetailView::setupLayout() {
     connect(back_btn, &QPushButton::clicked, this, &ArtistDetailView::back_requested);
     content_layout_->addWidget(back_btn, 0, Qt::AlignLeft);
 
-    // Header: avatar + name
-    auto *header = new QHBoxLayout();
-    header->setSpacing(20);
+    // Header card: avatar + name info
+    auto *header_card = new QWidget(scroll_content);
+    header_card->setProperty("boxRole", "card");
+    auto *header_layout = new QHBoxLayout(header_card);
+    int m = DesignTokens::spacing().lg;
+    header_layout->setContentsMargins(m, m, m, m);
+    header_layout->setSpacing(20);
 
-    avatar_label_ = new QLabel(this);
+    avatar_label_ = new QLabel(header_card);
     avatar_label_->setFixedSize(140, 140);
     avatar_label_->setStyleSheet(QString("background-color: %1; border-radius: %2px;").arg(c.bg_elevated.name()).arg(DesignTokens::radius().pill));
     avatar_label_->setAlignment(Qt::AlignCenter);
-    header->addWidget(avatar_label_);
+    header_layout->addWidget(avatar_label_);
 
     auto *info = new QVBoxLayout();
     info->setSpacing(6);
 
-    auto *type_lbl = new QLabel("ARTISTA", this);
+    auto *type_lbl = new QLabel("ARTISTA", header_card);
     type_lbl->setObjectName("typeLabel");
     type_lbl->setFont(DesignTokens::getFont("caption", 10));
     type_lbl->setProperty("textRole", "muted");
     info->addWidget(type_lbl);
 
-    name_label_ = new QLabel("Artista", this);
+    name_label_ = new QLabel("Artista", header_card);
     name_label_->setFont(DesignTokens::getFont("heading_lg"));
     name_label_->setProperty("textRole", "heading");
     name_label_->setWordWrap(true);
     info->addWidget(name_label_);
 
-    meta_label_ = new QLabel("", this);
+    meta_label_ = new QLabel("", header_card);
     meta_label_->setFont(DesignTokens::getFont("caption", 12));
     meta_label_->setProperty("textRole", "muted");
     info->addWidget(meta_label_);
 
-    desc_label_ = new QLabel("", this);
+    desc_label_ = new QLabel("", header_card);
     desc_label_->setFont(DesignTokens::getFont("caption_sm"));
     desc_label_->setProperty("textRole", "secondary");
     desc_label_->setWordWrap(true);
@@ -91,35 +105,38 @@ void ArtistDetailView::setupLayout() {
     info->addWidget(desc_label_);
 
     info->addStretch();
-    header->addLayout(info, 1);
-    content_layout_->addLayout(header);
+    header_layout->addLayout(info, 1);
+    header_card->setLayout(header_layout);
+    content_layout_->addWidget(header_card);
 
     // Separator
-    auto *sep = new QWidget(this);
+    auto *sep = new QWidget(scroll_content);
     sep->setObjectName("separator");
     sep->setFixedHeight(1);
     sep->setProperty("boxRole", "separator");
-    content_layout_->addSpacing(12);
     content_layout_->addWidget(sep);
-    content_layout_->addSpacing(4);
 
     // Tracks section header
-    auto *tracks_header = new QLabel("Canciones populares", this);
+    auto *tracks_header = new QLabel("Canciones populares", scroll_content);
     tracks_header->setObjectName("tracksHeader");
     tracks_header->setFont(DesignTokens::getFont("heading_sm", 14));
     tracks_header->setProperty("textRole", "heading");
     content_layout_->addWidget(tracks_header);
 
     // Tracks container
-    tracks_widget_ = new QWidget(this);
-    tracks_widget_->setProperty("bgRole", "transparent");
+    tracks_widget_ = new QWidget(scroll_content);
+    tracks_widget_->setProperty("boxRole", "card");
     tracks_layout_ = new QVBoxLayout(tracks_widget_);
     tracks_layout_->setContentsMargins(0, 0, 0, 0);
     tracks_layout_->setSpacing(2);
     content_layout_->addWidget(tracks_widget_);
 
-    main_vbox->addLayout(content_layout_);
-    setLayout(main_vbox);
+    content_layout_->addStretch(1);
+
+    scroll_content->setLayout(content_layout_);
+    scroll_area_->setWidget(scroll_content);
+    root->addWidget(scroll_area_, 1);
+    setLayout(root);
 }
 
 void ArtistDetailView::set_artist_info(const Artist &artist) {
@@ -210,8 +227,8 @@ void ArtistDetailView::set_artist_tracks(const std::vector<Track> &tracks,
     if (!albums.empty()) {
         albums_container_ = new QWidget(this);
         auto *lay = new QVBoxLayout(albums_container_);
-        lay->setContentsMargins(0, 16, 0, 0);
-        lay->setSpacing(10);
+        lay->setContentsMargins(0, 0, 0, 0);
+        lay->setSpacing(DesignTokens::spacing().sm);
         
         auto *header = new QLabel("Álbumes", albums_container_);
         header->setObjectName("sectionHeader");
@@ -235,6 +252,7 @@ void ArtistDetailView::set_artist_tracks(const std::vector<Track> &tracks,
             carousel->addWidget(card);
         }
         lay->addWidget(carousel);
+        albums_container_->setLayout(lay);
         content_layout_->addWidget(albums_container_);
     }
 
@@ -242,8 +260,8 @@ void ArtistDetailView::set_artist_tracks(const std::vector<Track> &tracks,
     if (!singles.empty()) {
         singles_container_ = new QWidget(this);
         auto *lay = new QVBoxLayout(singles_container_);
-        lay->setContentsMargins(0, 16, 0, 0);
-        lay->setSpacing(10);
+        lay->setContentsMargins(0, 0, 0, 0);
+        lay->setSpacing(DesignTokens::spacing().sm);
         
         auto *header = new QLabel("Singles y EPs", singles_container_);
         header->setObjectName("sectionHeader");
@@ -267,6 +285,7 @@ void ArtistDetailView::set_artist_tracks(const std::vector<Track> &tracks,
             carousel->addWidget(card);
         }
         lay->addWidget(carousel);
+        singles_container_->setLayout(lay);
         content_layout_->addWidget(singles_container_);
     }
     updateGeometry();
@@ -292,10 +311,22 @@ void ArtistDetailView::clear() {
         singles_container_->deleteLater();
         singles_container_ = nullptr;
     }
+    // Show loading skeleton immediately
+    auto *loading = new LoadingState(LoadingState::ListRows, tracks_widget_);
+    loading->setRowCount(4);
+    loading->setRowHeight(48);
+    tracks_layout_->addWidget(loading);
+    updateGeometry();
 }
 
 void ArtistDetailView::update_theme() {
+    const auto &c = DesignTokens::current();
+    if (avatar_label_) {
+        avatar_label_->setStyleSheet(QString("background-color: %1; border-radius: %2px;").arg(c.bg_elevated.name()).arg(DesignTokens::radius().pill));
+    }
     for (auto *row : findChildren<ArtistTrackRow*>()) {
         row->update_theme();
     }
+    style()->unpolish(this);
+    style()->polish(this);
 }

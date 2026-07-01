@@ -9,6 +9,7 @@
 #include <QDebug>
 #include <QMouseEvent>
 #include <QPointer>
+#include <QStyle>
 
 
 static QPixmap getRoundedPixmap(const QPixmap &src, int radius) {
@@ -403,4 +404,11 @@ void PlayerBar::update_theme() {
     
     QColor rep_color = repeat_mode_ > 0 ? c.accent : c.text_secondary;
     repeat_btn_->setIcon(IconProvider::getIcon(repeat_mode_ == 2 ? "repeat_one" : "repeat", rep_color, 20));
+    
+    if (artwork_label_) {
+        artwork_label_->setStyleSheet(QString("background-color: %1; border-radius: %2px;")
+            .arg(c.bg_elevated.name()).arg(DesignTokens::radius().sm));
+    }
+    style()->unpolish(this);
+    style()->polish(this);
 }

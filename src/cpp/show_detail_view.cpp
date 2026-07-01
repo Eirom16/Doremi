@@ -211,8 +211,14 @@ bool ShowDetailView::eventFilter(QObject *obj, QEvent *event) {
 }
 
 void ShowDetailView::update_theme() {
+    const auto &c = DesignTokens::current();
+    if (cover_label_) {
+        cover_label_->setStyleSheet(QString("background: %1; border-radius: %2px;").arg(c.bg_elevated.name()).arg(DesignTokens::radius().md));
+    }
     updateSubscriptionButtonState(is_subscribed_);
     for (auto *row : findChildren<EpisodeRow*>()) {
         row->update_theme();
     }
+    style()->unpolish(this);
+    style()->polish(this);
 }

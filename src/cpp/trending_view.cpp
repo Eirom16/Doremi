@@ -9,6 +9,7 @@
 #include "components/artwork_loader.h"
 #include "components/loading_state.h"
 #include <QFile>
+#include <QStyle>
 #include <QPointer>
 #include "doremi/src/bridge.rs.h"
 
@@ -23,6 +24,11 @@ static QPixmap getRoundedPixmap(const QPixmap &src, int radius) {
     painter.setClipPath(path);
     painter.drawPixmap(0, 0, src);
     return dest;
+}
+
+void TrendingView::update_theme() {
+    style()->unpolish(this);
+    style()->polish(this);
 }
 
 TrendingView::TrendingView(QWidget *parent)

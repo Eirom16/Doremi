@@ -30,7 +30,6 @@ TitleBar::TitleBar(QWidget *parent)
 
     search_input_ = new QLineEdit(this);
     search_input_->setMinimumWidth(400);
-    search_input_->setMaximumWidth(800);
     search_input_->setFixedHeight(40);
     search_input_->setPlaceholderText("Buscar canciones, artistas, álbumes...");
     search_input_->setFont(DesignTokens::getFont("body_sm"));
@@ -47,11 +46,10 @@ TitleBar::TitleBar(QWidget *parent)
     search_completer_->setMaxVisibleItems(8);
     search_input_->setCompleter(search_completer_);
     
-    search_input_->addAction(IconProvider::getIcon("search", c.text_secondary, 18), QLineEdit::LeadingPosition);
+    search_action_ = search_input_->addAction(IconProvider::getIcon("search", c.text_secondary, 18), QLineEdit::LeadingPosition);
     
     search_input_->setProperty("inputRole", "search");
     layout_->addWidget(search_input_, 1);
-    layout_->addStretch(1);
 
     debounce_timer_ = new QTimer(this);
     debounce_timer_->setSingleShot(true);
@@ -114,5 +112,11 @@ void TitleBar::update_theme() {
     
     if (logo_icon_) {
         IconProvider::setupIconLabel(logo_icon_, "music_note", 18, c.accent, true);
+    }
+    if (logo_label_) {
+        logo_label_->setStyleSheet(QString("font-weight: bold; color: %1; background: transparent;").arg(c.accent.name()));
+    }
+    if (search_action_) {
+        search_action_->setIcon(IconProvider::getIcon("search", c.text_secondary, 18));
     }
 }

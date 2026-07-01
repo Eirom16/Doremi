@@ -4,9 +4,19 @@
 #include "icon_provider.h"
 #include "components/loading_state.h"
 #include "components/empty_state.h"
+#include <QStyle>
 
 
 static void clear_layout(QVBoxLayout *lay);
+
+void SearchView::update_theme() {
+    style()->unpolish(this);
+    style()->polish(this);
+    for (auto *btn : filter_btns_) {
+        btn->style()->unpolish(btn);
+        btn->style()->polish(btn);
+    }
+}
 
 SearchView::SearchView(QWidget *parent)
     : QWidget(parent)

@@ -33,6 +33,7 @@ private:
     QCompleter *search_completer_;
     QStringListModel *search_suggestions_model_;
     QTimer *debounce_timer_;
+    QAction *search_action_ = nullptr;
 };
 
 #endif

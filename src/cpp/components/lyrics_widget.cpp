@@ -134,7 +134,7 @@ LyricsWidget::LyricsWidget(QWidget *parent)
         "    border: none;"
         "    color: %1;"
         "    padding: 4px;"
-        "    border-radius: %3px;"
+        "    border-radius: %4px;"
         "    min-width: 24px;"
         "    min-height: 24px;"
         "}"
@@ -144,7 +144,7 @@ LyricsWidget::LyricsWidget(QWidget *parent)
         "QPushButton:pressed {"
         "    background-color: %3;"
         "}"
-    ).arg(c.text_primary.name()).arg(DesignTokens::rgba(c.bg_overlay)).arg(DesignTokens::rgba(c.border));
+    ).arg(c.text_primary.name()).arg(DesignTokens::rgba(c.bg_overlay)).arg(DesignTokens::rgba(c.border)).arg(DesignTokens::radius().sm);
 
     // Minus button (-0.5s)
     sync_minus_btn_ = new QPushButton(sync_control_bar_);

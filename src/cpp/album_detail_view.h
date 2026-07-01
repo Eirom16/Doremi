@@ -5,6 +5,7 @@
 #include <QVBoxLayout>
 #include <QLabel>
 #include <QHBoxLayout>
+#include <QScrollArea>
 #include <vector>
 #include <string>
 #include "components/track_row.h"
@@ -49,6 +50,7 @@ private:
     std::vector<Track> tracks_;
     std::string artist_id_;
     Album current_album_;
+    QScrollArea *scroll_area_ = nullptr;
 };
 
 #endif

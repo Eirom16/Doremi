@@ -10,6 +10,12 @@
 #include <QPushButton>
 #include <QMessageBox>
 #include "doremi/src/bridge.rs.h"
+#include <QStyle>
+
+void HistoryView::update_theme() {
+    style()->unpolish(this);
+    style()->polish(this);
+}
 
 HistoryView::HistoryView(QWidget *parent)
     : QWidget(parent)

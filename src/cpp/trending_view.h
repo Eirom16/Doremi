@@ -15,6 +15,7 @@ class TrendingView : public QWidget {
     Q_OBJECT
 public:
     explicit TrendingView(QWidget *parent = nullptr);
+    void update_theme();
     void clear_items();
     void add_item(const HomeCard &item);
     void set_state(const std::string &state, const std::string &message);

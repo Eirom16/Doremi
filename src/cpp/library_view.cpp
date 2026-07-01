@@ -6,6 +6,7 @@
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QVariant>
+#include <QStyle>
 #include <QPushButton>
 #include <QLineEdit>
 #include <QComboBox>
@@ -23,6 +24,15 @@ constexpr LibraryTabSpec kLibraryTabs[] = {
     {"artists", "artists"},
     {"shows", "shows"},
 };
+}
+
+void LibraryView::update_theme() {
+    style()->unpolish(this);
+    style()->polish(this);
+    for (auto *btn : tab_btns_) {
+        btn->style()->unpolish(btn);
+        btn->style()->polish(btn);
+    }
 }
 
 LibraryView::LibraryView(QWidget *parent)

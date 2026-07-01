@@ -10,6 +10,7 @@ class AnimatedToggle : public QAbstractButton {
     Q_PROPERTY(QColor trackColor READ trackColor WRITE setTrackColor)
 public:
     explicit AnimatedToggle(QWidget *parent = nullptr);
+    void updateTheme();
     
     qreal thumbPosition() const { return m_thumbPosition; }
     void setThumbPosition(qreal pos) { m_thumbPosition = pos; update(); }

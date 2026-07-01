@@ -49,9 +49,18 @@ void FadeStack::setCurrentIndex(int index) {
         currentW->setGraphicsEffect(nullptr);
         outAnim->deleteLater();
         
+        // If a second navigation already switched to this index,
+        // skip the fade-in to avoid clobbering the visible widget.
+        bool alreadySwitched = (currentIndex() == index);
+        
         // 2. Change page
         QStackedWidget::setCurrentIndex(index);
         updateGeometry();
+        
+        if (alreadySwitched) {
+            m_isTransitioning = false;
+            return;
+        }
         
         // 3. Fade in next widget
         QGraphicsOpacityEffect *inEffect = new QGraphicsOpacityEffect(nextW);

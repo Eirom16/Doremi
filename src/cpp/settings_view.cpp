@@ -85,6 +85,7 @@ SettingsView::SettingsView(QWidget *parent)
         button->setCursor(Qt::PointingHandCursor);
         button->setFocusPolicy(Qt::StrongFocus);
         button->setIcon(IconProvider::getIcon(iconName, c.text_secondary, 18));
+        button->setProperty("tabIconName", iconName);
         button->setStyleSheet(tab_style);
         DesignTokens::applyAccessible(
             button,
@@ -93,6 +94,7 @@ SettingsView::SettingsView(QWidget *parent)
             label);
         const int index = pages->count() - 1;
         tab_group->addButton(button, index);
+        tab_btns_.push_back(button);
         QObject::connect(button, &QPushButton::clicked, this, [pages, index]() {
             pages->setCurrentIndex(index);
         });
@@ -771,6 +773,63 @@ SettingsView::SettingsView(QWidget *parent)
     });
 
     refresh_storage_sizes();
+}
+
+void SettingsView::update_theme() {
+    const auto &c = DesignTokens::current();
+    QString ts = QString(
+        "QPushButton {"
+        "    background: transparent;"
+        "    border: 1px solid transparent;"
+        "    border-radius: %6px;"
+        "    color: %1;"
+        "    padding: 10px 12px;"
+        "    text-align: left;"
+        "    font-weight: 600;"
+        "}"
+        "QPushButton:hover {"
+        "    background: %2;"
+        "    color: %3;"
+        "}"
+        "QPushButton:checked {"
+        "    background: %2;"
+        "    border-color: %4;"
+        "    color: %5;"
+        "}"
+        "QPushButton:focus {"
+        "    border: 2px solid %5;"
+        "}"
+    )
+        .arg(c.text_secondary.name())
+        .arg(DesignTokens::rgba(c.accent_dim))
+        .arg(c.text_primary.name())
+        .arg(DesignTokens::rgba(c.border_accent))
+        .arg(c.accent.name())
+        .arg(DesignTokens::radius().md);
+    for (auto *btn : tab_btns_) {
+        btn->setStyleSheet(ts);
+        QString icon_name = btn->property("tabIconName").toString();
+        if (!icon_name.isEmpty()) {
+            btn->setIcon(IconProvider::getIcon(icon_name, c.text_secondary, 18));
+        }
+    }
+    if (lastfm_auth_btn_) lastfm_auth_btn_->updateStyle();
+    if (download_location_btn_) download_location_btn_->updateStyle();
+    if (clean_cache_btn_) clean_cache_btn_->updateStyle();
+    if (clear_downloads_btn_) clear_downloads_btn_->updateStyle();
+    if (export_backup_btn_) export_backup_btn_->updateStyle();
+    if (import_backup_btn_) import_backup_btn_->updateStyle();
+    if (normalize_cb_) normalize_cb_->updateTheme();
+    if (crossfade_cb_) crossfade_cb_->updateTheme();
+    if (equalizer_cb_) equalizer_cb_->updateTheme();
+    if (discord_rpc_cb_) discord_rpc_cb_->updateTheme();
+    if (lastfm_cb_) lastfm_cb_->updateTheme();
+    if (mpris_cb_) mpris_cb_->updateTheme();
+    if (stop_on_close_cb_) stop_on_close_cb_->updateTheme();
+    if (sub_auto_scroll_cb_) sub_auto_scroll_cb_->updateTheme();
+    if (sub_glow_cb_) sub_glow_cb_->updateTheme();
+    style()->unpolish(this);
+    style()->polish(this);
 }
 
 QWidget *SettingsView::section_header(const std::string &title) {

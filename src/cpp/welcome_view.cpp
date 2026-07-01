@@ -37,18 +37,19 @@ WelcomeView::WelcomeView(QWidget *parent)
     }
 
     if (!logo_path.isEmpty()) {
-        logo_ = new QLabel(this);
         QPixmap pix(logo_path);
-        logo_->setPixmap(pix.scaledToWidth(180, Qt::SmoothTransformation));
-        logo_->setAlignment(Qt::AlignCenter);
-        
-        auto *effect = new QGraphicsColorizeEffect(logo_);
-        effect->setColor(c.accent);
-        effect->setStrength(1.0);
-        logo_->setGraphicsEffect(effect);
-        
-        layout->addWidget(logo_);
-    } else {
+        if (!pix.isNull()) {
+            logo_ = new QLabel(this);
+            logo_->setPixmap(pix.scaledToWidth(180, Qt::SmoothTransformation));
+            logo_->setAlignment(Qt::AlignCenter);
+            auto *effect = new QGraphicsColorizeEffect(logo_);
+            effect->setColor(c.accent);
+            effect->setStrength(1.0);
+            logo_->setGraphicsEffect(effect);
+            layout->addWidget(logo_);
+        }
+    }
+    if (!logo_) {
         logo_ = IconProvider::createIconLabel("album", 80, c.accent, true, this);
         logo_->setAlignment(Qt::AlignCenter);
         layout->addWidget(logo_);
@@ -122,6 +123,9 @@ void WelcomeView::update_theme() {
         if (effect) {
             effect->setColor(c.accent);
         }
+    }
+    if (login_btn_) {
+        login_btn_->updateStyle();
     }
 }
 

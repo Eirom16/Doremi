@@ -19,6 +19,7 @@ class LibraryView : public QWidget {
     Q_OBJECT
 public:
     explicit LibraryView(QWidget *parent = nullptr);
+    void update_theme();
     void set_playlists(const std::vector<Playlist> &playlists);
     void set_songs(const std::vector<Track> &songs);
     void set_albums(const std::vector<Album> &albums);

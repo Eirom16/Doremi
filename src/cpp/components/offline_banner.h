@@ -12,6 +12,7 @@ public:
 
     void showBanner();
     void hideBanner();
+    void update_theme();
 
 protected:
     void changeEvent(QEvent *event) override;

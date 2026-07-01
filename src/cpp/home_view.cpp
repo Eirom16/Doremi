@@ -8,6 +8,12 @@
 #include "components/artist_card.h"
 #include "components/horizontal_carousel.h"
 #include "components/loading_state.h"
+#include <QStyle>
+
+void HomeView::update_theme() {
+    style()->unpolish(this);
+    style()->polish(this);
+}
 
 HomeView::HomeView(QWidget *parent)
     : QWidget(parent)

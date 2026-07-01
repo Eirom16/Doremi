@@ -11,6 +11,7 @@ class HomeView : public QWidget {
     Q_OBJECT
 public:
     explicit HomeView(QWidget *parent = nullptr);
+    void update_theme();
     void set_welcome_message(const std::string &msg);
     void add_section(const std::string &title, const std::vector<HomeCard> &items);
     void clear_sections();

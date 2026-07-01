@@ -12,6 +12,8 @@
 #include <QAction>
 #include <QMessageBox>
 #include <QButtonGroup>
+#include <QPointer>
+#include "components/artwork_loader.h"
 
 static QPixmap getRoundedPixmap(const QPixmap &src, int radius) {
     if (src.isNull()) return src;
@@ -133,14 +135,34 @@ QWidget *DownloadsView::make_download_row(const std::string &video_id, const std
     thumb->setAlignment(Qt::AlignCenter);
     thumb->setStyleSheet(QString("background: %1; border-radius: %2px;").arg(c.bg_elevated.name()).arg(DesignTokens::radius().sm));
 
+    // Try local file first, fall back to ArtworkLoader for remote URLs
     bool thumbLoaded = false;
-    if (!thumbnail_path.empty() && QFile::exists(QString::fromStdString(thumbnail_path))) {
-        QPixmap px(QString::fromStdString(thumbnail_path));
-        if (!px.isNull()) {
-            thumb->setPixmap(getRoundedPixmap(
-                px.scaled(36, 36, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation), 4
-            ));
-            thumbLoaded = true;
+    if (!thumbnail_path.empty()) {
+        QString path = QString::fromStdString(thumbnail_path);
+        if (QFile::exists(path)) {
+            QPixmap px(path);
+            if (!px.isNull()) {
+                thumb->setPixmap(getRoundedPixmap(
+                    px.scaled(36, 36, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation), 4
+                ));
+                thumbLoaded = true;
+            }
+        }
+        if (!thumbLoaded) {
+            QPointer<QLabel> label_ptr(thumb);
+            ArtworkLoader::load(path, QSize(36, 36),
+                [label_ptr, c](const QPixmap &pixmap) {
+                    if (!label_ptr) return;
+                    QPixmap dest(pixmap.size());
+                    dest.fill(Qt::transparent);
+                    QPainter painter(&dest);
+                    painter.setRenderHint(QPainter::Antialiasing);
+                    QPainterPath path;
+                    path.addRoundedRect(pixmap.rect(), 4, 4);
+                    painter.setClipPath(path);
+                    painter.drawPixmap(0, 0, pixmap);
+                    label_ptr->setPixmap(dest.scaled(36, 36, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation));
+                });
         }
     }
     if (!thumbLoaded) {

@@ -1,0 +1,63 @@
+# Maintainer: Eirom <eirom@users.noreply.github.com>
+
+pkgname=doremi
+pkgver=2.0.0
+pkgrel=1
+pkgdesc="Desktop client for YouTube Music"
+arch=('x86_64')
+url="https://github.com/Eirom16/Doremi"
+license=('MIT')
+depends=(
+    'qt6-base'
+    'qt6-webengine'
+    'vlc'
+    'dbus'
+)
+makedepends=(
+    'rust'
+    'cargo'
+    'pkg-config'
+    'gcc'
+)
+optdepends=(
+    'yt-dlp: downloading music for offline listening'
+    'ffmpeg: audio format conversion for downloads'
+    'gnome-keyring: secure credential storage on GNOME'
+    'kwallet: secure credential storage on KDE'
+)
+source=("${pkgname}-${pkgver}.tar.gz::${url}/archive/v${pkgver}.tar.gz")
+sha256sums=('SKIP')
+
+build() {
+    cd "${srcdir}/Doremi-${pkgver}"
+    export CARGO_HOME="${srcdir}/cargo-home"
+    cargo build --release --locked
+}
+
+check() {
+    cd "${srcdir}/Doremi-${pkgver}"
+    export CARGO_HOME="${srcdir}/cargo-home"
+    cargo test --release --locked
+}
+
+package() {
+    cd "${srcdir}/Doremi-${pkgver}"
+
+    # Binary
+    install -Dm755 "target/release/doremi" "${pkgdir}/usr/bin/doremi"
+
+    # Desktop file
+    install -Dm644 "assets/io.github.eirom16.Doremi.desktop" \
+        "${pkgdir}/usr/share/applications/io.github.eirom16.Doremi.desktop"
+
+    # AppStream metadata
+    install -Dm644 "assets/io.github.eirom16.Doremi.metainfo.xml" \
+        "${pkgdir}/usr/share/metainfo/io.github.eirom16.Doremi.metainfo.xml"
+
+    # Icon
+    install -Dm644 "assets/icons/io.github.eirom16.Doremi.svg" \
+        "${pkgdir}/usr/share/icons/hicolor/scalable/apps/io.github.eirom16.Doremi.svg"
+
+    # Documentation
+    install -Dm644 "README.md" "${pkgdir}/usr/share/doc/${pkgname}/README.md"
+}
