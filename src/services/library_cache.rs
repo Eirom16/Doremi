@@ -68,6 +68,43 @@ pub struct CacheData {
     pub source: LibrarySource,
 }
 
+impl CacheData {
+    /// Create CacheData containing only songs.
+    pub fn songs_only(songs: Vec<crate::bridge::bridge::Track>, source: LibrarySource) -> Self {
+        Self { songs, albums: Vec::new(), artists: Vec::new(), playlists: Vec::new(), source }
+    }
+
+    /// Create CacheData containing only albums.
+    pub fn albums_only(albums: Vec<crate::bridge::bridge::Album>, source: LibrarySource) -> Self {
+        Self { songs: Vec::new(), albums, artists: Vec::new(), playlists: Vec::new(), source }
+    }
+
+    /// Create CacheData containing only artists.
+    pub fn artists_only(artists: Vec<crate::bridge::bridge::Artist>, source: LibrarySource) -> Self {
+        Self { songs: Vec::new(), albums: Vec::new(), artists, playlists: Vec::new(), source }
+    }
+
+    /// Create CacheData containing only playlists.
+    pub fn playlists_only(playlists: Vec<crate::bridge::bridge::Playlist>, source: LibrarySource) -> Self {
+        Self { songs: Vec::new(), albums: Vec::new(), artists: Vec::new(), playlists, source }
+    }
+}
+
+/// Helper to update the global library cache for a given tab, encapsulating
+/// the RwLock acquire + set pattern that was previously repeated 20+ times.
+pub fn update_cache(tab: &str, data: CacheData) {
+    if let Ok(cache) = GLOBAL_LIBRARY_CACHE.write() {
+        cache.set(tab, data);
+    }
+}
+
+/// Helper to invalidate a specific tab in the global cache.
+pub fn invalidate_cache_tab(tab: &str) {
+    if let Ok(cache) = GLOBAL_LIBRARY_CACHE.write() {
+        cache.invalidate(tab);
+    }
+}
+
 impl LibraryCache {
     pub fn new(authenticated: bool) -> Self {
         Self {

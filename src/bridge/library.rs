@@ -1,5 +1,6 @@
 // Library / Favorites / Playlists — extracted from bridge.rs
 use super::bridge;
+use crate::services::library_cache::{self, CacheData, LibrarySource};
 use std::sync::atomic::Ordering;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -51,19 +52,7 @@ fn load_local_library_tab(tab: LibraryTab) {
                     })
                     .collect();
 
-                if let Ok(cache) = crate::services::library_cache::GLOBAL_LIBRARY_CACHE.write() {
-                    cache.set(
-                        "songs",
-                        crate::services::library_cache::CacheData {
-                            songs: songs.clone(),
-                            albums: Vec::new(),
-                            artists: Vec::new(),
-                            playlists: Vec::new(),
-                            source: crate::services::library_cache::LibrarySource::Local,
-                        },
-                    );
-                }
-
+                library_cache::update_cache("songs", CacheData::songs_only(songs.clone(), LibrarySource::Local));
                 bridge::set_library_songs(songs);
             }
         }
@@ -82,19 +71,7 @@ fn load_local_library_tab(tab: LibraryTab) {
                     })
                     .collect();
 
-                if let Ok(cache) = crate::services::library_cache::GLOBAL_LIBRARY_CACHE.write() {
-                    cache.set(
-                        "albums",
-                        crate::services::library_cache::CacheData {
-                            songs: Vec::new(),
-                            albums: a_list.clone(),
-                            artists: Vec::new(),
-                            playlists: Vec::new(),
-                            source: crate::services::library_cache::LibrarySource::Local,
-                        },
-                    );
-                }
-
+                library_cache::update_cache("albums", CacheData::albums_only(a_list.clone(), LibrarySource::Local));
                 bridge::set_library_albums(a_list);
             }
         }
@@ -111,19 +88,7 @@ fn load_local_library_tab(tab: LibraryTab) {
                     })
                     .collect();
 
-                if let Ok(cache) = crate::services::library_cache::GLOBAL_LIBRARY_CACHE.write() {
-                    cache.set(
-                        "artists",
-                        crate::services::library_cache::CacheData {
-                            songs: Vec::new(),
-                            albums: Vec::new(),
-                            artists: art_list.clone(),
-                            playlists: Vec::new(),
-                            source: crate::services::library_cache::LibrarySource::Local,
-                        },
-                    );
-                }
-
+                library_cache::update_cache("artists", CacheData::artists_only(art_list.clone(), LibrarySource::Local));
                 bridge::set_library_artists(art_list);
             }
         }
@@ -149,19 +114,7 @@ fn load_local_library_tab(tab: LibraryTab) {
                     })
                     .collect();
 
-                if let Ok(cache) = crate::services::library_cache::GLOBAL_LIBRARY_CACHE.write() {
-                    cache.set(
-                        "playlists",
-                        crate::services::library_cache::CacheData {
-                            songs: Vec::new(),
-                            albums: Vec::new(),
-                            artists: Vec::new(),
-                            playlists: p_list.clone(),
-                            source: crate::services::library_cache::LibrarySource::Local,
-                        },
-                    );
-                }
-
+                library_cache::update_cache("playlists", CacheData::playlists_only(p_list.clone(), LibrarySource::Local));
                 bridge::set_library_playlists(p_list);
             }
         }
@@ -211,9 +164,7 @@ pub fn on_remove_favorite_impl(track_id: &str) {
     if let Err(e) = crate::db::repo::FavoritesRepo::remove_track(track_id) {
         log::error!("Failed to remove favorite: {e}");
     } else {
-        if let Ok(cache) = crate::services::library_cache::GLOBAL_LIBRARY_CACHE.write() {
-            cache.invalidate("songs");
-        }
+        library_cache::invalidate_cache_tab("songs");
     }
 }
 
@@ -256,9 +207,7 @@ pub fn on_add_favorite_impl(track: bridge::Track) {
         log::error!("Failed to add favorite: {e}");
     } else {
         log::info!("Added favorite: {} — {}", fav_track.title, fav_track.artist);
-        if let Ok(cache) = crate::services::library_cache::GLOBAL_LIBRARY_CACHE.write() {
-            cache.invalidate("songs");
-        }
+        library_cache::invalidate_cache_tab("songs");
     }
 }
 
@@ -291,9 +240,7 @@ pub fn on_add_favorite_album(album: bridge::Album) {
         log::error!("Failed to add favorite album: {e}");
     } else {
         log::info!("Added favorite album: {}", fav.title);
-        if let Ok(cache) = crate::services::library_cache::GLOBAL_LIBRARY_CACHE.write() {
-            cache.invalidate("albums");
-        }
+        library_cache::invalidate_cache_tab("albums");
     }
 }
 
@@ -318,9 +265,7 @@ pub fn on_add_favorite_artist(artist: bridge::Artist) {
         log::error!("Failed to add favorite artist: {e}");
     } else {
         log::info!("Added favorite artist: {}", fav.name);
-        if let Ok(cache) = crate::services::library_cache::GLOBAL_LIBRARY_CACHE.write() {
-            cache.invalidate("artists");
-        }
+        library_cache::invalidate_cache_tab("artists");
     }
 }
 
@@ -328,9 +273,7 @@ pub fn on_remove_favorite_artist(artist_id: &str) {
     if let Err(e) = crate::db::repo::FavoritesRepo::remove_artist(artist_id) {
         log::error!("Failed to remove favorite artist: {e}");
     } else {
-        if let Ok(cache) = crate::services::library_cache::GLOBAL_LIBRARY_CACHE.write() {
-            cache.invalidate("artists");
-        }
+        library_cache::invalidate_cache_tab("artists");
     }
 }
 
@@ -549,9 +492,7 @@ fn push_context_and_library_playlists() {
                 .collect(),
         );
         bridge::set_library_playlists(p_list);
-        if let Ok(cache) = crate::services::library_cache::GLOBAL_LIBRARY_CACHE.write() {
-            cache.invalidate("playlists");
-        }
+        library_cache::invalidate_cache_tab("playlists");
     }
 }
 
@@ -575,18 +516,7 @@ fn load_downloaded_library_tab(tab: LibraryTab) {
                 Vec::new()
             };
 
-            if let Ok(cache) = crate::services::library_cache::GLOBAL_LIBRARY_CACHE.write() {
-                cache.set(
-                    "songs",
-                    crate::services::library_cache::CacheData {
-                        songs: tracks.clone(),
-                        albums: Vec::new(),
-                        artists: Vec::new(),
-                        playlists: Vec::new(),
-                        source: crate::services::library_cache::LibrarySource::Downloaded,
-                    },
-                );
-            }
+            library_cache::update_cache("songs", CacheData::songs_only(tracks.clone(), LibrarySource::Downloaded));
 
             bridge::set_library_songs(tracks);
         }
@@ -615,18 +545,7 @@ fn load_downloaded_library_tab(tab: LibraryTab) {
                 }
             }
 
-            if let Ok(cache) = crate::services::library_cache::GLOBAL_LIBRARY_CACHE.write() {
-                cache.set(
-                    "albums",
-                    crate::services::library_cache::CacheData {
-                        songs: Vec::new(),
-                        albums: albums.clone(),
-                        artists: Vec::new(),
-                        playlists: Vec::new(),
-                        source: crate::services::library_cache::LibrarySource::Downloaded,
-                    },
-                );
-            }
+            library_cache::update_cache("albums", CacheData::albums_only(albums.clone(), LibrarySource::Downloaded));
 
             bridge::set_library_albums(albums);
         }
@@ -649,18 +568,7 @@ fn load_downloaded_library_tab(tab: LibraryTab) {
                 }
             }
 
-            if let Ok(cache) = crate::services::library_cache::GLOBAL_LIBRARY_CACHE.write() {
-                cache.set(
-                    "artists",
-                    crate::services::library_cache::CacheData {
-                        songs: Vec::new(),
-                        albums: Vec::new(),
-                        artists: artists.clone(),
-                        playlists: Vec::new(),
-                        source: crate::services::library_cache::LibrarySource::Downloaded,
-                    },
-                );
-            }
+            library_cache::update_cache("artists", CacheData::artists_only(artists.clone(), LibrarySource::Downloaded));
 
             bridge::set_library_artists(artists);
         }
@@ -693,18 +601,7 @@ fn load_downloaded_library_tab(tab: LibraryTab) {
                 }
             }
 
-            if let Ok(cache) = crate::services::library_cache::GLOBAL_LIBRARY_CACHE.write() {
-                cache.set(
-                    "playlists",
-                    crate::services::library_cache::CacheData {
-                        songs: Vec::new(),
-                        albums: Vec::new(),
-                        artists: Vec::new(),
-                        playlists: playlists.clone(),
-                        source: crate::services::library_cache::LibrarySource::Downloaded,
-                    },
-                );
-            }
+            library_cache::update_cache("playlists", CacheData::playlists_only(playlists.clone(), LibrarySource::Downloaded));
 
             bridge::set_library_playlists(playlists);
         }

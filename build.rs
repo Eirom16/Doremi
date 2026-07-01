@@ -232,6 +232,7 @@ fn main() {
     // Extraídos de main_window.cpp para reducir el god object (BF3.4)
     build.file("src/cpp/bridge_setters.cpp");
     build.file("src/cpp/thumbnail_provider.cpp");
+    build.file("src/cpp/signal_connections.cpp");
 
     build
         .flag_if_supported("-std=c++17")
