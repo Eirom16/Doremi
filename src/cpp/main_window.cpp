@@ -237,6 +237,8 @@ DoremiMainWindow::DoremiMainWindow(QWidget *parent)
     if (auto *app = qobject_cast<QApplication *>(QApplication::instance()))
         app->setWindowIcon(win_icon);
 
+    Q_INIT_RESOURCE(resources);
+
     StyleManager::applyTheme();
     update_responsive_layout();
     connect_signals();

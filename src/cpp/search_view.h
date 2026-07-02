@@ -18,7 +18,7 @@ class SearchView : public QWidget {
 public:
     explicit SearchView(QWidget *parent = nullptr);
     void update_theme();
-    void set_query(const std::string &query);
+    void set_query(const std::string &query, const std::string &filter = "all");
     void set_results(const TopResult &top_result, bool has_top_result,
                      const std::vector<Track> &songs,
                      const std::vector<Track> &videos,

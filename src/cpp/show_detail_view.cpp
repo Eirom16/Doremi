@@ -1,5 +1,6 @@
 #include "show_detail_view.h"
 #include "design_tokens.h"
+#include "icon_provider.h"
 #include "components/loading_state.h"
 #include "components/empty_state.h"
 #include <QScrollArea>
@@ -40,12 +41,14 @@ void ShowDetailView::setupLayout() {
     auto *header_info = new QVBoxLayout;
     header_info->setSpacing(8);
 
-    auto *back_btn = new QPushButton("← Volver");
+    auto *back_btn = new QPushButton();
     back_btn->setObjectName("backBtn");
+    back_btn->setFixedSize(36, 36);
     back_btn->setCursor(Qt::PointingHandCursor);
-    back_btn->setObjectName("backBtn");
+    back_btn->setIcon(IconProvider::getIcon("arrow_back", DesignTokens::current().text_primary, 24));
+    back_btn->setStyleSheet(DesignTokens::iconButtonStyle());
     QObject::connect(back_btn, &QPushButton::clicked, this, &ShowDetailView::back_requested);
-    header_info->addWidget(back_btn);
+    header_info->addWidget(back_btn, 0, Qt::AlignLeft);
 
     title_label_ = new QLabel;
     title_label_->setProperty("textRole", "heading");
@@ -66,7 +69,7 @@ void ShowDetailView::setupLayout() {
     description_label_->setWordWrap(true);
     header_info->addWidget(description_label_);
 
-    subscribe_btn_ = new QPushButton(this);
+    subscribe_btn_ = new QPushButton(tr_q("subscribe"), this);
     subscribe_btn_->setCursor(Qt::PointingHandCursor);
     subscribe_btn_->setFixedHeight(36);
     QObject::connect(subscribe_btn_, &QPushButton::clicked, this, [this]() {
@@ -78,6 +81,14 @@ void ShowDetailView::setupLayout() {
             updateSubscriptionButtonState(true);
         }
     });
+    
+    // Style the subscribe button using active_tab_style or similar
+    // We'll just set the standard active button style when subscribed, inactive otherwise
+    subscribe_btn_->setStyleSheet(QString(
+        "QPushButton { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: %1px; padding: 0 16px; }"
+        "QPushButton:hover { background: rgba(255,255,255,0.1); }"
+    ).arg(DesignTokens::radius().sm));
+
     header_info->addWidget(subscribe_btn_, 0, Qt::AlignLeft);
     updateSubscriptionButtonState(false);
 

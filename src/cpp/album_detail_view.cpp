@@ -19,11 +19,13 @@
 AlbumDetailView::AlbumDetailView(QWidget *parent)
     : QWidget(parent)
 {
+    const auto &c = DesignTokens::current();
     setupLayout();
 }
 
 void AlbumDetailView::setupLayout() {
     const auto &s = DesignTokens::spacing();
+    const auto &c = DesignTokens::current();
 
     auto *root = new QVBoxLayout(this);
     root->setContentsMargins(0, 0, 0, 0);
@@ -43,21 +45,10 @@ void AlbumDetailView::setupLayout() {
 
     // Back button
     auto *back_btn = new QPushButton(scroll_content);
-    back_btn->setObjectName("backBtn");
-    auto *back_layout = new QHBoxLayout(back_btn);
-    back_layout->setContentsMargins(8, 4, 12, 4);
-    back_layout->setSpacing(6);
-    auto *back_icon = IconProvider::createIconLabel("arrow_back", 18, DesignTokens::current().text_secondary, false, back_btn);
-    auto *back_text = new QLabel(tr_q("go_back"), back_btn);
-    back_text->setObjectName("backText");
-    back_text->setFont(DesignTokens::getFont("caption", 12));
-    back_text->setProperty("textRole", "secondary");
-    back_layout->addWidget(back_icon);
-    back_layout->addWidget(back_text);
-    back_btn->setLayout(back_layout);
-    back_btn->setFixedHeight(32);
+    back_btn->setFixedSize(36, 36);
     back_btn->setCursor(Qt::PointingHandCursor);
-    back_btn->setObjectName("backBtn");
+    back_btn->setIcon(IconProvider::getIcon("arrow_back", DesignTokens::current().text_primary, 24));
+    back_btn->setStyleSheet(DesignTokens::iconButtonStyle());
     connect(back_btn, &QPushButton::clicked, this, &AlbumDetailView::back_requested);
     content_layout_->addWidget(back_btn, 0, Qt::AlignLeft);
 
@@ -96,38 +87,28 @@ void AlbumDetailView::setupLayout() {
     meta_label_->setProperty("textRole", "muted");
     info->addWidget(meta_label_);
 
-    // Play all button
-    auto *play_all_btn = new QPushButton(header_card);
-    play_all_btn->setObjectName("playAllBtn");
-    auto *play_all_layout = new QHBoxLayout(play_all_btn);
-    play_all_layout->setContentsMargins(16, 8, 20, 8);
-    play_all_layout->setSpacing(8);
-    auto *play_icon = IconProvider::createIconLabel("play_arrow", 20, DesignTokens::current().text_on_accent, false, play_all_btn);
-    auto *play_text = new QLabel(tr_q("play_all"), play_all_btn);
-    play_text->setFont(DesignTokens::getFont("body_sm"));
-    play_text->setProperty("textRole", "primary");
-    play_all_layout->addWidget(play_icon);
-    play_all_layout->addWidget(play_text);
-    play_all_btn->setLayout(play_all_layout);
-    play_all_btn->setFixedHeight(40);
-    play_all_btn->setCursor(Qt::PointingHandCursor);
-    play_all_btn->setProperty("buttonRole", "primary");
-    connect(play_all_btn, &QPushButton::clicked, this, [this]() {
+    auto *actions_layout = new QHBoxLayout();
+    actions_layout->setSpacing(12);
+
+    // Play button
+    auto *play_btn = new QPushButton(header_card);
+    play_btn->setFixedSize(36, 36);
+    play_btn->setCursor(Qt::PointingHandCursor);
+    play_btn->setIcon(IconProvider::getIcon("play_arrow", DesignTokens::current().text_primary, 24));
+    play_btn->setStyleSheet(DesignTokens::iconButtonStyle());
+    connect(play_btn, &QPushButton::clicked, this, [this]() {
         emit play_all_requested(tracks_);
     });
 
-    info->addSpacing(8);
-    info->addWidget(play_all_btn, 0, Qt::AlignLeft);
-
-    // Download all button
     auto *dl_all_btn = new QPushButton(header_card);
-    dl_all_btn->setObjectName("dlAllBtn");
     auto *dl_layout = new QHBoxLayout(dl_all_btn);
-    dl_layout->setContentsMargins(16, 8, 20, 8);
+    dl_layout->setContentsMargins(16, 0, 16, 0);
     dl_layout->setSpacing(8);
-    auto *dl_icon = IconProvider::createIconLabel("download", 18, DesignTokens::current().accent, false, dl_all_btn);
-    dl_icon->setObjectName("dlIcon");
-    auto *dl_text = new QLabel(tr_q("download_all"), dl_all_btn);
+    
+    auto *dl_icon = new QLabel;
+    dl_icon->setPixmap(IconProvider::getIcon("download", DesignTokens::current().accent, 20).pixmap(20, 20));
+    
+    auto *dl_text = new QLabel(tr_q("download_all"));
     dl_text->setObjectName("dlText");
     dl_text->setFont(DesignTokens::getFont("body_sm"));
     dl_text->setProperty("textRole", "accent");

@@ -115,7 +115,7 @@ void DoremiMainWindow::connect_signals() {
         [](Track track) { on_search_item_clicked(track); });
     guardOnline(search_view_, &SearchView::search_requested, "buscar en YouTube Music", [this](const std::string &query, const std::string &filter) {
         title_bar_->set_search_text(query);
-        search_view_->set_query(query);
+        search_view_->set_query(query, filter);
         on_search_submitted(query, filter);
     });
     guardOnline(search_view_, &SearchView::album_requested, "abrir detalles de álbum", [this](const std::string &browse_id) {

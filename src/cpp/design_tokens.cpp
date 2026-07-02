@@ -271,6 +271,55 @@ QFont DesignTokens::getFont(const QString &level, int size) {
     return font;
 }
 
+QString DesignTokens::iconButtonStyle() {
+    const auto &c = current();
+    const auto &r = radius();
+    
+    return QString(
+        "QPushButton {\n"
+        "    background-color: transparent;\n"
+        "    border: 1px solid rgba(255, 255, 255, 0.0941176);\n"
+        "    border-radius: %1px;\n"
+        "    color: %2;\n"
+        "    padding: 8px 16px;\n"
+        "    font-weight: 500;\n"
+        "}\n"
+        "QPushButton:hover {\n"
+        "    background-color: %3;\n"
+        "}\n"
+    ).arg(r.pill).arg(c.text_primary.name()).arg(rgba(QColor(c.accent.red(), c.accent.green(), c.accent.blue(), 38)));
+}
+
+QString DesignTokens::iconButtonDangerStyle() {
+    const auto &c = current();
+    const auto &r = radius();
+    
+    return QString(
+        "QPushButton {\n"
+        "    background-color: %1;\n"
+        "    border: 1px solid transparent;\n"
+        "    border-radius: %2px;\n"
+        "    color: %3;\n"
+        "    padding: 8px 16px;\n"
+        "    font-weight: 500;\n"
+        "}\n"
+        "QPushButton:hover {\n"
+        "    background-color: %4;\n"
+        "}\n"
+    ).arg(c.error.name()).arg(r.pill).arg(c.text_on_accent.name()).arg(c.error.lighter(110).name());
+}
+
+QString DesignTokens::panelStyle() {
+    const auto &c = current();
+    return QString(
+        "QWidget {"
+        "  background-color: %1;"
+        "  border-radius: %2px;"
+        "}"
+    ).arg(c.bg_elevated.name())
+     .arg(radius().md);
+}
+
 void DesignTokens::applyAccessible(QWidget *widget,
                                     const QString &name,
                                     const QString &description,

@@ -25,11 +25,13 @@
 PlaylistDetailView::PlaylistDetailView(QWidget *parent)
     : QWidget(parent)
 {
+    const auto &c = DesignTokens::current();
     setupLayout();
 }
 
 void PlaylistDetailView::setupLayout() {
     const auto &s = DesignTokens::spacing();
+    const auto &c = DesignTokens::current();
 
     auto *root = new QVBoxLayout(this);
     root->setContentsMargins(0, 0, 0, 0);
@@ -49,20 +51,10 @@ void PlaylistDetailView::setupLayout() {
 
     // Back button
     auto *back_btn = new QPushButton(scroll_content);
-    back_btn->setObjectName("backBtn");
-    auto *back_layout = new QHBoxLayout(back_btn);
-    back_layout->setContentsMargins(8, 4, 12, 4);
-    back_layout->setSpacing(6);
-    auto *back_icon = IconProvider::createIconLabel("arrow_back", 18, DesignTokens::current().text_secondary, false, back_btn);
-    auto *back_text = new QLabel(tr_q("go_back"), back_btn);
-    back_text->setObjectName("backText");
-    back_text->setFont(DesignTokens::getFont("caption", 12));
-    back_text->setProperty("textRole", "secondary");
-    back_layout->addWidget(back_icon);
-    back_layout->addWidget(back_text);
-    back_btn->setLayout(back_layout);
-    back_btn->setFixedHeight(32);
+    back_btn->setFixedSize(36, 36);
     back_btn->setCursor(Qt::PointingHandCursor);
+    back_btn->setIcon(IconProvider::getIcon("arrow_back", c.text_primary, 24));
+    back_btn->setStyleSheet(DesignTokens::iconButtonStyle());
     back_btn->setObjectName("backBtn");
     connect(back_btn, &QPushButton::clicked, this, &PlaylistDetailView::back_requested);
     content_layout_->addWidget(back_btn, 0, Qt::AlignLeft);
@@ -115,19 +107,11 @@ void PlaylistDetailView::setupLayout() {
 
     // Play all
     auto *play_btn = new QPushButton(header_card);
-    play_btn->setObjectName("playBtn");
-    auto *play_l = new QHBoxLayout(play_btn);
-    play_l->setContentsMargins(16, 8, 20, 8);
-    play_l->setSpacing(8);
-    play_l->addWidget(IconProvider::createIconLabel("play_arrow", 20, DesignTokens::current().text_on_accent, false, play_btn));
-    auto *play_t = new QLabel(tr_q("play"), play_btn);
-    play_t->setFont(DesignTokens::getFont("body_sm"));
-    play_t->setProperty("textRole", "primary");
-    play_l->addWidget(play_t);
-    play_btn->setLayout(play_l);
-    play_btn->setFixedHeight(40);
+    play_btn->setFixedSize(36, 36);
     play_btn->setCursor(Qt::PointingHandCursor);
-    play_btn->setProperty("buttonRole", "primary");
+    play_btn->setIcon(IconProvider::getIcon("play_arrow", c.text_primary, 24));
+    play_btn->setStyleSheet(DesignTokens::iconButtonStyle());
+    play_btn->setObjectName("playBtn");
     connect(play_btn, &QPushButton::clicked, this, [this]() {
         emit play_all_requested(tracks_);
     });
@@ -135,19 +119,10 @@ void PlaylistDetailView::setupLayout() {
 
     // Shuffle
     auto *shuffle_btn = new QPushButton(header_card);
-    shuffle_btn->setObjectName("shuffleBtn");
-    auto *shuffle_l = new QHBoxLayout(shuffle_btn);
-    shuffle_l->setContentsMargins(16, 8, 20, 8);
-    shuffle_l->setSpacing(8);
-    shuffle_l->addWidget(IconProvider::createIconLabel("shuffle", 18, DesignTokens::current().text_primary, false, shuffle_btn));
-    auto *shuffle_t = new QLabel(tr_q("shuffle"), shuffle_btn);
-    shuffle_t->setObjectName("shuffleText");
-    shuffle_t->setFont(DesignTokens::getFont("body_sm"));
-    shuffle_t->setProperty("textRole", "primary");
-    shuffle_l->addWidget(shuffle_t);
-    shuffle_btn->setLayout(shuffle_l);
-    shuffle_btn->setFixedHeight(40);
+    shuffle_btn->setFixedSize(36, 36);
     shuffle_btn->setCursor(Qt::PointingHandCursor);
+    shuffle_btn->setIcon(IconProvider::getIcon("shuffle", c.text_primary, 24));
+    shuffle_btn->setStyleSheet(DesignTokens::iconButtonStyle());
     shuffle_btn->setObjectName("shuffleBtn");
     connect(shuffle_btn, &QPushButton::clicked, this, [this]() {
         emit shuffle_requested(tracks_);
@@ -156,21 +131,10 @@ void PlaylistDetailView::setupLayout() {
 
     // Download all
     auto *dl_btn = new QPushButton(header_card);
-    dl_btn->setObjectName("dlBtn");
-    auto *dl_l = new QHBoxLayout(dl_btn);
-    dl_l->setContentsMargins(16, 8, 20, 8);
-    dl_l->setSpacing(8);
-    auto *dl_icon = IconProvider::createIconLabel("download", 18, DesignTokens::current().accent, false, dl_btn);
-    dl_icon->setObjectName("dlIcon");
-    dl_l->addWidget(dl_icon);
-    auto *dl_t = new QLabel(tr_q("download_all"), dl_btn);
-    dl_t->setObjectName("dlText");
-    dl_t->setFont(DesignTokens::getFont("body_sm"));
-    dl_t->setProperty("textRole", "accent");
-    dl_l->addWidget(dl_t);
-    dl_btn->setLayout(dl_l);
-    dl_btn->setFixedHeight(40);
+    dl_btn->setFixedSize(36, 36);
     dl_btn->setCursor(Qt::PointingHandCursor);
+    dl_btn->setIcon(IconProvider::getIcon("download", c.text_primary, 24));
+    dl_btn->setStyleSheet(DesignTokens::iconButtonStyle());
     dl_btn->setObjectName("dlBtn");
     connect(dl_btn, &QPushButton::clicked, this, [this]() {
         if (!tracks_.empty()) {
@@ -187,8 +151,9 @@ void PlaylistDetailView::setupLayout() {
     edit_btn_ = new QPushButton(header_card);
     edit_btn_->setFixedSize(36, 36);
     edit_btn_->setCursor(Qt::PointingHandCursor);
+    edit_btn_->setIcon(IconProvider::getIcon("edit", c.text_primary, 24));
+    edit_btn_->setStyleSheet(DesignTokens::iconButtonStyle());
     edit_btn_->setToolTip(tr_q("edit_playlist"));
-    edit_btn_->setIcon(IconProvider::getIcon("edit", DesignTokens::current().text_secondary, 18));
     edit_btn_->setObjectName("editBtn");
     connect(edit_btn_, &QPushButton::clicked, this, [this]() {
         bool ok;
@@ -213,8 +178,9 @@ void PlaylistDetailView::setupLayout() {
     delete_btn_ = new QPushButton(header_card);
     delete_btn_->setFixedSize(36, 36);
     delete_btn_->setCursor(Qt::PointingHandCursor);
+    delete_btn_->setIcon(IconProvider::getIcon("delete", c.error, 24));
+    delete_btn_->setStyleSheet(DesignTokens::iconButtonStyle());
     delete_btn_->setToolTip(tr_q("delete_playlist"));
-    delete_btn_->setIcon(IconProvider::getIcon("delete", DesignTokens::current().error, 18));
     delete_btn_->setObjectName("deleteBtn");
     connect(delete_btn_, &QPushButton::clicked, this, [this]() {
         auto reply = QMessageBox::question(this, tr_q("delete_playlist"),

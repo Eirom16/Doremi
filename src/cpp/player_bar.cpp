@@ -11,6 +11,7 @@
 #include <QPointer>
 #include <QStyle>
 
+#include "widgets.h"
 
 static QPixmap getRoundedPixmap(const QPixmap &src, int radius) {
     if (src.isNull()) return src;
@@ -50,19 +51,31 @@ PlayerBar::PlayerBar(QWidget *parent)
     artwork_label_->setPixmap(getRoundedPixmap(default_art, 6));
     artwork_label_->setAccessibleName(tr_q("artwork_accessible_name"));
 
-    track_label_ = new QLabel(left_container_);
-    track_label_->setFont(DesignTokens::getFont("body_sm"));
-    track_label_->setText("<b>" + tr_q("no_playback") + "</b><br><font color=\"" + c.text_muted.name() + "\">" + tr_q("no_track_selected") + "</font>");
-    track_label_->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-    track_label_->setProperty("bgRole", "transparent");
-    track_label_->setAccessibleName(tr_q("current_track"));
+    auto *text_container = new QWidget(left_container_);
+    auto *text_layout = new QVBoxLayout(text_container);
+    text_layout->setContentsMargins(0, 0, 0, 0);
+    text_layout->setSpacing(2);
+    
+    title_label_ = new ElidedLabel(tr_q("no_playback"), text_container);
+    title_label_->setFont(DesignTokens::getFont("body_sm"));
+    title_label_->setStyleSheet("font-weight: bold;");
+    title_label_->setAttribute(Qt::WA_TransparentForMouseEvents);
+    
+    artist_label_ = new ElidedLabel(tr_q("no_track_selected"), text_container);
+    artist_label_->setFont(DesignTokens::getFont("body_sm"));
+    artist_label_->setStyleSheet(QString("color: %1;").arg(c.text_muted.name()));
+    artist_label_->setAttribute(Qt::WA_TransparentForMouseEvents);
+    
+    text_layout->addWidget(title_label_);
+    text_layout->addWidget(artist_label_);
+    text_container->setLayout(text_layout);
+    text_container->setAccessibleName(tr_q("current_track"));
 
     artwork_label_->setAttribute(Qt::WA_TransparentForMouseEvents);
-    track_label_->setAttribute(Qt::WA_TransparentForMouseEvents);
 
 
     left_layout->addWidget(artwork_label_);
-    left_layout->addWidget(track_label_);
+    left_layout->addWidget(text_container);
     left_layout->addStretch();
     left_container_->setLayout(left_layout);
     left_container_->setMinimumWidth(230);
@@ -251,6 +264,8 @@ PlayerBar::PlayerBar(QWidget *parent)
         set_repeat_mode(repeat_mode_);
         emit repeat_cycled();
     });
+    
+    update_theme();
 }
 
 void PlayerBar::set_track_info(const std::string &title, const std::string &artist,
@@ -260,14 +275,10 @@ void PlayerBar::set_track_info(const std::string &title, const std::string &arti
     QString title_str = QString::fromStdString(title);
     QString artist_str = QString::fromStdString(artist);
     
-    // Format track info using HTML for two lines of text
-    track_label_->setText(QString("<b>%1</b><br><font color=\"%2\">%3</font>")
-        .arg(title_str)
-        .arg(c.text_secondary.name())
-        .arg(artist_str)
-    );
-    track_label_->setAccessibleName(tr_q("current_track_accessible").arg(title_str));
-    track_label_->setAccessibleDescription(tr_q("artist_accessible").arg(artist_str));
+    title_label_->setText(title_str);
+    artist_label_->setText(artist_str);
+    title_label_->setAccessibleName(tr_q("current_track_accessible").arg(title_str));
+    artist_label_->setAccessibleDescription(tr_q("artist_accessible").arg(artist_str));
 
     // Load artwork
     const int artwork_size = artwork_label_->width() > 0 ? artwork_label_->width() : 44;
@@ -409,6 +420,14 @@ void PlayerBar::update_theme() {
         artwork_label_->setStyleSheet(QString("background-color: %1; border-radius: %2px;")
             .arg(c.bg_elevated.name()).arg(DesignTokens::radius().sm));
     }
+    
+    QString icon_style = DesignTokens::iconButtonStyle();
+    shuffle_btn_->setStyleSheet(icon_style);
+    prev_btn_->setStyleSheet(icon_style);
+    play_btn_->setStyleSheet(icon_style);
+    next_btn_->setStyleSheet(icon_style);
+    repeat_btn_->setStyleSheet(icon_style);
+    
     style()->unpolish(this);
     style()->polish(this);
 }

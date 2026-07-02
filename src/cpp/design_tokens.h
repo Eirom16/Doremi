@@ -89,6 +89,11 @@ public:
     static QMargins pagePadding();
     static QMargins pagePaddingNarrow();
     
+    // Style Helpers
+    static QString iconButtonStyle();
+    static QString iconButtonDangerStyle();
+    static QString panelStyle();
+    
     static void applyAccessible(QWidget *widget,
                                 const QString &name,
                                 const QString &description = QString(),

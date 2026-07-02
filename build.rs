@@ -130,6 +130,8 @@ fn qt_resources(build: &mut cc::Build, qrc: &str, out_dir: &std::path::Path) {
 
     let status = std::process::Command::new(&rcc_path)
         .arg(qrc_path)
+        .arg("--name")
+        .arg(stem)
         .arg("-o")
         .arg(&rcc_out)
         .status()

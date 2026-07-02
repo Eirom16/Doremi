@@ -15,6 +15,8 @@
 #include "components/related_tracks_widget.h"
 #include "components/waveform_bars.h"
 #include "components/animated_progress.h"
+#include "icon_provider.h"
+#include "widgets.h"
 #include "doremi/src/bridge.rs.h"
 
 class NowPlayingView : public QWidget {
@@ -69,8 +71,8 @@ private:
 
     // Left side: Player Controls
     VinylDisc *vinyl_disc_;
-    QLabel *title_label_;
-    QLabel *artist_label_;
+    ElidedLabel *title_label_;
+    ElidedLabel *artist_label_;
     WaveformBars *waveform_bars_;
     AnimatedProgress *progress_bar_;
     QLabel *time_label_;

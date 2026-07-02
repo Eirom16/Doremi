@@ -44,21 +44,10 @@ void ArtistDetailView::setupLayout() {
 
     // Back button
     auto *back_btn = new QPushButton(scroll_content);
-    back_btn->setObjectName("backBtn");
-    auto *back_layout = new QHBoxLayout(back_btn);
-    back_layout->setContentsMargins(8, 4, 12, 4);
-    back_layout->setSpacing(6);
-    auto *back_icon = IconProvider::createIconLabel("arrow_back", 18, c.text_secondary, false, back_btn);
-    auto *back_text = new QLabel("Volver", back_btn);
-    back_text->setObjectName("backText");
-    back_text->setFont(DesignTokens::getFont("caption", 12));
-    back_text->setProperty("textRole", "secondary");
-    back_layout->addWidget(back_icon);
-    back_layout->addWidget(back_text);
-    back_btn->setLayout(back_layout);
-    back_btn->setFixedHeight(32);
+    back_btn->setFixedSize(36, 36);
     back_btn->setCursor(Qt::PointingHandCursor);
-    back_btn->setObjectName("backBtn");
+    back_btn->setIcon(IconProvider::getIcon("arrow_back", DesignTokens::current().text_primary, 24));
+    back_btn->setStyleSheet(DesignTokens::iconButtonStyle());
     connect(back_btn, &QPushButton::clicked, this, &ArtistDetailView::back_requested);
     content_layout_->addWidget(back_btn, 0, Qt::AlignLeft);
 
@@ -69,6 +58,12 @@ void ArtistDetailView::setupLayout() {
     int m = DesignTokens::spacing().lg;
     header_layout->setContentsMargins(m, m, m, m);
     header_layout->setSpacing(20);
+
+    auto *play_btn = new QPushButton(header_card);
+    play_btn->setFixedSize(36, 36);
+    play_btn->setCursor(Qt::PointingHandCursor);
+    play_btn->setIcon(IconProvider::getIcon("play_arrow", c.text_primary, 24));
+    play_btn->setStyleSheet(DesignTokens::iconButtonStyle());
 
     avatar_label_ = new QLabel(header_card);
     avatar_label_->setFixedSize(140, 140);

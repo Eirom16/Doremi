@@ -307,3 +307,122 @@ impl LibraryCache {
         playlists
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::thread::sleep;
+
+    fn create_mock_track(id: &str, title: &str, artist: &str, duration: i64) -> crate::bridge::bridge::Track {
+        crate::bridge::bridge::Track {
+            id: id.to_string(),
+            title: title.to_string(),
+            artist: artist.to_string(),
+            album: "".to_string(),
+            duration_ms: duration,
+            thumbnail: "".to_string(),
+        }
+    }
+
+    fn create_mock_album(id: &str, title: &str, artist: &str) -> crate::bridge::bridge::Album {
+        crate::bridge::bridge::Album {
+            id: id.to_string(),
+            title: title.to_string(),
+            artist: artist.to_string(),
+            year: "".to_string(),
+            thumbnail: "".to_string(),
+            track_count: 0,
+            artist_id: "".to_string(),
+        }
+    }
+
+    #[test]
+    fn test_cache_entry_ttl() {
+        // Test validity with a very short TTL
+        let entry = CacheEntry::new("data".to_string(), Duration::from_millis(10));
+        assert!(entry.is_valid());
+        sleep(Duration::from_millis(15));
+        assert!(!entry.is_valid());
+    }
+
+    #[test]
+    fn test_cache_data_factories() {
+        let track = create_mock_track("1", "Song", "Artist", 1000);
+        
+        let songs_data = CacheData::songs_only(vec![track.clone()], LibrarySource::Local);
+        assert_eq!(songs_data.songs.len(), 1);
+        assert_eq!(songs_data.albums.len(), 0);
+        assert_eq!(songs_data.source, LibrarySource::Local);
+
+        let albums_data = CacheData::albums_only(vec![create_mock_album("1", "Album", "Artist")], LibrarySource::Downloaded);
+        assert_eq!(albums_data.songs.len(), 0);
+        assert_eq!(albums_data.albums.len(), 1);
+        assert_eq!(albums_data.source, LibrarySource::Downloaded);
+    }
+
+    #[test]
+    fn test_library_cache_operations() {
+        let cache = LibraryCache::new(true);
+        let track = create_mock_track("1", "Song", "Artist", 1000);
+        let data = CacheData::songs_only(vec![track], LibrarySource::Remote);
+        
+        // Test set and get
+        cache.set("songs", data.clone());
+        let retrieved = cache.get("songs");
+        assert!(retrieved.is_some());
+        assert_eq!(retrieved.as_ref().unwrap().songs.len(), 1);
+        assert_eq!(retrieved.as_ref().unwrap().source, LibrarySource::Remote);
+        
+        // Test invalidate
+        cache.invalidate("songs");
+        assert!(cache.get("songs").is_none());
+        
+        // Test invalidate_all
+        cache.set("songs", data.clone());
+        cache.set("albums", CacheData::albums_only(vec![], LibrarySource::Remote));
+        cache.invalidate_all();
+        assert!(cache.get("songs").is_none());
+        assert!(cache.get("albums").is_none());
+    }
+
+    #[test]
+    fn test_search_tracks() {
+        let tracks = vec![
+            create_mock_track("1", "Hello World", "John Doe", 1000),
+            create_mock_track("2", "Test Track", "Jane Doe", 2000),
+            create_mock_track("3", "Another Track", "John Doe", 3000),
+        ];
+        
+        // Empty query should return all
+        assert_eq!(LibraryCache::search_tracks(&tracks, "").len(), 3);
+        
+        // Case-insensitive title search
+        assert_eq!(LibraryCache::search_tracks(&tracks, "hello").len(), 1);
+        assert_eq!(LibraryCache::search_tracks(&tracks, "HELLO")[0].id, "1");
+        
+        // Artist search
+        assert_eq!(LibraryCache::search_tracks(&tracks, "jane").len(), 1);
+        assert_eq!(LibraryCache::search_tracks(&tracks, "john doe").len(), 2);
+    }
+
+    #[test]
+    fn test_sort_tracks() {
+        let tracks = vec![
+            create_mock_track("1", "B Track", "Z Artist", 3000),
+            create_mock_track("2", "A Track", "X Artist", 1000),
+            create_mock_track("3", "C Track", "Y Artist", 2000),
+        ];
+        
+        // Sort by title
+        let sorted_by_title = LibraryCache::sort_tracks(tracks.clone(), "title");
+        assert_eq!(sorted_by_title[0].title, "A Track");
+        assert_eq!(sorted_by_title[1].title, "B Track");
+        assert_eq!(sorted_by_title[2].title, "C Track");
+        
+        // Sort by duration
+        let sorted_by_duration = LibraryCache::sort_tracks(tracks.clone(), "duration");
+        assert_eq!(sorted_by_duration[0].duration_ms, 1000);
+        assert_eq!(sorted_by_duration[1].duration_ms, 2000);
+        assert_eq!(sorted_by_duration[2].duration_ms, 3000);
+    }
+}

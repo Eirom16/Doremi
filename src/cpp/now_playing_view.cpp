@@ -65,12 +65,12 @@ void NowPlayingView::setupLayout() {
     meta_layout->setSpacing(4);
     meta_layout->setAlignment(Qt::AlignCenter);
 
-    title_label_ = new QLabel(tr_q("no_playback"), this);
+    title_label_ = new ElidedLabel(tr_q("no_playback"), this);
     title_label_->setFont(DesignTokens::getFont("heading_lg"));
     title_label_->setProperty("textRole", "primary");
     title_label_->setAlignment(Qt::AlignCenter);
 
-    artist_label_ = new QLabel(tr_q("no_track"), this);
+    artist_label_ = new ElidedLabel(tr_q("no_track"), this);
     artist_label_->setFont(DesignTokens::getFont("body_sm"));
     artist_label_->setProperty("textRole", "secondary");
     artist_label_->setAlignment(Qt::AlignCenter);
@@ -342,6 +342,21 @@ void NowPlayingView::updateButtonsStyle() {
     } else {
         repeat_btn_->setIcon(IconProvider::getIcon("repeat_one", c.accent, 20));
         repeat_btn_->setToolTip(tr_q("repeat_one_tooltip"));
+    }
+    
+    QString icon_style = DesignTokens::iconButtonStyle();
+    shuffle_btn_->setStyleSheet(icon_style);
+    prev_btn_->setStyleSheet(icon_style);
+    play_btn_->setStyleSheet(icon_style);
+    next_btn_->setStyleSheet(icon_style);
+    repeat_btn_->setStyleSheet(icon_style);
+    like_btn_->setStyleSheet(icon_style);
+    download_btn_->setStyleSheet(icon_style);
+    
+    // Also apply to close_btn if we can access it, but it's a local variable in constructor. 
+    // Wait, close_btn is local. We should find it by objectName.
+    if (auto *close_btn = findChild<QPushButton*>("closeBtn")) {
+        close_btn->setStyleSheet(icon_style);
     }
 }
 

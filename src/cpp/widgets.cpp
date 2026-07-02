@@ -58,6 +58,29 @@ void set_widget_style(QWidget *widget, const std::string &qss) {
     widget->setStyleSheet(QString::fromStdString(qss));
 }
 
+ElidedLabel::ElidedLabel(const QString &text, QWidget *parent)
+    : QLabel(parent), full_text_(text) {
+    setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+}
+
+void ElidedLabel::setText(const QString &text) {
+    full_text_ = text;
+    QLabel::setText(text);
+    update();
+}
+
+void ElidedLabel::paintEvent(QPaintEvent *event) {
+    QPainter painter(this);
+    QFontMetrics metrics = painter.fontMetrics();
+    QString elided = metrics.elidedText(full_text_, Qt::ElideRight, width());
+    painter.drawText(rect(), alignment(), elided);
+}
+
+void ElidedLabel::resizeEvent(QResizeEvent *event) {
+    QLabel::resizeEvent(event);
+    update();
+}
+
 // ── ClickableItem ──
 
 ClickableItem::ClickableItem(const std::string &title, const std::string &subtitle,

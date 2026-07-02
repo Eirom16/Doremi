@@ -6,6 +6,7 @@
 #include <QLabel>
 #include <QSlider>
 #include <QHBoxLayout>
+#include "widgets.h"
 
 class AnimatedProgress;
 
@@ -45,7 +46,8 @@ private:
     AnimatedProgress *progress_;
     QWidget    *left_container_ = nullptr;
     QWidget    *right_container_ = nullptr;
-    QLabel     *track_label_;
+    ElidedLabel *title_label_;
+    ElidedLabel *artist_label_;
     QLabel     *artwork_label_;
     QLabel     *time_label_;
     QSlider    *volume_slider_;

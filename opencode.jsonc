@@ -6,6 +6,29 @@
         "baseURL": "https://cc.freemodel.dev",
         "apiKey": "{env:ANTHROPIC_API_KEY}"
       }
+    },
+    "nvidia": {
+      "name": "NVIDIA",
+      "api": "openai",
+      "options": {
+        "baseURL": "https://integrate.api.nvidia.com/v1",
+        "apiKey": "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"
+      },
+      "models": {
+        "glm-5.2": {
+          "name": "GLM-5.2",
+          "id": "z-ai/glm-5.2",
+          "family": "glm",
+          "limit": {
+            "context": 131072,
+            "output": 16384
+          },
+          "cost": {
+            "input": 0,
+            "output": 0
+          }
+        }
+      }
     }
   },
   "model": "anthropic/claude-sonnet-4-20250514",

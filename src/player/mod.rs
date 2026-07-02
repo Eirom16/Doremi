@@ -451,7 +451,13 @@ impl PlayerService {
     }
 
     pub fn duration_ms(&self) -> i64 {
-        self.audio.duration_ms()
+        let dur = self.audio.duration_ms();
+        if dur <= 0 {
+            if let Some(track) = self.current_track() {
+                return track.duration_ms as i64;
+            }
+        }
+        dur
     }
 
     pub fn is_playing(&self) -> bool {
@@ -593,7 +599,7 @@ impl PlayerService {
                     .crossfade_active
                     .load(std::sync::atomic::Ordering::Relaxed)
             {
-                let remaining_ms = self.audio.duration_ms() - self.audio.position_ms();
+                let remaining_ms = self.duration_ms() - self.audio.position_ms();
                 let crossfade_ms = (settings.player.crossfade_duration_sec * 1000) as i64;
                 if remaining_ms > 0 && remaining_ms <= crossfade_ms {
                     let next_track = self
@@ -757,7 +763,7 @@ impl PlayerService {
     fn sync_ui(&self) {
         let state = self.audio.state();
         let pos = self.audio.position_ms();
-        let dur = self.audio.duration_ms();
+        let dur = self.duration_ms();
         let is_playing = state.is_playing();
 
         crate::bridge::bridge::update_player_state(state as i32, pos as i32, dur as i32);

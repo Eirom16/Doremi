@@ -9,6 +9,22 @@
 #include <QMouseEvent>
 #include <string>
 #include <vector>
+#include <QPaintEvent>
+
+class ElidedLabel : public QLabel {
+    Q_OBJECT
+public:
+    explicit ElidedLabel(const QString &text, QWidget *parent = nullptr);
+    void setText(const QString &text);
+
+protected:
+    void paintEvent(QPaintEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
+
+private:
+    QString full_text_;
+};
+
 
 // Helper C++ functions callable from Rust
 QWidget* create_container_widget(QWidget *parent, const char *object_name);

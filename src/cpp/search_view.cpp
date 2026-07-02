@@ -77,13 +77,14 @@ SearchView::SearchView(QWidget *parent)
     setProperty("bgRole", "transparent");
 }
 
-void SearchView::set_query(const std::string &query) {
+void SearchView::set_query(const std::string &query, const std::string &filter) {
     current_query_ = query;
     header_->setText(tr_q("search_results_for").arg(QString::fromStdString(query)));
     for (auto *btn : filter_btns_) {
-        btn->setChecked(btn->property("filterValue").toString() == "all");
+        btn->setChecked(btn->property("filterValue").toString().toStdString() == filter);
     }
     clear_layout(results_);
+    showing_recent_ = false;
     auto *loading = new LoadingState(LoadingState::ListRows, this);
     loading->setRowCount(6);
     loading->setRowHeight(56);
@@ -534,7 +535,9 @@ void SearchView::set_results(const TopResult &top_result, bool has_top_result,
 }
 
 void SearchView::set_recent_searches(const std::vector<std::string> &queries) {
-    show_recent_searches(queries);
+    if (current_query_.empty() || showing_recent_) {
+        show_recent_searches(queries);
+    }
 }
 
 void SearchView::set_active_filter(const std::string &filter) {

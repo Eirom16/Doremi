@@ -33,6 +33,10 @@ VIEWS=(
     "settings"
     "now-playing"
     "album_detail"
+    "artist_detail"
+    "playlist_detail"
+    "show_detail"
+    "welcome"
 )
 
 if [[ ! -f "$BINARY" ]]; then
