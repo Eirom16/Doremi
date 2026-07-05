@@ -76,7 +76,7 @@ void RippleButton::updateStyle() {
         "QPushButton {\n"
         "    background-color: %1;\n"
         "    border: 1px solid %2;\n"
-        "    border-radius: %4px;\n"
+        "    border-radius: %5px;\n"
         "    color: %3;\n"
         "    padding: 8px 16px;\n"
         "    font-weight: 500;\n"

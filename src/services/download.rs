@@ -517,6 +517,10 @@ impl DownloadManager {
         if has_ffmpeg {
             child.arg("--embed-metadata");
             child.arg("--embed-thumbnail");
+            child.arg("--convert-thumbnails").arg("jpg");
+            // Also write thumbnail as separate file in case embedding fails
+            // (e.g. for webm/opus containers that don't support cover art)
+            child.arg("--write-thumbnail");
 
             if dl_format != "original" {
                 child

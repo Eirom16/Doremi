@@ -456,6 +456,26 @@ impl StreamResolver {
     pub fn is_youtube_stream_url(url: &str) -> bool {
         url.contains("googlevideo.com") || url.contains(".googlevideo.com/")
     }
+
+    /// Extract the `dur` query-parameter from a YouTube stream URL and return
+    /// the value converted to milliseconds.  Returns 0 when the parameter is
+    /// absent or unparsable.
+    pub fn parse_duration_ms(url: &str) -> i64 {
+        url.split('?')
+            .nth(1)
+            .unwrap_or("")
+            .split('&')
+            .find_map(|pair| {
+                let (key, val) = pair.split_once('=')?;
+                if key == "dur" {
+                    val.parse::<f64>().ok()
+                } else {
+                    None
+                }
+            })
+            .map(|secs| (secs * 1000.0) as i64)
+            .unwrap_or(0)
+    }
 }
 
 #[cfg(test)]

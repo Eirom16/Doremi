@@ -2,49 +2,48 @@
 #define DOREMI_STATS_VIEW_H
 
 #include <QWidget>
-#include <QVBoxLayout>
-#include <QLabel>
-#include <QString>
-#include "components/stat_card.h"
-#include "components/bar_chart.h"
-#include "components/track_row.h"
+#include <QQuickWidget>
+#include <QVariantList>
+#include <QVariantMap>
 #include "doremi/src/bridge.rs.h"
-
 
 class StatsView : public QWidget {
     Q_OBJECT
+    Q_PROPERTY(QVariantMap summary READ summary NOTIFY statsChanged)
+    Q_PROPERTY(QVariantList dailyPlays READ dailyPlays NOTIFY statsChanged)
+    Q_PROPERTY(QVariantList topTracks READ topTracks NOTIFY statsChanged)
+
 public:
     explicit StatsView(QWidget *parent = nullptr);
     void setStatsData(const StatsData &stats);
-    void update_theme();
+    void update_theme() {} // Kept for compatibility
+
+    QVariantMap summary() const { return summary_; }
+    QVariantList dailyPlays() const { return daily_plays_; }
+    QVariantList topTracks() const { return top_tracks_; }
+
+    Q_INVOKABLE void exportStatsAsJson();
+    Q_INVOKABLE void exportStatsAsCsv();
+    Q_INVOKABLE void requestPlay(const QString &trackId);
+    Q_INVOKABLE void requestStats(int days);
 
 signals:
-    void play_requested(Track track);
+    void statsChanged();
+    void play_requested(Track track); // Need to construct Track to pass back to main window if used.
 
 protected:
     void showEvent(QShowEvent *event) override;
 
 private:
-    void setupLayout();
-    void buildTopTracks(const std::vector<Track> &tracks, const std::vector<int> &plays);
-    void exportStatsAsJson();
-    void exportStatsAsCsv();
     bool writeStatsJson(const QString &path) const;
     bool writeStatsCsv(const QString &path) const;
-
-    QVBoxLayout *main_layout_;
-
-    StatCard *card_time_;
-    StatCard *card_plays_;
-    StatCard *card_artists_;
-
-    BarChart *bar_chart_;
-
-    QWidget *top_tracks_widget_;
-    QVBoxLayout *top_tracks_layout_;
-
+    
     StatsData current_stats_;
-    bool has_stats_ = false;
+
+    QQuickWidget *quick_widget_ = nullptr;
+    QVariantMap summary_;
+    QVariantList daily_plays_;
+    QVariantList top_tracks_;
 };
 
 #endif

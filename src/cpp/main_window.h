@@ -4,6 +4,7 @@
 #include <QMainWindow>
 #include <QStackedWidget>
 #include <QScrollArea>
+#include <QPushButton>
 #include "components/fade_stack.h"
 #include <QLabel>
 #include <QString>
@@ -62,16 +63,15 @@ enum class ViewIndex {
     Home = 1,
     Search = 2,
     Library = 3,
-    Settings = 4,
-    Trending = 5,
-    Downloads = 6,
-    Stats = 7,
-    History = 8,
-    AlbumDetail = 9,
-    ArtistDetail = 10,
-    PlaylistDetail = 11,
-    ShowDetail = 12,
-    Welcome = 13
+    Trending = 4,
+    Downloads = 5,
+    Stats = 6,
+    History = 7,
+    AlbumDetail = 8,
+    ArtistDetail = 9,
+    PlaylistDetail = 10,
+    ShowDetail = 11,
+    Welcome = 12
 };
 
 class DoremiMainWindow : public QMainWindow {
@@ -130,6 +130,8 @@ public:
     ThemeController* theme_controller() const { return theme_controller_; }
     std::string current_route() const;
 
+    void update_fab_visibility();
+
     void set_stop_on_close(bool stop) { stop_on_close_ = stop; }
 
     void navigate_back();
@@ -170,6 +172,7 @@ private:
     QWidget *player_shell_ = nullptr;
     QHBoxLayout *player_shell_layout_ = nullptr;
     PlayerBar *player_bar_;
+    QPushButton *fab_playlist_ = nullptr;
     HomeView *home_view_;
     SearchView *search_view_;
     LibraryView *library_view_;

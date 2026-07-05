@@ -16,7 +16,7 @@ ToastNotification::ToastNotification(QWidget *parent,
                                      Type type,
                                      const QString &actionLabel,
                                      std::function<void()> action)
-    : GlassPanel(parent),
+    : QFrame(parent),
       m_type(type),
       m_message(message),
       m_actionLabel(actionLabel),
@@ -288,7 +288,7 @@ void ToastNotification::updateStackPositions() {
 
 void ToastNotification::paintEvent(QPaintEvent *event) {
     // Render the base glassmorphism panel
-    GlassPanel::paintEvent(event);
+    QFrame::paintEvent(event);
 
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing);

@@ -2,25 +2,28 @@
 #define DOREMI_NOW_PLAYING_VIEW_H
 
 #include <QWidget>
-#include <QLabel>
-#include <QPushButton>
-#include <QStackedWidget>
-#include <QHBoxLayout>
-#include <QVBoxLayout>
-#include "components/artwork_backdrop.h"
-#include "components/nebula_bg.h"
-#include "components/vinyl_disc.h"
-#include "components/lyrics_widget.h"
-#include "components/queue_panel.h"
-#include "components/related_tracks_widget.h"
-#include "components/waveform_bars.h"
-#include "components/animated_progress.h"
-#include "icon_provider.h"
-#include "widgets.h"
+#include <QQuickWidget>
+#include <QVariantList>
+#include <QVariantMap>
 #include "doremi/src/bridge.rs.h"
 
 class NowPlayingView : public QWidget {
     Q_OBJECT
+    Q_PROPERTY(QString title READ title NOTIFY titleChanged)
+    Q_PROPERTY(QString artist READ artist NOTIFY artistChanged)
+    Q_PROPERTY(QString artworkUrl READ artworkUrl NOTIFY artworkUrlChanged)
+    Q_PROPERTY(bool isPlaying READ isPlaying NOTIFY isPlayingChanged)
+    Q_PROPERTY(int durationMs READ durationMs NOTIFY durationMsChanged)
+    Q_PROPERTY(int positionMs READ positionMs NOTIFY positionMsChanged)
+    Q_PROPERTY(bool shuffleOn READ shuffleOn NOTIFY shuffleOnChanged)
+    Q_PROPERTY(int repeatMode READ repeatMode NOTIFY repeatModeChanged)
+    Q_PROPERTY(QVariantList queue READ queue NOTIFY queueChanged)
+    Q_PROPERTY(int currentIndex READ currentIndex NOTIFY currentIndexChanged)
+    Q_PROPERTY(QVariantList relatedTracks READ relatedTracks NOTIFY relatedTracksChanged)
+    Q_PROPERTY(QString plainLyrics READ plainLyrics NOTIFY plainLyricsChanged)
+    Q_PROPERTY(QString syncedLyrics READ syncedLyrics NOTIFY syncedLyricsChanged)
+    Q_PROPERTY(QStringList dominantColors READ dominantColors NOTIFY dominantColorsChanged)
+    
 public:
     explicit NowPlayingView(QWidget *parent = nullptr);
     
@@ -38,14 +41,48 @@ public:
     void setQueue(const std::vector<Track> &tracks, int current_index);
     void setRelatedTracks(const std::vector<Track> &tracks);
     
-    void setSubtitleAlignment(const std::string &alignment);
-    void setSubtitleFontSize(int32_t size);
-    void setSubtitleLineSpacing(double spacing);
-    void setSubtitleAutoScroll(bool enabled);
-    void setSubtitleGlowEffect(bool enabled);
-    void update_theme();
+    // Stub these for compatibility
+    void setSubtitleAlignment(const std::string &) {}
+    void setSubtitleFontSize(int32_t) {}
+    void setSubtitleLineSpacing(double) {}
+    void setSubtitleAutoScroll(bool) {}
+    void setSubtitleGlowEffect(bool) {}
+    void update_theme() {}
+
+    // Getters
+    QString title() const { return title_; }
+    QString artist() const { return artist_; }
+    QString artworkUrl() const { return artworkUrl_; }
+    bool isPlaying() const { return is_playing_; }
+    int durationMs() const { return duration_ms_; }
+    int positionMs() const { return position_ms_; }
+    bool shuffleOn() const { return shuffle_on_; }
+    int repeatMode() const { return repeat_mode_; }
+    QVariantList queue() const { return queue_; }
+    int currentIndex() const { return current_index_; }
+    QVariantList relatedTracks() const { return related_tracks_; }
+    QString plainLyrics() const { return plain_lyrics_; }
+    QString syncedLyrics() const { return synced_lyrics_; }
+    QStringList dominantColors() const { return dominant_colors_; }
 
 signals:
+    // Model signals
+    void titleChanged();
+    void artistChanged();
+    void artworkUrlChanged();
+    void isPlayingChanged();
+    void durationMsChanged();
+    void positionMsChanged();
+    void shuffleOnChanged();
+    void repeatModeChanged();
+    void queueChanged();
+    void currentIndexChanged();
+    void relatedTracksChanged();
+    void plainLyricsChanged();
+    void syncedLyricsChanged();
+    void dominantColorsChanged();
+
+    // Action signals (routed to main_window)
     void close_clicked();
     void play_pause_clicked();
     void next_clicked();
@@ -57,47 +94,48 @@ signals:
     void related_add_to_queue_requested(const Track &track);
     void like_clicked(const Track &track);
     void download_clicked(const Track &track);
+    
+public slots:
+    // Invokables from QML
+    void togglePlayPause() { emit play_pause_clicked(); }
+    void next() { emit next_clicked(); }
+    void previous() { emit previous_clicked(); }
+    void seek(int position_ms) { emit seek_requested(position_ms); }
+    void toggleShuffle() { emit shuffle_toggled(!shuffle_on_); }
+    void cycleRepeat() { emit repeat_cycled(); }
+    void closeView() { hideView(); }
+    void playQueueItem(int index);
+    void removeQueueItem(int index);
+    void moveQueueItem(int from, int to);
+    void clearQueue();
+    void toggleLike() { emit like_clicked(current_track_); }
+    void downloadCurrent() { emit download_clicked(current_track_); }
+    
+    void playRelated(int index);
+    void queueRelated(int index);
 
 protected:
     void resizeEvent(QResizeEvent *event) override;
 
 private:
-    void setupLayout();
-    void updateButtonsStyle();
-    void updateLikeButtonState(bool is_favorite);
-
-    ArtworkBackdrop *artwork_backdrop_;
-    NebulaBg *nebula_bg_;
-
-    // Left side: Player Controls
-    VinylDisc *vinyl_disc_;
-    ElidedLabel *title_label_;
-    ElidedLabel *artist_label_;
-    WaveformBars *waveform_bars_;
-    AnimatedProgress *progress_bar_;
-    QLabel *time_label_;
+    QQuickWidget *quick_widget_;
     
-    QPushButton *prev_btn_;
-    QPushButton *play_btn_;
-    QPushButton *next_btn_;
-    QPushButton *shuffle_btn_;
-    QPushButton *repeat_btn_;
-    QPushButton *like_btn_;
-    QPushButton *download_btn_;
-    
-    // Right side: Tabs (Lyrics / Queue / Related)
-    QPushButton *lyrics_tab_btn_;
-    QPushButton *queue_tab_btn_;
-    QPushButton *related_tab_btn_;
-    QStackedWidget *tabs_stack_;
-    
-    LyricsWidget *lyrics_widget_;
-    QueuePanel *queue_panel_;
-    RelatedTracksWidget *related_widget_;
-    
+    QString title_;
+    QString artist_;
+    QString artworkUrl_;
     bool is_playing_ = false;
+    int duration_ms_ = 0;
+    int position_ms_ = 0;
     bool shuffle_on_ = false;
     int repeat_mode_ = 0;
+    QVariantList queue_;
+    int32_t current_index_ = -1;
+    QVariantList related_tracks_;
+    std::vector<Track> raw_related_tracks_;
+    QString plain_lyrics_;
+    QString synced_lyrics_;
+    QStringList dominant_colors_;
+    
     Track current_track_;
 };
 

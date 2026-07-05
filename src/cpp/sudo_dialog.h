@@ -2,12 +2,8 @@
 #define DOREMI_SUDO_DIALOG_H
 
 #include <QDialog>
-#include <QVBoxLayout>
-#include <QHBoxLayout>
-#include <QLabel>
-#include <QLineEdit>
-#include <QFrame>
-#include "components/ripple_button.h"
+#include <QQuickWidget>
+#include <QString>
 
 class SudoPasswordDialog : public QDialog {
     Q_OBJECT
@@ -17,24 +13,16 @@ public:
 
     QString get_password() const { return password_; }
 
-private slots:
-    void on_accept();
-    void toggle_password_visibility();
+    Q_INVOKABLE void requestAccept(const QString &password);
+    Q_INVOKABLE void requestCancel();
+
+signals:
+    void errorOccurred(const QString &message);
+    void validatingChanged(bool isValidating);
 
 private:
     void center_on_parent();
-    void build_ui();
-
-    QFrame *panel_ = nullptr;
-    QLabel *title_lbl_ = nullptr;
-    QLabel *subtitle_lbl_ = nullptr;
-    QLabel *prompt_lbl_ = nullptr;
-    QLineEdit *password_input_ = nullptr;
-    RippleButton *toggle_visible_btn_ = nullptr;
-    QLabel *error_lbl_ = nullptr;
-    RippleButton *cancel_btn_ = nullptr;
-    RippleButton *confirm_btn_ = nullptr;
-
+    QQuickWidget *quick_widget_ = nullptr;
     QString password_;
 };
 

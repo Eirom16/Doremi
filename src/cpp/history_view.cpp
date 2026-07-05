@@ -1,153 +1,81 @@
 #include "history_view.h"
-#include <QtGlobal>
-#include "design_tokens.h"
-#include "icon_provider.h"
-#include "components/artwork_loader.h"
-#include <QHBoxLayout>
-#include <QMouseEvent>
+#include <QQmlContext>
+#include <QVariantMap>
+#include <QVBoxLayout>
 #include <QDateTime>
-#include <QTimeZone>
-#include <QPushButton>
-#include <QMessageBox>
-#include "doremi/src/bridge.rs.h"
-#include <QStyle>
-
-void HistoryView::update_theme() {
-    style()->unpolish(this);
-    style()->polish(this);
-}
 
 HistoryView::HistoryView(QWidget *parent)
     : QWidget(parent)
 {
-    setupLayout();
-}
+    auto *layout = new QVBoxLayout(this);
+    layout->setContentsMargins(0, 0, 0, 0);
 
-void HistoryView::setupLayout() {
-    auto *main_vbox = new QVBoxLayout(this);
-    main_vbox->setContentsMargins(0, 0, 0, 0);
-    main_vbox->setSpacing(0);
+    quick_widget_ = new QQuickWidget(this);
+    quick_widget_->setResizeMode(QQuickWidget::SizeRootObjectToView);
+    quick_widget_->setAttribute(Qt::WA_TranslucentBackground);
+    quick_widget_->setClearColor(Qt::transparent);
 
-    content_layout_ = new QVBoxLayout();
-    content_layout_->setContentsMargins(DesignTokens::pagePadding());
-    content_layout_->setSpacing(4);
-    content_layout_->setAlignment(Qt::AlignTop);
+    quick_widget_->rootContext()->setContextProperty("HistoryCtrl", this);
+    quick_widget_->setSource(QUrl("qrc:/qml/HistoryView.qml"));
 
-    auto *header_layout = new QHBoxLayout();
-    auto *title = new QLabel(tr_q("history"), this);
-    title->setObjectName("historyTitle");
-    title->setFont(DesignTokens::getFont("heading_lg"));
-    title->setProperty("textRole", "heading");
-
-    auto *clear_btn = new QPushButton(tr_q("clear_history"), this);
-    clear_btn->setObjectName("historyClearBtn");
-    clear_btn->setCursor(Qt::PointingHandCursor);
-    connect(clear_btn, &QPushButton::clicked, this, [this]() {
-        auto reply = QMessageBox::question(this, tr_q("clear_history"),
-            tr_q("confirm_clear_history"),
-            QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
-        if (reply == QMessageBox::Yes) {
-            on_clear_history();
-        }
-    });
-
-    header_layout->addWidget(title);
-    header_layout->addStretch();
-    header_layout->addWidget(clear_btn);
-    content_layout_->addLayout(header_layout);
-
-    auto *subtitle = new QLabel(tr_q("recently_played"), this);
-    subtitle->setObjectName("historySubtitle");
-    subtitle->setFont(DesignTokens::getFont("caption", 12));
-    subtitle->setProperty("textRole", "secondary");
-    content_layout_->addWidget(subtitle);
-
-    empty_label_ = new EmptyState(this);
-    empty_label_->setObjectName("historyEmptyLabel");
-    empty_label_->setIcon("history");
-    empty_label_->setTitle(tr_q("history_empty_desc"));
-    empty_label_->applyPanelStyle("empty");
-    empty_label_->hide();
-    content_layout_->addWidget(empty_label_);
-
-    main_vbox->addLayout(content_layout_);
-    setLayout(main_vbox);
-}
-
-void HistoryView::showEvent(QShowEvent *event) {
-    QWidget::showEvent(event);
-    if (!qEnvironmentVariableIsSet("DOREMI_UI_TEST")) {
-        on_history_requested();
-    }
-}
-
-QString HistoryView::getGroupLabel(const QString &played_at) const {
-    QDateTime dt = QDateTime::fromString(played_at, Qt::ISODate);
-    if (!dt.isValid()) {
-        dt = QDateTime::fromString(played_at, "yyyy-MM-dd HH:mm:ss");
-    }
-    if (!dt.isValid()) return tr_q("other");
-
-    QDate today = QDate::currentDate();
-    QDate play_date = dt.date();
-
-    if (play_date == today) return tr_q("today");
-    if (play_date == today.addDays(-1)) return tr_q("yesterday");
-    if (play_date >= today.addDays(-7)) return tr_q("this_week");
-    return tr_q("older");
-}
-
-void HistoryView::clear_history() {
-    while (content_layout_->count() > 2) {
-        QLayoutItem *item = content_layout_->takeAt(2);
-        if (item->widget()) {
-            item->widget()->deleteLater();
-        }
-        delete item;
-    }
+    layout->addWidget(quick_widget_);
 }
 
 void HistoryView::set_history(const std::vector<Track> &tracks,
-                              const std::vector<std::string> &played_at,
-                              const std::vector<std::string> &feedback_tokens) {
-    clear_history();
-
-    if (tracks.empty()) {
-        empty_label_ = new EmptyState(this);
-        empty_label_->setObjectName("historyEmptyLabel");
-        empty_label_->setIcon("history");
-        empty_label_->setTitle(tr_q("history_empty_desc"));
-        empty_label_->applyPanelStyle("empty");
-        content_layout_->addWidget(empty_label_);
-        return;
-    }
-
-    size_t n = std::min({tracks.size(), played_at.size(), feedback_tokens.size()});
-
-    QString last_group;
-    for (size_t i = 0; i < n; ++i) {
-        const auto &t = tracks[i];
-        const auto &pa = played_at[i];
-        const auto &ft = feedback_tokens[i];
-
-        QString group = getGroupLabel(QString::fromStdString(pa));
-        if (group != last_group) {
-            last_group = group;
-            auto *group_lbl = new QLabel(group, this);
-            group_lbl->setFont(DesignTokens::getFont("heading_sm", 13));
-            group_lbl->setProperty("textRole", "accent-heading");
-            content_layout_->addWidget(group_lbl);
+                 const std::vector<std::string> &played_at,
+                 const std::vector<std::string> &feedback_tokens) {
+    raw_tracks_ = tracks;
+    history_list_.clear();
+    
+    for (size_t i = 0; i < tracks.size(); ++i) {
+        const auto &track = tracks[i];
+        QVariantMap map;
+        map["id"] = QString::fromUtf8(track.id.data(), track.id.size());
+        map["title"] = QString::fromUtf8(track.title.data(), track.title.size());
+        map["artist"] = QString::fromUtf8(track.artist.data(), track.artist.size());
+        map["album"] = QString::fromUtf8(track.album.data(), track.album.size());
+        map["thumbnail"] = QString::fromUtf8(track.thumbnail.data(), track.thumbnail.size());
+        
+        int ts = track.duration_ms / 1000;
+        map["duration"] = QString("%1:%2").arg(ts / 60).arg(ts % 60, 2, 10, QChar('0'));
+        
+        if (i < played_at.size()) {
+            map["playedAt"] = formatRelativeTime(QString::fromStdString(played_at[i]));
+        } else {
+            map["playedAt"] = "";
         }
-
-        auto *row = new HistoryRow(t, pa, ft, this);
-        connect(row, &HistoryRow::play_requested, this, &HistoryView::play_requested);
-        connect(row, &HistoryRow::delete_requested, this, [](const std::string &track_id, const std::string &feedback_token) {
-            on_delete_history_item(track_id, feedback_token);
-        });
-        content_layout_->addWidget(row);
+        
+        history_list_.append(map);
     }
-
-    content_layout_->addStretch();
+    
+    emit historyChanged();
 }
 
+void HistoryView::clear_history() {
+    raw_tracks_.clear();
+    history_list_.clear();
+    emit historyChanged();
+}
 
+Track HistoryView::getTrackById(const QString &id) {
+    std::string stdId = id.toStdString();
+    for (const auto &t : raw_tracks_) {
+        if (std::string(t.id) == stdId) return t;
+    }
+    return Track();
+}
+
+void HistoryView::requestPlay(const QString &trackId) {
+    Track t = getTrackById(trackId);
+    if (!std::string(t.id).empty()) {
+        emit play_requested(t);
+    }
+}
+
+// Simple time formatter
+QString HistoryView::formatRelativeTime(const QString &played_at) const {
+    // Usually played_at is something like "Hoy", "Ayer", or a month. 
+    // We just pass it through or format it if it's a raw timestamp.
+    // For now we pass it through.
+    return played_at;
+}

@@ -1,8 +1,8 @@
 #include "update_dialog.h"
-#include "design_tokens.h"
-#include "icon_provider.h"
 #include "sudo_dialog.h"
-#include <QGraphicsDropShadowEffect>
+#include "design_tokens.h"
+#include <QQmlContext>
+#include <QVBoxLayout>
 #include <QApplication>
 #include <QScreen>
 #include <QDesktopServices>
@@ -25,12 +25,23 @@ UpdateDialog::UpdateDialog(QWidget *parent)
     active_instance_ = this;
 
     setWindowTitle(tr_q("update_window_title"));
-    setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
+    setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint | Qt::NoDropShadowWindowHint);
     setAttribute(Qt::WA_TranslucentBackground);
     setModal(true);
-    setMinimumWidth(520);
+    setFixedSize(600, 480);
 
-    build_ui();
+    auto *layout = new QVBoxLayout(this);
+    layout->setContentsMargins(0, 0, 0, 0);
+
+    quick_widget_ = new QQuickWidget(this);
+    quick_widget_->setResizeMode(QQuickWidget::SizeRootObjectToView);
+    quick_widget_->setAttribute(Qt::WA_TranslucentBackground);
+    quick_widget_->setClearColor(Qt::transparent);
+
+    quick_widget_->rootContext()->setContextProperty("UpdateCtrl", this);
+    quick_widget_->setSource(QUrl("qrc:/qml/UpdateDialog.qml"));
+
+    layout->addWidget(quick_widget_);
     center_on_parent();
 }
 
@@ -66,137 +77,6 @@ void UpdateDialog::center_on_parent() {
     }
 }
 
-void UpdateDialog::build_ui() {
-    const auto &c = DesignTokens::current();
-
-    auto *root = new QVBoxLayout(this);
-    root->setContentsMargins(0, 0, 0, 0);
-
-    panel_ = new QFrame(this);
-    panel_->setObjectName("updatePanel");
-    panel_->setProperty("boxRole", "panel");
-
-    auto *shadow = new QGraphicsDropShadowEffect(panel_);
-    shadow->setBlurRadius(48);
-    shadow->setOffset(0, 12);
-    shadow->setColor(DesignTokens::elevation().medium);
-    panel_->setGraphicsEffect(shadow);
-
-    auto *layout = new QVBoxLayout(panel_);
-    layout->setContentsMargins(28, 24, 28, 24);
-    layout->setSpacing(16);
-
-    // Header row: Icon + Title
-    auto *header_row = new QHBoxLayout();
-    auto *update_icon = IconProvider::createIconLabel("new_releases", 32, c.accent, true, panel_);
-    
-    auto *title_col = new QVBoxLayout();
-    title_col->setSpacing(2);
-
-    title_lbl_ = new QLabel(tr_q("update_available_title"), panel_);
-    title_lbl_->setFont(DesignTokens::getFont("heading_lg"));
-    title_lbl_->setProperty("textRole", "heading");
-
-    version_lbl_ = new QLabel(panel_);
-    version_lbl_->setFont(DesignTokens::getFont("body_sm"));
-    version_lbl_->setProperty("textRole", "accent");
-
-    title_col->addWidget(title_lbl_);
-    title_col->addWidget(version_lbl_);
-
-    header_row->addWidget(update_icon);
-    header_row->addSpacing(12);
-    header_row->addLayout(title_col);
-    header_row->addStretch();
-
-    // Close button
-    auto *close_btn = new RippleButton(panel_, RippleButton::Variant::Ghost);
-    close_btn->setText("✕");
-    close_btn->setFont(DesignTokens::getFont("body", 14));
-    close_btn->setFixedSize(36, 36);
-    connect(close_btn, &QPushButton::clicked, this, &QDialog::reject);
-    header_row->addWidget(close_btn);
-
-    layout->addLayout(header_row);
-
-    // Separator line
-    auto *sep = new QFrame(panel_);
-    sep->setFrameShape(QFrame::HLine);
-    sep->setProperty("boxRole", "separator");
-    layout->addWidget(sep);
-
-    // Release Notes Box
-    notes_label_ = new QLabel(tr_q("update_notes_label"), panel_);
-    notes_label_->setFont(DesignTokens::getFont("body", 12));
-    notes_label_->setProperty("textRole", "secondary");
-    layout->addWidget(notes_label_);
-
-    notes_box_ = new QTextEdit(panel_);
-    notes_box_->setReadOnly(true);
-    notes_box_->setFont(DesignTokens::getFont("body_sm"));
-    notes_box_->setFixedHeight(140);
-    notes_box_->setProperty("boxRole", "card");
-    layout->addWidget(notes_box_);
-
-    // Progress Bar Container (hidden until downloading)
-    progress_container_ = new QWidget(panel_);
-    auto *prog_layout = new QVBoxLayout(progress_container_);
-    prog_layout->setContentsMargins(0, 0, 0, 0);
-    prog_layout->setSpacing(6);
-
-    progress_bar_ = new QProgressBar(progress_container_);
-    progress_bar_->setRange(0, 100);
-    progress_bar_->setValue(0);
-    progress_bar_->setTextVisible(false);
-    progress_bar_->setFixedHeight(8);
-    progress_bar_->setStyleSheet(QString(
-        "QProgressBar {"
-        "    background-color: %1;"
-        "    border: none;"
-        "    border-radius: %3px;"
-        "}"
-        "QProgressBar::chunk {"
-        "    background-color: %2;"
-        "    border-radius: %3px;"
-        "}"
-    ).arg(c.bg_surface.name(), c.accent.name(), QString::number(DesignTokens::radius().sm)));
-
-    progress_label_ = new QLabel(tr_q("update_preparing"), progress_container_);
-    progress_label_->setFont(DesignTokens::getFont("body", 12));
-    progress_label_->setProperty("textRole", "secondary");
-
-    prog_layout->addWidget(progress_bar_);
-    prog_layout->addWidget(progress_label_);
-    progress_container_->hide();
-    layout->addWidget(progress_container_);
-
-    // Action buttons
-    auto *btn_row = new QHBoxLayout();
-    btn_row->setSpacing(10);
-
-    github_btn_ = new RippleButton(tr_q("update_btn_github"), panel_, RippleButton::Variant::Ghost);
-    github_btn_->setIcon(IconProvider::getIcon("open_in_new", c.text_secondary, 20));
-    github_btn_->setFont(DesignTokens::getFont("body_sm"));
-    connect(github_btn_, &QPushButton::clicked, this, &UpdateDialog::on_github_clicked);
-
-    postpone_btn_ = new RippleButton(tr_q("update_btn_postpone"), panel_, RippleButton::Variant::Secondary);
-    connect(postpone_btn_, &QPushButton::clicked, this, &QDialog::reject);
-
-    update_btn_ = new RippleButton(panel_, RippleButton::Variant::Primary);
-    update_btn_->setIcon(IconProvider::getIcon("download", c.text_primary, 20));
-    update_btn_->setFont(DesignTokens::getFont("body", 14));
-    update_btn_->setMinimumHeight(44);
-    connect(update_btn_, &QPushButton::clicked, this, &UpdateDialog::on_update_clicked);
-
-    btn_row->addWidget(github_btn_);
-    btn_row->addStretch();
-    btn_row->addWidget(postpone_btn_);
-    btn_row->addWidget(update_btn_);
-
-    layout->addLayout(btn_row);
-    root->addWidget(panel_);
-}
-
 void UpdateDialog::set_release_info(const QString &version, const QString &notes,
                                       const QString &url, const QString &asset_url,
                                       const QString &asset_name, qint64 asset_size) {
@@ -207,27 +87,26 @@ void UpdateDialog::set_release_info(const QString &version, const QString &notes
     asset_name_ = asset_name;
     asset_size_ = asset_size;
 
-    version_lbl_->setText(QString("%1  →  %2").arg(QString::fromStdString(std::string(get_app_version()))).arg(version));
-    notes_box_->setPlainText(notes);
-    update_btn_->setText(tr_q("update_btn_upgrade") + version);
+    emit versionChanged();
+    emit notesChanged();
 }
 
-void UpdateDialog::on_github_clicked() {
+void UpdateDialog::openGithub() {
     QDesktopServices::openUrl(QUrl(url_));
 }
 
-void UpdateDialog::on_update_clicked() {
+void UpdateDialog::requestDownload() {
     if (asset_url_.isEmpty()) {
-        progress_label_->setText(tr_q("update_no_package"));
-        progress_container_->show();
+        status_message_ = tr_q("update_no_package");
+        emit statusMessageChanged();
         return;
     }
 
-    update_btn_->setEnabled(false);
-    postpone_btn_->setEnabled(false);
-    progress_container_->show();
-    progress_label_->setText(tr_q("update_starting"));
     downloading_ = true;
+    emit isDownloadingChanged();
+    
+    status_message_ = tr_q("update_starting");
+    emit statusMessageChanged();
 
     // Call Rust to start downloading
     on_download_update_requested(
@@ -236,21 +115,26 @@ void UpdateDialog::on_update_clicked() {
 }
 
 void UpdateDialog::set_download_progress(double percent, const QString &message) {
-    progress_bar_->setValue(static_cast<int>(percent));
-    progress_label_->setText(message);
+    download_progress_ = percent;
+    status_message_ = message;
+    emit downloadProgressChanged();
+    emit statusMessageChanged();
 }
 
 void UpdateDialog::set_download_failed(const QString &error) {
-    progress_label_->setText(error);
-    update_btn_->setEnabled(true);
-    postpone_btn_->setEnabled(true);
+    status_message_ = error;
     downloading_ = false;
+    emit statusMessageChanged();
+    emit isDownloadingChanged();
 }
 
 void UpdateDialog::set_download_finished(const QString &package_path) {
     package_path_ = package_path;
-    progress_bar_->setValue(100);
-    progress_label_->setText(tr_q("update_auth_required"));
+    download_progress_ = 100;
+    emit downloadProgressChanged();
+    
+    status_message_ = tr_q("update_auth_required");
+    emit statusMessageChanged();
 
     // Request Sudo Password Dialog
     QString pwd;
@@ -258,14 +142,15 @@ void UpdateDialog::set_download_finished(const QString &package_path) {
     if (sudo_dlg.exec() == QDialog::Accepted) {
         pwd = sudo_dlg.get_password();
     } else {
-        progress_label_->setText(tr_q("update_cancelled") + package_path_);
-        update_btn_->setEnabled(true);
-        postpone_btn_->setEnabled(true);
+        status_message_ = tr_q("update_cancelled") + package_path_;
+        emit statusMessageChanged();
         downloading_ = false;
+        emit isDownloadingChanged();
         return;
     }
 
-    progress_label_->setText(tr_q("update_installing"));
+    status_message_ = tr_q("update_installing");
+    emit statusMessageChanged();
 
     // Call Rust to start installation
     on_install_update_requested(
@@ -274,18 +159,27 @@ void UpdateDialog::set_download_finished(const QString &package_path) {
 }
 
 void UpdateDialog::set_install_finished(bool success) {
-    const auto &c = DesignTokens::current();
     if (success) {
-        progress_label_->setText(tr_q("update_install_success"));
-        update_btn_->setText(tr_q("update_install_restarting"));
-        update_btn_->setIcon(IconProvider::getIcon("check_circle", c.accent, 20));
-        QTimer::singleShot(2000, this, &UpdateDialog::restart_app);
+        install_success_ = true;
+        ready_to_restart_ = true;
+        status_message_ = tr_q("update_install_success");
+        emit isInstallSuccessChanged();
+        emit isReadyToRestartChanged();
+        emit statusMessageChanged();
+        
+        QTimer::singleShot(3000, this, &UpdateDialog::restart_app);
     } else {
-        progress_label_->setText(tr_q("update_install_failed") + package_path_);
-        update_btn_->setEnabled(true);
-        postpone_btn_->setEnabled(true);
+        install_failed_ = true;
         downloading_ = false;
+        status_message_ = tr_q("update_install_failed") + package_path_;
+        emit isInstallFailedChanged();
+        emit isDownloadingChanged();
+        emit statusMessageChanged();
     }
+}
+
+void UpdateDialog::requestRestart() {
+    restart_app();
 }
 
 void UpdateDialog::restart_app() {

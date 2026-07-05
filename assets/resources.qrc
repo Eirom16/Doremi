@@ -2,5 +2,28 @@
     <qresource prefix="/assets">
         <file alias="fonts/MaterialSymbolsRounded.ttf">fonts/MaterialSymbolsRounded.ttf</file>
         <file alias="styles/base.qss">styles/base.qss</file>
+        <file>qml/UpdateDialog.qml</file>
+    </qresource>
+    <qresource prefix="/qml">
+        <file alias="SettingsView.qml">qml/SettingsView.qml</file>
+        <file alias="StatsView.qml">qml/StatsView.qml</file>
+        <file alias="WelcomeView.qml">qml/WelcomeView.qml</file>
+        <file alias="NowPlayingView.qml">qml/NowPlayingView.qml</file>
+        <file alias="PlayerBar.qml">qml/PlayerBar.qml</file>
+        <file alias="Sidebar.qml">qml/Sidebar.qml</file>
+        <file alias="HomeCard.qml">qml/HomeCard.qml</file>
+        <file alias="HomeView.qml">qml/HomeView.qml</file>
+        <file alias="TrendingView.qml">qml/TrendingView.qml</file>
+        <file alias="TrackRow.qml">qml/TrackRow.qml</file>
+        <file alias="AlbumDetailView.qml">qml/AlbumDetailView.qml</file>
+        <file alias="PlaylistDetailView.qml">qml/PlaylistDetailView.qml</file>
+        <file alias="ArtistDetailView.qml">qml/ArtistDetailView.qml</file>
+        <file alias="ShowDetailView.qml">qml/ShowDetailView.qml</file>
+        <file alias="LibraryView.qml">qml/LibraryView.qml</file>
+        <file alias="SearchView.qml">qml/SearchView.qml</file>
+        <file alias="HistoryView.qml">qml/HistoryView.qml</file>
+        <file alias="DownloadsView.qml">qml/DownloadsView.qml</file>
+        <file alias="SudoDialog.qml">qml/SudoDialog.qml</file>
+        <file>qml/UpdateDialog.qml</file>
     </qresource>
 </RCC>

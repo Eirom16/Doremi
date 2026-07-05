@@ -13,3 +13,8 @@ oauth.json
 browser.json
 *.log
 compile_commands.json
+
+# Temporary JSON and Scripts
+albums.json
+test_output.json
+fix_rust_strings.py

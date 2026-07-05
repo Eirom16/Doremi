@@ -2,24 +2,30 @@
 #define DOREMI_LIBRARY_VIEW_H
 
 #include <QWidget>
-#include <QVBoxLayout>
-#include <QPushButton>
-#include <QLabel>
-#include <QLineEdit>
-#include <QScrollArea>
-#include <QComboBox>
+#include <QQuickWidget>
+#include <QVariantList>
 #include <vector>
 #include <string>
 
-#include "widgets.h"
 #include "doremi/src/bridge.rs.h"
-#include "components/create_playlist_dialog.h"
 
 class LibraryView : public QWidget {
     Q_OBJECT
+    Q_PROPERTY(QString activeTab READ activeTab NOTIFY tabChanged)
+    Q_PROPERTY(bool authenticated READ isAuthenticated NOTIFY authenticatedChanged)
+    Q_PROPERTY(QString libraryState READ libraryState NOTIFY libraryStateChanged)
+    Q_PROPERTY(QString stateMessage READ stateMessage NOTIFY libraryStateChanged)
+    
+    Q_PROPERTY(QVariantList playlists READ playlists NOTIFY dataChanged)
+    Q_PROPERTY(QVariantList songs READ songs NOTIFY dataChanged)
+    Q_PROPERTY(QVariantList albums READ albums NOTIFY dataChanged)
+    Q_PROPERTY(QVariantList artists READ artists NOTIFY dataChanged)
+    Q_PROPERTY(QVariantList shows READ shows NOTIFY dataChanged)
+
 public:
     explicit LibraryView(QWidget *parent = nullptr);
-    void update_theme();
+    void update_theme() {} // Kept for compatibility
+
     void set_playlists(const std::vector<Playlist> &playlists);
     void set_songs(const std::vector<Track> &songs);
     void set_albums(const std::vector<Album> &albums);
@@ -31,11 +37,41 @@ public:
         const std::vector<Album> &albums,
         const std::vector<Artist> &artists,
         const std::vector<Playlist> &playlists
-    );
+    ) {} // Not used directly in LibraryView UI anymore, usually search results go to SearchView. Wait, the Rust side calls this? We'll just ignore for QML or map it.
+    
     void set_library_state(const std::string &state, const std::string &message);
     void set_authenticated(bool authenticated);
-    std::string current_tab() const;
+    
+    std::string current_tab() const { return active_tab_.toStdString(); }
+    QString activeTab() const { return active_tab_; }
+    bool isAuthenticated() const { return authenticated_; }
+    QString libraryState() const { return library_state_; }
+    QString stateMessage() const { return state_message_; }
+    
+    QVariantList playlists() const { return playlists_; }
+    QVariantList songs() const { return songs_; }
+    QVariantList albums() const { return albums_; }
+    QVariantList artists() const { return artists_; }
+    QVariantList shows() const { return shows_; }
+
+    Q_INVOKABLE void requestTabChange(const QString &tab);
+    Q_INVOKABLE void requestPlay(const QString &trackId);
+    Q_INVOKABLE void requestPlaylist(const QString &playlistId);
+    Q_INVOKABLE void requestAlbum(const QString &albumId);
+    Q_INVOKABLE void requestArtist(const QString &artistId);
+    Q_INVOKABLE void requestShow(const QString &showId);
+    Q_INVOKABLE void requestCreatePlaylist();
+    Q_INVOKABLE void requestLogin();
+    Q_INVOKABLE void requestFilterSourceChange(int source);
+    Q_INVOKABLE void requestRemoveFavorite(const QString &trackId);
+
 signals:
+    void tabChanged();
+    void authenticatedChanged();
+    void libraryStateChanged();
+    void dataChanged();
+
+    // Original signals
     void tab_changed(const std::string &tab);
     void play_requested(Track track);
     void playlist_requested(const std::string &playlist_id);
@@ -55,21 +91,24 @@ signals:
     void search_requested(const std::string &tab, const std::string &query, const std::string &sort_by);
     void filter_source_changed(int source);
     void login_requested();
+
 private:
-    QVBoxLayout *list_;
-    QLineEdit *search_box_;
-    QComboBox *sort_combo_;
-    QComboBox *source_combo_;
-    std::vector<QPushButton *> tab_btns_;
-    std::string active_tab_;
-    bool authenticated_;
-    void set_active_tab(const std::string &tab);
-    void setup_search_bar();
-    QWidget *make_list_item(const std::string &text, const std::string &sub, const std::string &id, const std::string &thumbnail);
-    QWidget *make_song_item(const Track &track);
-    void clear_list();
-    void show_empty_state();
-    void show_not_authenticated_state();
+    QQuickWidget *quick_widget_ = nullptr;
+    
+    QString active_tab_ = "playlists";
+    bool authenticated_ = false;
+    QString library_state_ = "loading";
+    QString state_message_ = "";
+    
+    QVariantList playlists_;
+    QVariantList songs_;
+    QVariantList albums_;
+    QVariantList artists_;
+    QVariantList shows_;
+    
+    std::vector<Track> raw_songs_;
+    
+    Track getTrackById(const QString &id);
 };
 
 #endif

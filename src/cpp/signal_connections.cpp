@@ -44,9 +44,25 @@ void DoremiMainWindow::connect_signals() {
 
     // ── Title bar (search) ─────────────────────────────────────────────
     guardOnline(title_bar_, &TitleBar::search_submitted, "buscar en YouTube Music", [this](const std::string &q) {
-        search_view_->set_query(q);
-        stack_->setCurrentIndex(2);
-        on_search_submitted(q, "all");
+        if (q.rfind("GLOBAL:", 0) == 0) {
+            std::string actual_q = q.substr(7);
+            search_view_->set_query(actual_q);
+            navigate_to("search");
+            on_search_submitted(actual_q, "all");
+        } else {
+            std::string route = current_route();
+            if (route == "library") {
+                std::string tab = library_view_->current_tab();
+                if (tab.empty()) tab = "songs";
+                on_library_search(tab, q, "name_asc");
+            } else if (route == "downloads" || route == "settings") {
+                // TODO: Implement local filtering for downloads/settings
+            } else {
+                search_view_->set_query(q);
+                navigate_to("search");
+                on_search_submitted(q, "all");
+            }
+        }
     });
     QObject::connect(title_bar_, &TitleBar::search_text_changed, this, [this](const std::string &q) {
         if (!is_online_) return;
@@ -184,7 +200,10 @@ void DoremiMainWindow::connect_signals() {
 
     // ── Library view ───────────────────────────────────────────────────
     QObject::connect(library_view_, &LibraryView::tab_changed, this,
-        [](const std::string &tab) { on_library_tab_changed(tab); });
+        [this](const std::string &tab) { 
+            on_library_tab_changed(tab);
+            update_fab_visibility();
+        });
     QObject::connect(library_view_, &LibraryView::search_requested, this,
         [](const std::string &tab, const std::string &query, const std::string &sort_by) {
             on_library_search(tab, query, sort_by);
@@ -249,6 +268,10 @@ void DoremiMainWindow::connect_signals() {
     QObject::connect(album_detail_view_, &AlbumDetailView::play_all_requested, this,
         [](std::vector<Track> tracks) {
             on_play_all(to_rust_vec(tracks), false);
+        });
+    QObject::connect(album_detail_view_, &AlbumDetailView::shuffle_requested, this,
+        [](std::vector<Track> tracks) {
+            on_play_all(to_rust_vec(tracks), true);
         });
     guardOnline(album_detail_view_, &AlbumDetailView::download_all_requested, "descargar álbumes", [this](std::vector<Track> tracks, std::string parent_id, std::string parent_title, std::string parent_thumbnail) {
         on_batch_download_requested(to_rust_vec(tracks), parent_id, parent_title, parent_thumbnail);

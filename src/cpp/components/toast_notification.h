@@ -1,6 +1,6 @@
 #pragma once
 
-#include "glass_panel.h"
+#include <QFrame>
 #include <QLabel>
 #include <QPointer>
 #include <QPushButton>
@@ -10,7 +10,7 @@
 #include <functional>
 #include <vector>
 
-class ToastNotification : public GlassPanel {
+class ToastNotification : public QFrame {
     Q_OBJECT
     Q_PROPERTY(qreal progress READ progress WRITE setProgress)
 public:

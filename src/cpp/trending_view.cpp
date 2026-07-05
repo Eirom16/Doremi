@@ -1,206 +1,67 @@
-#include <QFrame>
-#include <QPixmap>
-#include <QHBoxLayout>
-#include <QPainter>
-#include <QPainterPath>
 #include "trending_view.h"
-#include "design_tokens.h"
-#include "icon_provider.h"
-#include "components/artwork_loader.h"
-#include "components/loading_state.h"
-#include <QFile>
-#include <QStyle>
-#include <QPointer>
-#include "doremi/src/bridge.rs.h"
-
-static QPixmap getRoundedPixmap(const QPixmap &src, int radius) {
-    if (src.isNull()) return src;
-    QPixmap dest(src.size());
-    dest.fill(Qt::transparent);
-    QPainter painter(&dest);
-    painter.setRenderHint(QPainter::Antialiasing);
-    QPainterPath path;
-    path.addRoundedRect(src.rect(), radius, radius);
-    painter.setClipPath(path);
-    painter.drawPixmap(0, 0, src);
-    return dest;
-}
-
-void TrendingView::update_theme() {
-    style()->unpolish(this);
-    style()->polish(this);
-}
+#include <QQmlContext>
+#include <QVBoxLayout>
 
 TrendingView::TrendingView(QWidget *parent)
     : QWidget(parent)
 {
-    auto *root = new QVBoxLayout(this);
-    root->setContentsMargins(0, 0, 0, 0);
-    root->setSpacing(0);
+    auto *layout = new QVBoxLayout(this);
+    layout->setContentsMargins(0, 0, 0, 0);
 
-    list_ = new QVBoxLayout();
-    list_->setContentsMargins(DesignTokens::pagePadding());
-    list_->setSpacing(8);
-
-    auto *header = new QLabel(tr_q("trending"), this);
-    header->setProperty("textRole", "heading");
-    header->setFont(DesignTokens::getFont("heading_lg"));
-    list_->addWidget(header);
-
-    auto *sub = new QLabel(tr_q("trending_subtitle"), this);
-    sub->setProperty("textRole", "secondary");
-    sub->setFont(DesignTokens::getFont("body_sm"));
-    list_->addWidget(sub);
-
-    list_->addStretch(1);
-    root->addLayout(list_);
-    // TrendingView background handled by base.qss
-}
-
-QWidget *TrendingView::make_trending_card(const HomeCard &item) {
-    const auto &c = DesignTokens::current();
-    const std::string id = static_cast<std::string>(item.id);
-    const std::string title = static_cast<std::string>(item.title);
-    const std::string subtitle = static_cast<std::string>(item.subtitle);
-    const std::string thumbnail = static_cast<std::string>(item.thumbnail);
-    const std::string itemType = static_cast<std::string>(item.item_type);
-
-    auto *card = new QWidget(this);
-    card->setProperty("boxRole", "trending-card");
-    card->setFixedHeight(72);
-
-    auto *lay = new QHBoxLayout(card);
-    lay->setContentsMargins(12, 8, 12, 8);
-    lay->setSpacing(12);
-
-    auto *thumb = new QLabel(card);
-    thumb->setProperty("boxRole", "thumb");
-    thumb->setFixedSize(56, 56);
-    thumb->setAlignment(Qt::AlignCenter);
+    quick_widget_ = new QQuickWidget(this);
+    quick_widget_->setResizeMode(QQuickWidget::SizeRootObjectToView);
+    quick_widget_->rootContext()->setContextProperty("TrendingCtrl", this);
     
-    bool thumbLoaded = false;
-    if (!thumbnail.empty() && QFile::exists(QString::fromStdString(thumbnail))) {
-        QPixmap px(QString::fromStdString(thumbnail));
-        if (!px.isNull()) {
-            thumb->setPixmap(getRoundedPixmap(
-                px.scaled(56, 56, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation), 6
-            ));
-            thumbLoaded = true;
-        }
-    }
+    quick_widget_->setAttribute(Qt::WA_TranslucentBackground);
+    quick_widget_->setClearColor(Qt::transparent);
     
-    if (!thumbLoaded) {
-        // Fallback default icon
-        QPixmap fallback = IconProvider::getIcon("music_note", c.text_secondary, 22).pixmap(56, 56);
-        thumb->setPixmap(getRoundedPixmap(fallback, 6));
-    }
-    QPointer<QLabel> safeThumb(thumb);
-    ArtworkLoader::load(QString::fromStdString(thumbnail), QSize(56, 56),
-                        [safeThumb](const QPixmap &pixmap) {
-        if (safeThumb) safeThumb->setPixmap(getRoundedPixmap(pixmap, 6));
-    });
+    quick_widget_->setSource(QUrl("qrc:/qml/TrendingView.qml"));
     
-    lay->addWidget(thumb);
-
-    auto *vl = new QVBoxLayout();
-    vl->setSpacing(2);
-    vl->setContentsMargins(0, 0, 0, 0);
+    layout->addWidget(quick_widget_);
     
-    auto *t = new QLabel(QString::fromStdString(title), card);
-    t->setObjectName("trendingTitle");
-    t->setFont(DesignTokens::getFont("body_sm"));
-    t->setStyleSheet(QString("color: %1; font-weight: bold; background: transparent;").arg(c.text_primary.name()));
-    vl->addWidget(t);
-    
-    auto *s = new QLabel(QString::fromStdString(subtitle), card);
-    s->setObjectName("trendingSubtitle");
-    s->setFont(DesignTokens::getFont("caption_sm"));
-    s->setStyleSheet(QString("color: %1; background: transparent;").arg(c.text_secondary.name()));
-    vl->addWidget(s);
-    
-    lay->addLayout(vl, 1);
-
-    auto *play_btn = new QPushButton(card);
-    play_btn->setProperty("buttonRole", "primary");
-    play_btn->setFixedSize(36, 36);
-    play_btn->setCursor(Qt::PointingHandCursor);
-    play_btn->setIcon(IconProvider::getIcon("play_arrow", c.text_on_accent, 18));
-    play_btn->setIconSize(QSize(18, 18));
-    lay->addWidget(play_btn);
-
-    connect(play_btn, &QPushButton::clicked, this,
-            [this, id, title, subtitle, thumbnail, itemType]() {
-        if (itemType == "song") {
-            Track track;
-            track.id = id;
-            track.title = title;
-            track.artist = subtitle;
-            track.thumbnail = thumbnail;
-            emit play_requested(track);
-        } else if (itemType == "album") {
-            emit album_requested(id);
-        } else if (itemType == "artist") {
-            emit artist_requested(id);
-        } else {
-            emit playlist_requested(id);
-        }
-    });
-
-    return card;
+    view_state_ = "loading";
 }
 
 void TrendingView::clear_items() {
-    // Keep header (0) and subtitle (1) and stretch (last)
-    while (list_->count() > 3) {
-        auto *item = list_->takeAt(2);
-        if (item->widget()) {
-            item->widget()->deleteLater();
-        }
-        delete item;
-    }
+    items_.clear();
+    emit itemsChanged();
 }
 
 void TrendingView::add_item(const HomeCard &item) {
-    if (state_widget_) {
-        state_widget_->deleteLater();
-        state_widget_ = nullptr;
-    }
-    // Insert before stretch
-    int idx = list_->count() - 1;
-    list_->insertWidget(idx, make_trending_card(item));
+    QVariantMap map;
+    map["id"] = QString::fromStdString(static_cast<std::string>(item.id));
+    map["title"] = QString::fromStdString(static_cast<std::string>(item.title));
+    map["subtitle"] = QString::fromStdString(static_cast<std::string>(item.subtitle));
+    map["thumbnail"] = QString::fromStdString(static_cast<std::string>(item.thumbnail));
+    map["itemType"] = QString::fromStdString(static_cast<std::string>(item.item_type));
+    items_.append(map);
+    emit itemsChanged();
 }
 
 void TrendingView::set_state(const std::string &state, const std::string &message) {
-    if (state == "content") {
-        if (state_widget_) state_widget_->deleteLater();
-        state_widget_ = nullptr;
-        return;
+    QString newState = QString::fromStdString(state);
+    if (view_state_ != newState) {
+        view_state_ = newState;
+        emit viewStateChanged();
     }
-    clear_items();
-    state_widget_ = new QWidget(this);
-    auto *layout = new QVBoxLayout(state_widget_);
-    layout->setContentsMargins(0, 12, 0, 12);
-    layout->setSpacing(10);
-    if (state == "loading") {
-        auto *loading = new LoadingState(LoadingState::ListRows, state_widget_);
-        layout->addWidget(loading);
-    } else {
-        auto *label = new QLabel(QString::fromStdString(message), state_widget_);
-        label->setProperty("textRole", "trending-muted-padded");
-        label->setAlignment(Qt::AlignCenter);
-        label->setWordWrap(true);
-        label->setFont(DesignTokens::getFont("body_sm"));
-        layout->addWidget(label);
-        if (state == "error") {
-            auto *retry = new QPushButton(tr_q("retry"), state_widget_);
-            retry->setCursor(Qt::PointingHandCursor);
-            retry->setFixedWidth(140);
-            retry->setProperty("buttonRole", "primary");
-            connect(retry, &QPushButton::clicked, this, &TrendingView::retry_requested);
-            layout->addWidget(retry, 0, Qt::AlignHCenter);
-        }
-    }
-    list_->insertWidget(2, state_widget_);
 }
 
+void TrendingView::requestPlay(const QString &id, const QString &type, const QString &title, const QString &artist, const QString &thumbnail) {
+    Track track;
+    track.id = id.toStdString();
+    track.title = title.toStdString();
+    track.artist = artist.toStdString();
+    track.thumbnail = thumbnail.toStdString();
+    emit play_requested(track);
+}
 
+void TrendingView::requestNavigate(const QString &id, const QString &type) {
+    if (id.isEmpty()) return;
+    if (type == "album") emit album_requested(id.toStdString());
+    else if (type == "artist") emit artist_requested(id.toStdString());
+    else emit playlist_requested(id.toStdString());
+}
+
+void TrendingView::requestRetry() {
+    emit retry_requested();
+}

@@ -1,167 +1,74 @@
 #include "welcome_view.h"
-#include "design_tokens.h"
-#include "icon_provider.h"
 #include "login_dialog.h"
-#include <QPixmap>
-#include <QDir>
-#include <QCoreApplication>
-#include <QFile>
-#include <QStringList>
-#include <QTimer>
-#include <QGraphicsColorizeEffect>
 #include "doremi/src/bridge.rs.h"
+#include <QQmlContext>
+#include <QVBoxLayout>
+#include <QTimer>
+#include <QVariantMap>
 
 WelcomeView::WelcomeView(QWidget *parent)
     : QWidget(parent)
 {
-    const auto &c = DesignTokens::current();
-
     auto *layout = new QVBoxLayout(this);
-    layout->setAlignment(Qt::AlignCenter);
-    layout->setContentsMargins(80, 40, 80, 40);
-    layout->setSpacing(20);
+    layout->setContentsMargins(0, 0, 0, 0);
 
-    // Try to load logo.png from packaged or adjacent assets
-    QString app_dir = QCoreApplication::applicationDirPath();
-    QStringList logo_paths = {
-        ":/assets/logo.png",
-        app_dir + "/assets/logo.png",
-        QDir(app_dir).filePath("../assets/logo.png")
-    };
-    QString logo_path;
-    for (const QString &candidate : logo_paths) {
-        if (QFile::exists(candidate)) {
-            logo_path = candidate;
-            break;
-        }
-    }
+    quick_widget_ = new QQuickWidget(this);
+    quick_widget_->setResizeMode(QQuickWidget::SizeRootObjectToView);
+    quick_widget_->setAttribute(Qt::WA_TranslucentBackground);
+    quick_widget_->setClearColor(Qt::transparent);
 
-    if (!logo_path.isEmpty()) {
-        QPixmap pix(logo_path);
-        if (!pix.isNull()) {
-            logo_ = new QLabel(this);
-            logo_->setPixmap(pix.scaledToWidth(180, Qt::SmoothTransformation));
-            logo_->setAlignment(Qt::AlignCenter);
-            auto *effect = new QGraphicsColorizeEffect(logo_);
-            effect->setColor(c.accent);
-            effect->setStrength(1.0);
-            logo_->setGraphicsEffect(effect);
-            layout->addWidget(logo_);
-        }
-    }
-    if (!logo_) {
-        logo_ = IconProvider::createIconLabel("album", 80, c.accent, true, this);
-        logo_->setAlignment(Qt::AlignCenter);
-        layout->addWidget(logo_);
-    }
+    quick_widget_->rootContext()->setContextProperty("WelcomeCtrl", this);
+    quick_widget_->setSource(QUrl("qrc:/qml/WelcomeView.qml"));
 
-    title_ = new QLabel("Doremi", this);
-    title_->setFont(DesignTokens::getFont("heading_lg"));
-    title_->setProperty("textRole", "accent-heading");
-    title_->setAlignment(Qt::AlignCenter);
-    layout->addWidget(title_);
-
-    subtitle_ = new QLabel(tr_q("welcome_subtitle"), this);
-    subtitle_->setFont(DesignTokens::getFont("body", 14));
-    subtitle_->setProperty("textRole", "secondary");
-    subtitle_->setAlignment(Qt::AlignCenter);
-    layout->addWidget(subtitle_);
-
-    layout->addSpacing(20);
-
-    // Card Glass Panel container
-    card_ = new GlassPanel(this);
-    card_->setObjectName("welcomeCard");
-    card_->setMaximumWidth(380);
-    card_->setMinimumWidth(340);
-    card_->setMaximumHeight(300);
-    auto *card_layout = new QVBoxLayout(card_);
-    card_layout->setSpacing(16);
-    card_layout->setContentsMargins(32, 28, 32, 28);
-    card_layout->setAlignment(Qt::AlignCenter);
-
-    welcome_text_ = new QLabel(tr_q("welcome_title"), card_);
-    welcome_text_->setFont(DesignTokens::getFont("heading_lg", 20));
-    welcome_text_->setProperty("textRole", "heading");
-    welcome_text_->setAlignment(Qt::AlignCenter);
-    card_layout->addWidget(welcome_text_);
-
-    desc_text_ = new QLabel(tr_q("welcome_desc"), card_);
-    desc_text_->setFont(DesignTokens::getFont("body_sm"));
-    desc_text_->setProperty("textRole", "secondary");
-    desc_text_->setAlignment(Qt::AlignCenter);
-    card_layout->addWidget(desc_text_);
-
-    login_btn_ = new RippleButton(tr_q("welcome_btn_login"), card_, RippleButton::Variant::Primary);
-    login_btn_->setMinimumHeight(50);
-    login_btn_->setMinimumWidth(240);
-    connect(login_btn_, &QPushButton::clicked, this, &WelcomeView::on_login_clicked);
-    card_layout->addWidget(login_btn_);
-
-    status_label_ = new QLabel("", card_);
-    status_label_->setFont(DesignTokens::getFont("body_sm"));
-    status_label_->setProperty("textRole", "secondary");
-    status_label_->setAlignment(Qt::AlignCenter);
-    status_label_->setVisible(false);
-    card_layout->addWidget(status_label_);
-
-    progress_ = new QLabel("", card_);
-    progress_->setFont(DesignTokens::getFont("body", 12));
-    progress_->setProperty("textRole", "muted");
-    progress_->setAlignment(Qt::AlignCenter);
-    progress_->setVisible(false);
-    card_layout->addWidget(progress_);
-
-    layout->addWidget(card_);
-    layout->addStretch();
+    layout->addWidget(quick_widget_);
 }
 
-void WelcomeView::update_theme() {
-    const auto &c = DesignTokens::current();
-    if (logo_) {
-        auto *effect = qobject_cast<QGraphicsColorizeEffect*>(logo_->graphicsEffect());
-        if (effect) {
-            effect->setColor(c.accent);
-        }
-    }
-    if (login_btn_) {
-        login_btn_->updateStyle();
+void WelcomeView::setStatusText(const QString &text) {
+    if (status_text_ != text) {
+        status_text_ = text;
+        emit statusTextChanged();
     }
 }
 
-void WelcomeView::on_login_clicked() {
-    login_btn_->setEnabled(false);
-    login_btn_->setText(tr_q("welcome_btn_logging_in"));
-    status_label_->setText(tr_q("welcome_status_opening"));
-    status_label_->setVisible(true);
-    progress_->clear();
-    progress_->setVisible(false);
+void WelcomeView::setIsLoggingIn(bool val) {
+    if (is_logging_in_ != val) {
+        is_logging_in_ = val;
+        emit isLoggingInChanged();
+    }
+}
+
+void WelcomeView::setIsSuccess(bool val) {
+    if (is_success_ != val) {
+        is_success_ = val;
+        emit isSuccessChanged();
+    }
+}
+
+void WelcomeView::requestLogin() {
+    setIsLoggingIn(true);
+    setStatusText("Abriendo ventana de inicio de sesión...");
+    setIsSuccess(false);
 
     auto *dialog = new WebLoginDialog(this);
     connect(dialog, &WebLoginDialog::login_successful, this, &WelcomeView::handle_login_success);
-    
+
     int result = dialog->exec();
     dialog->deleteLater();
 
-    // Check if authentication succeeded, if not reset state
     if (result != QDialog::Accepted) {
-        login_btn_->setEnabled(true);
-        login_btn_->setText(tr_q("welcome_btn_login"));
-        status_label_->setText("");
-        status_label_->setVisible(false);
+        setIsLoggingIn(false);
+        setStatusText("");
     }
 }
 
 void WelcomeView::handle_login_success(const QString &avatar_url, const QString &user_name) {
     Q_UNUSED(avatar_url);
     Q_UNUSED(user_name);
-    status_label_->setText(tr_q("welcome_status_success"));
-    progress_->setText(tr_q("welcome_status_loading"));
-    status_label_->setVisible(true);
-    progress_->setVisible(true);
     
+    setIsSuccess(true);
+    setStatusText("Inicio de sesión exitoso. Cargando...");
+
     QTimer::singleShot(1000, this, []() {
-        // Trigger navigating to home
         navigate_to("home");
     });
 }

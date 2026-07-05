@@ -1,23 +1,20 @@
 #ifndef DOREMI_SETTINGS_VIEW_H
 #define DOREMI_SETTINGS_VIEW_H
 
-#include <QWidget>
-#include <QVBoxLayout>
-#include <QLabel>
-#include <QComboBox>
-#include <QCheckBox>
-#include <QPushButton>
-#include <QLineEdit>
-#include <QSlider>
+#include <QDialog>
+#include <QQuickWidget>
+#include <QVariantMap>
+#include <QString>
 #include <vector>
-#include "components/animated_toggle.h"
-#include "components/ripple_button.h"
+#include <string>
 
-class SettingsView : public QWidget {
+class SettingsView : public QDialog {
     Q_OBJECT
+    Q_PROPERTY(QVariantMap config READ config NOTIFY configChanged)
+
 public:
     explicit SettingsView(QWidget *parent = nullptr);
-    void update_theme();
+    void update_theme() {}
 
     void set_theme(const std::string &mode);
     void set_accent(const std::string &color);
@@ -58,72 +55,24 @@ public:
     bool discord_rpc_enabled() const;
     bool lastfm_enabled() const;
 
+    QVariantMap config() const { return config_; }
+
+    Q_INVOKABLE void updateSetting(const QString &key, const QVariant &value);
+    Q_INVOKABLE void requestLastfmAuth(const QString &apiKey, const QString &apiSecret, const QString &username, const QString &password);
+    Q_INVOKABLE void requestLastfmDisconnect();
+    Q_INVOKABLE void closeDialog() { this->close(); }
+
 signals:
     void setting_changed(const std::string &key, const std::string &value);
     void lastfm_auth_requested(const std::string &apiKey, const std::string &apiSecret, const std::string &username, const std::string &password);
     void lastfm_disconnect_requested();
+    void configChanged();
 
 private:
-    QComboBox *theme_cmb_;
-    QComboBox *accent_cmb_;
-    QComboBox *font_cmb_;
-    QComboBox *lang_cmb_;
-    QComboBox *region_cmb_;
-    AnimatedToggle *normalize_cb_;
-    AnimatedToggle *crossfade_cb_;
-    AnimatedToggle *equalizer_cb_;
-    QComboBox *eq_preset_cmb_;
-    QSlider *eq_preamp_slider_;
-    QLabel *eq_preamp_value_;
-    std::vector<QSlider *> eq_band_sliders_;
-    std::vector<QLabel *> eq_band_values_;
-    QPushButton *eq_reset_btn_;
-    QComboBox *sleep_timer_cmb_;
-
-    AnimatedToggle *discord_rpc_cb_;
-    AnimatedToggle *lastfm_cb_;
-    AnimatedToggle *mpris_cb_;
-    AnimatedToggle *stop_on_close_cb_;
-
-    QWidget *lastfm_auth_widget_;
-    QLineEdit *lastfm_api_key_input_;
-    QLineEdit *lastfm_api_secret_input_;
-    QLineEdit *lastfm_username_input_;
-    QLineEdit *lastfm_password_input_;
-    RippleButton *lastfm_auth_btn_;
-    // BF3.1: use a state flag rather than comparing button text (text is translated).
-    bool lastfm_connected_ = false;
-    QLabel *lastfm_status_lbl_;
-
-    // Subtitles
-    QComboBox *sub_alignment_cmb_;
-    QComboBox *sub_font_size_cmb_;
-    QComboBox *sub_line_spacing_cmb_;
-    AnimatedToggle *sub_auto_scroll_cb_;
-    AnimatedToggle *sub_glow_cb_;
-
-    // Downloads
-    QLineEdit *download_location_input_;
-    RippleButton *download_location_btn_;
-    QComboBox *download_format_cmb_;
-    QComboBox *download_quality_cmb_;
-
-    // Storage
-    QLabel *db_size_lbl_;
-    QLabel *cache_size_lbl_;
-    QLabel *downloads_size_lbl_;
-    RippleButton *clean_cache_btn_;
-    RippleButton *clear_downloads_btn_;
-    RippleButton *export_backup_btn_;
-    RippleButton *import_backup_btn_;
-
-    QWidget *section_header(const std::string &title);
-    QWidget *combo_row(const std::string &label, QComboBox *cmb);
-    QWidget *check_row(const std::string &label, AnimatedToggle *cb);
-    QWidget *input_row(const std::string &label, QLineEdit *input);
-    QWidget *storage_row(const std::string &label, QLabel *val_lbl, RippleButton *btn);
-
-    std::vector<QPushButton *> tab_btns_;
+    QQuickWidget *quick_widget_ = nullptr;
+    QVariantMap config_;
+    
+    void updateConfig(const QString &key, const QVariant &value);
 };
 
 #endif

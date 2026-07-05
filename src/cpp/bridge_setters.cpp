@@ -46,6 +46,7 @@ void create_main_window(rust::Str, rust::Str, rust::Str, int32_t) {
     if (!QApplication::instance()) {
         QGuiApplication::setHighDpiScaleFactorRoundingPolicy(
             Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
+        QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
         static const char *argv[] = {"doremi", nullptr};
         static int argc = 1;
         new QApplication(argc, const_cast<char **>(argv));

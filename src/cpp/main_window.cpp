@@ -5,6 +5,7 @@
 #include <QWidget>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
+#include <QPushButton>
 #include <QStackedWidget>
 #include <QLabel>
 #include <QCloseEvent>
@@ -63,6 +64,8 @@
 #include "bridge_helpers.h"
 #include "ffi_utils.h"
 #include "doremi/src/bridge.rs.h"
+#include "components/create_playlist_dialog.h"
+#include "icon_provider.h"
 
 
 
@@ -117,7 +120,7 @@ DoremiMainWindow::DoremiMainWindow(QWidget *parent)
     home_view_ = new HomeView(stack_);
     search_view_ = new SearchView(stack_);
     library_view_ = new LibraryView(stack_);
-    settings_view_ = new SettingsView(stack_);
+    settings_view_ = new SettingsView(this);
     trending_view_ = new TrendingView(stack_);
     downloads_view_ = new DownloadsView(stack_);
     stats_view_ = new StatsView(stack_);
@@ -138,7 +141,6 @@ DoremiMainWindow::DoremiMainWindow(QWidget *parent)
     int idx_home = stack_->addWidget(home_view_);
     int idx_search = stack_->addWidget(search_view_);
     int idx_library = stack_->addWidget(library_view_);
-    int idx_settings = stack_->addWidget(settings_view_);
     int idx_trending = stack_->addWidget(trending_view_);
     int idx_downloads = stack_->addWidget(downloads_view_);
     int idx_stats = stack_->addWidget(stats_view_);
@@ -153,7 +155,6 @@ DoremiMainWindow::DoremiMainWindow(QWidget *parent)
     Q_ASSERT(idx_home == static_cast<int>(ViewIndex::Home));
     Q_ASSERT(idx_search == static_cast<int>(ViewIndex::Search));
     Q_ASSERT(idx_library == static_cast<int>(ViewIndex::Library));
-    Q_ASSERT(idx_settings == static_cast<int>(ViewIndex::Settings));
     Q_ASSERT(idx_trending == static_cast<int>(ViewIndex::Trending));
     Q_ASSERT(idx_downloads == static_cast<int>(ViewIndex::Downloads));
     Q_ASSERT(idx_stats == static_cast<int>(ViewIndex::Stats));
@@ -191,6 +192,38 @@ DoremiMainWindow::DoremiMainWindow(QWidget *parent)
     player_bar_ = new PlayerBar(player_shell_);
     player_shell_layout_->addWidget(player_bar_);
     right_layout->addWidget(player_shell_);
+
+    fab_playlist_ = new QPushButton(IconProvider::getIcon("add", DesignTokens::current().text_on_accent, 24), "", right_container);
+    fab_playlist_->setCursor(Qt::PointingHandCursor);
+    fab_playlist_->setFixedSize(56, 56);
+    fab_playlist_->setStyleSheet(QString(
+        "QPushButton {"
+        "  background-color: %1;"
+        "  border-radius: 28px;"
+        "  border: none;"
+        "}"
+        "QPushButton:hover {"
+        "  background-color: %2;"
+        "}"
+        "QPushButton:pressed {"
+        "  background-color: %3;"
+        "}"
+    ).arg(DesignTokens::current().accent.name(),
+          DesignTokens::current().accent_bright.name(),
+          DesignTokens::current().accent_dim.name()));
+    fab_playlist_->setToolTip(tr_q("new_playlist"));
+    fab_playlist_->hide();
+
+    connect(fab_playlist_, &QPushButton::clicked, this, [this]() {
+        CreatePlaylistDialog dlg(this);
+        if (dlg.exec() == QDialog::Accepted) {
+            on_create_playlist(
+                dlg.playlistName().toStdString(),
+                dlg.description().toStdString(),
+                dlg.privacy().toStdString()
+            );
+        }
+    });
 
     root->addLayout(body, 1);
 
@@ -242,6 +275,10 @@ DoremiMainWindow::DoremiMainWindow(QWidget *parent)
     StyleManager::applyTheme();
     update_responsive_layout();
     connect_signals();
+
+    connect(title_bar_, &TitleBar::open_settings_requested, this, [this]() {
+        settings_view_->exec();
+    });
 
     player_timer_ = new QTimer(this);
     player_timer_->setInterval(250);
@@ -382,7 +419,27 @@ void DoremiMainWindow::resizeEvent(QResizeEvent *event) {
     if (theme_transition_) {
         theme_transition_->setGeometry(rect());
     }
+    
+    if (fab_playlist_ && player_shell_) {
+        // Find the right_container (parent of fab_playlist_)
+        QWidget *rc = fab_playlist_->parentWidget();
+        if (rc) {
+            int fab_x = rc->width() - fab_playlist_->width() - 24;
+            int fab_y = rc->height() - player_shell_->height() - fab_playlist_->height() - 24;
+            fab_playlist_->move(fab_x, fab_y);
+        }
+    }
+    
     ToastNotification::repositionActiveToasts();
+}
+
+void DoremiMainWindow::update_fab_visibility() {
+    if (!fab_playlist_) return;
+    if (current_route() == "library" && library_view_ && library_view_->current_tab() == "playlists" && is_online_) {
+        fab_playlist_->show();
+    } else {
+        fab_playlist_->hide();
+    }
 }
 
 void DoremiMainWindow::update_responsive_layout() {

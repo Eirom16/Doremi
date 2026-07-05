@@ -1,433 +1,90 @@
 #include "player_bar.h"
-#include "design_tokens.h"
-#include "icon_provider.h"
-#include "components/artwork_loader.h"
-#include "components/animated_progress.h"
-#include "doremi/src/bridge.rs.h"
-#include <QPainter>
-#include <QPainterPath>
-#include <QDebug>
-#include <QMouseEvent>
-#include <QPointer>
-#include <QStyle>
+#include <QVBoxLayout>
+#include <QQmlContext>
 
-#include "widgets.h"
+PlayerBar::PlayerBar(QWidget *parent) : QWidget(parent) {
+    auto *layout = new QVBoxLayout(this);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(0);
 
-static QPixmap getRoundedPixmap(const QPixmap &src, int radius) {
-    if (src.isNull()) return src;
-    QPixmap dest(src.size());
-    dest.fill(Qt::transparent);
-    QPainter painter(&dest);
-    painter.setRenderHint(QPainter::Antialiasing);
-    QPainterPath path;
-    path.addRoundedRect(src.rect(), radius, radius);
-    painter.setClipPath(path);
-    painter.drawPixmap(0, 0, src);
-    return dest;
+    quick_widget_ = new QQuickWidget(this);
+    quick_widget_->setResizeMode(QQuickWidget::SizeRootObjectToView);
+    quick_widget_->setClearColor(Qt::transparent);
+
+    quick_widget_->rootContext()->setContextProperty("PlayerCtrl", this);
+    quick_widget_->setSource(QUrl("qrc:/qml/PlayerBar.qml"));
+
+    layout->addWidget(quick_widget_);
 }
 
-PlayerBar::PlayerBar(QWidget *parent)
-    : QWidget(parent)
-{
-    const auto &c = DesignTokens::current();
-
-    auto *main_layout = new QHBoxLayout(this);
-    main_layout->setContentsMargins(18, 10, 18, 10);
-    main_layout->setSpacing(16);
-
-    // ── LEFT: Track Info & Artwork ─────────────────────────────────────────
-    left_container_ = new QWidget(this);
-    auto *left_layout = new QHBoxLayout(left_container_);
-    left_layout->setContentsMargins(0, 0, 0, 0);
-    left_layout->setSpacing(12);
-
-    artwork_label_ = new QLabel(left_container_);
-    artwork_label_->setFixedSize(44, 44);
-    artwork_label_->setAlignment(Qt::AlignCenter);
-    artwork_label_->setStyleSheet(QString("background-color: %1; border-radius: %2px;")
-        .arg(c.bg_elevated.name()).arg(DesignTokens::radius().sm));
-    
-    QPixmap default_art = IconProvider::getIcon("music_note", c.text_secondary, 22).pixmap(44, 44);
-    artwork_label_->setPixmap(getRoundedPixmap(default_art, 6));
-    artwork_label_->setAccessibleName(tr_q("artwork_accessible_name"));
-
-    auto *text_container = new QWidget(left_container_);
-    auto *text_layout = new QVBoxLayout(text_container);
-    text_layout->setContentsMargins(0, 0, 0, 0);
-    text_layout->setSpacing(2);
-    
-    title_label_ = new ElidedLabel(tr_q("no_playback"), text_container);
-    title_label_->setFont(DesignTokens::getFont("body_sm"));
-    title_label_->setStyleSheet("font-weight: bold;");
-    title_label_->setAttribute(Qt::WA_TransparentForMouseEvents);
-    
-    artist_label_ = new ElidedLabel(tr_q("no_track_selected"), text_container);
-    artist_label_->setFont(DesignTokens::getFont("body_sm"));
-    artist_label_->setStyleSheet(QString("color: %1;").arg(c.text_muted.name()));
-    artist_label_->setAttribute(Qt::WA_TransparentForMouseEvents);
-    
-    text_layout->addWidget(title_label_);
-    text_layout->addWidget(artist_label_);
-    text_container->setLayout(text_layout);
-    text_container->setAccessibleName(tr_q("current_track"));
-
-    artwork_label_->setAttribute(Qt::WA_TransparentForMouseEvents);
-
-
-    left_layout->addWidget(artwork_label_);
-    left_layout->addWidget(text_container);
-    left_layout->addStretch();
-    left_container_->setLayout(left_layout);
-    left_container_->setMinimumWidth(230);
-    left_container_->setMaximumWidth(340);
-    main_layout->addWidget(left_container_);
-
-    // ── CENTER: Controls & Progress ─────────────────────────────────────────
-    auto *center_container = new QWidget(this);
-    auto *center_layout = new QVBoxLayout(center_container);
-    center_layout->setContentsMargins(0, 0, 0, 0);
-    center_layout->setSpacing(6);
-
-    // Control Buttons Row
-    auto *controls_widget = new QWidget(this);
-    auto *controls_layout = new QHBoxLayout(controls_widget);
-    controls_layout->setContentsMargins(0, 0, 0, 0);
-    controls_layout->setSpacing(16);
-    controls_layout->addStretch();
-    controls_widget->setFixedHeight(40);
-
-    // Shuffle Button
-    shuffle_btn_ = new QPushButton(this);
-    shuffle_btn_->setFixedSize(32, 32);
-    shuffle_btn_->setCheckable(true);
-    shuffle_btn_->setCursor(Qt::PointingHandCursor);
-    shuffle_btn_->setFocusPolicy(Qt::StrongFocus);
-    shuffle_btn_->setIcon(IconProvider::getIcon("shuffle", c.text_secondary, 20));
-    DesignTokens::applyAccessible(
-        shuffle_btn_,
-        tr_q("shuffle"),
-        tr_q("shuffle_accessible_desc"),
-        tr_q("shuffle"));
-    shuffle_btn_->setProperty("buttonRole", "icon");
-
-    // Previous Button
-    prev_btn_ = new QPushButton(this);
-    prev_btn_->setFixedSize(32, 32);
-    prev_btn_->setCursor(Qt::PointingHandCursor);
-    prev_btn_->setFocusPolicy(Qt::StrongFocus);
-    prev_btn_->setIcon(IconProvider::getIcon("skip_previous", c.text_primary, 22));
-    DesignTokens::applyAccessible(
-        prev_btn_,
-        tr_q("previous_track"),
-        tr_q("previous_track_desc"),
-        tr_q("previous_accessible_name"));
-    prev_btn_->setProperty("buttonRole", "icon");
-
-    // Play/Pause Button (Solid Rounded Circle)
-    play_btn_ = new QPushButton(this);
-    play_btn_->setFixedSize(40, 40);
-    play_btn_->setCursor(Qt::PointingHandCursor);
-    play_btn_->setFocusPolicy(Qt::StrongFocus);
-    play_btn_->setIcon(IconProvider::getIcon("play_arrow", c.text_on_accent, 24));
-    DesignTokens::applyAccessible(
-        play_btn_,
-        tr_q("play"),
-        tr_q("play_accessible_desc"),
-        tr_q("play_accessible_name"));
-    play_btn_->setProperty("buttonRole", "primary");
-
-    // Next Button
-    next_btn_ = new QPushButton(this);
-    next_btn_->setFixedSize(32, 32);
-    next_btn_->setCursor(Qt::PointingHandCursor);
-    next_btn_->setFocusPolicy(Qt::StrongFocus);
-    next_btn_->setIcon(IconProvider::getIcon("skip_next", c.text_primary, 22));
-    DesignTokens::applyAccessible(
-        next_btn_,
-        tr_q("next_track"),
-        tr_q("next_track_desc"),
-        tr_q("next_accessible_name"));
-    next_btn_->setProperty("buttonRole", "icon");
-
-    // Repeat Button
-    repeat_btn_ = new QPushButton(this);
-    repeat_btn_->setFixedSize(32, 32);
-    repeat_btn_->setCursor(Qt::PointingHandCursor);
-    repeat_btn_->setFocusPolicy(Qt::StrongFocus);
-    repeat_btn_->setIcon(IconProvider::getIcon("repeat", c.text_secondary, 20));
-    DesignTokens::applyAccessible(
-        repeat_btn_,
-        tr_q("repeat_disabled_desc"),
-        tr_q("repeat_mode_desc"),
-        tr_q("repeat_disabled_tooltip"));
-    repeat_btn_->setProperty("buttonRole", "icon");
-
-    controls_layout->addWidget(shuffle_btn_);
-    controls_layout->addWidget(prev_btn_);
-    controls_layout->addWidget(play_btn_);
-    controls_layout->addWidget(next_btn_);
-    controls_layout->addWidget(repeat_btn_);
-    controls_layout->addStretch();
-    controls_widget->setLayout(controls_layout);
-    center_layout->addWidget(controls_widget);
-
-    // Progress Bar Row
-    auto *progress_widget = new QWidget(this);
-    auto *progress_layout = new QHBoxLayout(progress_widget);
-    progress_layout->setContentsMargins(0, 2, 0, 0);
-    progress_layout->setSpacing(8);
-    progress_widget->setFixedHeight(22);
-
-    progress_ = new AnimatedProgress(Qt::Horizontal, this);
-    progress_->setRange(0, 0);
-    progress_->setCursor(Qt::PointingHandCursor);
-    progress_->setFocusPolicy(Qt::StrongFocus);
-    DesignTokens::applyAccessible(
-        progress_,
-        tr_q("playback_progress"),
-        tr_q("playback_progress_desc"),
-        tr_q("    playback_progress_keys"));
-    progress_->setProperty("sliderRole", "prominent");
-
-    time_label_ = new QLabel("0:00 / 0:00", this);
-    time_label_->setFont(DesignTokens::getFont("caption_sm"));
-    time_label_->setProperty("textRole", "muted");
-
-    progress_layout->addWidget(progress_, 1);
-    progress_layout->addWidget(time_label_);
-    progress_widget->setLayout(progress_layout);
-    center_layout->addWidget(progress_widget);
-
-    center_container->setLayout(center_layout);
-    main_layout->addWidget(center_container, 1);
-
-    // ── RIGHT: Volume Controls ──────────────────────────────────────────────
-    right_container_ = new QWidget(this);
-    auto *right_layout = new QHBoxLayout(right_container_);
-    right_layout->setContentsMargins(0, 0, 0, 0);
-    right_layout->setSpacing(8);
-    right_layout->addStretch();
-
-    QLabel *volume_icon = IconProvider::createIconLabel("volume_up", 18, c.text_secondary, true, right_container_);
-    
-    volume_slider_ = new QSlider(Qt::Horizontal, right_container_);
-    volume_slider_->setRange(0, 100);
-    volume_slider_->setValue(75);
-    volume_slider_->setFixedWidth(80);
-    volume_slider_->setCursor(Qt::PointingHandCursor);
-    volume_slider_->setFocusPolicy(Qt::StrongFocus);
-    DesignTokens::applyAccessible(
-        volume_slider_,
-        tr_q("volume"),
-        tr_q("volume_accessible_desc"),
-        tr_q("volume_accessible_keys"));
-    // Volume slider uses default QSlider styling from base.qss
- 
-     right_layout->addWidget(volume_icon);
-    right_layout->addWidget(volume_slider_);
-    right_container_->setLayout(right_layout);
-    right_container_->setFixedWidth(150);
-    main_layout->addWidget(right_container_);
-
-    setLayout(main_layout);
-    setFixedHeight(88);
-
-    // Set panel background
-    setAttribute(Qt::WA_StyledBackground, true);
-    // PlayerBar background handled by base.qss
-
-    QWidget::setTabOrder({shuffle_btn_, prev_btn_, play_btn_, next_btn_, repeat_btn_, progress_, volume_slider_});
-
-    // Connections
-    connect(play_btn_, &QPushButton::clicked, this, &PlayerBar::play_pause_clicked);
-    connect(next_btn_, &QPushButton::clicked, this, &PlayerBar::next_clicked);
-    connect(prev_btn_, &QPushButton::clicked, this, &PlayerBar::previous_clicked);
-    connect(progress_, &AnimatedProgress::sliderReleased, this, [this]() {
-        emit seek_requested(progress_->value());
-    });
-    connect(volume_slider_, &QSlider::valueChanged, this, &PlayerBar::volume_set);
-    
-    connect(shuffle_btn_, &QPushButton::toggled, this, [this](bool on) {
-        const auto &c = DesignTokens::current();
-        shuffle_on_ = on;
-        shuffle_btn_->setIcon(IconProvider::getIcon("shuffle", on ? c.accent : c.text_secondary, 20));
-        DesignTokens::applyAccessible(
-            shuffle_btn_,
-            on ? tr_q("shuffle_enabled") : tr_q("shuffle_disabled"),
-            tr_q("shuffle_accessible_desc"),
-            on ? tr_q("shuffle_active_status") : tr_q("shuffle_inactive_status"));
-        emit shuffle_toggled(on);
-    });
-
-    connect(repeat_btn_, &QPushButton::clicked, this, [this]() {
-        repeat_mode_ = (repeat_mode_ + 1) % 3;
-        set_repeat_mode(repeat_mode_);
-        emit repeat_cycled();
-    });
-    
-    update_theme();
-}
-
-void PlayerBar::set_track_info(const std::string &title, const std::string &artist,
-                                const std::string &thumbnail) {
-    const auto &c = DesignTokens::current();
-    
-    QString title_str = QString::fromStdString(title);
-    QString artist_str = QString::fromStdString(artist);
-    
-    title_label_->setText(title_str);
-    artist_label_->setText(artist_str);
-    title_label_->setAccessibleName(tr_q("current_track_accessible").arg(title_str));
-    artist_label_->setAccessibleDescription(tr_q("artist_accessible").arg(artist_str));
-
-    // Load artwork
-    const int artwork_size = artwork_label_->width() > 0 ? artwork_label_->width() : 44;
-    if (!thumbnail.empty()) {
-        QPointer<QLabel> label_ptr(artwork_label_);
-        ArtworkLoader::load(QString::fromStdString(thumbnail), QSize(artwork_size, artwork_size), [label_ptr](const QPixmap &pixmap) {
-            if (label_ptr) {
-                label_ptr->setPixmap(getRoundedPixmap(pixmap, 6));
-            }
-        });
-    } else {
-        QPixmap default_art = IconProvider::getIcon("music_note", c.text_secondary, 22).pixmap(artwork_size, artwork_size);
-        artwork_label_->setPixmap(getRoundedPixmap(default_art, 6));
+void PlayerBar::resizeEvent(QResizeEvent *event) {
+    QWidget::resizeEvent(event);
+    if (quick_widget_) {
+        quick_widget_->resize(size());
     }
 }
 
-void PlayerBar::set_progress(int32_t pos_ms, int32_t dur_ms) {
-    if (progress_->isSliderDown()) {
-        return;
+void PlayerBar::set_track_info(const std::string &title, const std::string &artist, const std::string &thumbnail) {
+    QString qTitle = QString::fromStdString(title);
+    QString qArtist = QString::fromStdString(artist);
+    QString qThumbnail = QString::fromStdString(thumbnail);
+    
+    if (title_ != qTitle) {
+        title_ = qTitle;
+        emit titleChanged();
     }
-    if (dur_ms > 0) {
-        progress_->blockSignals(true);
-        progress_->setRange(0, dur_ms);
-        progress_->setValue(pos_ms);
-        progress_->blockSignals(false);
-        
-        auto fmt = [](int32_t ms) {
-            int m = ms / 60000;
-            int s = (ms % 60000) / 1000;
-            return QString("%1:%2").arg(m).arg(s, 2, 10, QChar('0'));
-        };
-        time_label_->setText(fmt(pos_ms) + " / " + fmt(dur_ms));
-        progress_->setAccessibleDescription(
-            tr_q("track_position_accessible").arg(fmt(pos_ms), fmt(dur_ms)));
+    if (artist_ != qArtist) {
+        artist_ = qArtist;
+        emit artistChanged();
+    }
+    if (thumbnail_ != qThumbnail) {
+        thumbnail_ = qThumbnail;
+        emit thumbnailChanged();
+    }
+}
+
+void PlayerBar::set_progress(int32_t position_ms, int32_t duration_ms) {
+    if (position_ms_ != position_ms) {
+        position_ms_ = position_ms;
+        emit positionMsChanged();
+    }
+    if (duration_ms_ != duration_ms) {
+        duration_ms_ = duration_ms;
+        emit durationMsChanged();
     }
 }
 
 void PlayerBar::set_playing(bool playing) {
-    const auto &c = DesignTokens::current();
-    play_btn_->setIcon(IconProvider::getIcon(
-        playing ? "pause" : "play_arrow",
-        c.text_on_accent,
-        24
-    ));
-    DesignTokens::applyAccessible(
-        play_btn_,
-        playing ? tr_q("pause") : tr_q("play"),
-        tr_q("play_accessible_desc"),
-        playing ? tr_q("pause_shortcut_tooltip") : tr_q("play_shortcut_tooltip"));
+    if (is_playing_ != playing) {
+        is_playing_ = playing;
+        emit isPlayingChanged();
+    }
 }
 
 void PlayerBar::set_volume_value(int32_t volume) {
-    volume_slider_->blockSignals(true);
-    volume_slider_->setValue(volume);
-    volume_slider_->blockSignals(false);
+    if (volume_value_ != volume) {
+        volume_value_ = volume;
+        emit volumeValueChanged();
+    }
 }
 
 void PlayerBar::set_shuffle(bool on) {
-    const auto &c = DesignTokens::current();
-    shuffle_on_ = on;
-    shuffle_btn_->blockSignals(true);
-    shuffle_btn_->setChecked(on);
-    shuffle_btn_->setIcon(IconProvider::getIcon("shuffle", on ? c.accent : c.text_secondary, 20));
-    DesignTokens::applyAccessible(
-        shuffle_btn_,
-        on ? tr_q("shuffle_enabled") : tr_q("shuffle_disabled"),
-        tr_q("shuffle_accessible_desc"),
-        on ? tr_q("shuffle_active_status") : tr_q("shuffle_inactive_status"));
-    shuffle_btn_->blockSignals(false);
+    if (shuffle_on_ != on) {
+        shuffle_on_ = on;
+        emit shuffleOnChanged();
+    }
 }
 
 void PlayerBar::set_repeat_mode(int mode) {
-    const auto &c = DesignTokens::current();
-    repeat_mode_ = mode;
-    
-    if (mode == 0) {
-        repeat_btn_->setIcon(IconProvider::getIcon("repeat", c.text_secondary, 20));
-        DesignTokens::applyAccessible(
-            repeat_btn_,
-            tr_q("repeat_disabled_desc"),
-            tr_q("repeat_mode_desc"),
-            tr_q("repeat_disabled_tooltip"));
-    } else if (mode == 1) {
-        repeat_btn_->setIcon(IconProvider::getIcon("repeat", c.accent, 20));
-        DesignTokens::applyAccessible(
-            repeat_btn_,
-            tr_q("repeat_all_accessible_name"),
-            tr_q("repeat_all_desc"),
-            tr_q("repeat_all_tooltip"));
-    } else {
-        repeat_btn_->setIcon(IconProvider::getIcon("repeat_one", c.accent, 20));
-        DesignTokens::applyAccessible(
-            repeat_btn_,
-            tr_q("repeat_one_accessible_name"),
-            tr_q("repeat_one_desc"),
-            tr_q("repeat_one_tooltip"));
+    if (repeat_mode_ != mode) {
+        repeat_mode_ = mode;
+        emit repeatModeChanged();
     }
 }
 
 void PlayerBar::set_compact(bool compact) {
-    if (compact_ == compact) {
-        return;
+    if (compact_ != compact) {
+        compact_ = compact;
+        emit isCompactChanged();
     }
-    compact_ = compact;
-
-    setFixedHeight(compact_ ? 70 : 78);
-    if (auto *layout = qobject_cast<QHBoxLayout *>(this->layout())) {
-        layout->setContentsMargins(compact_ ? 14 : 18, compact_ ? 6 : 8, compact_ ? 14 : 18, compact_ ? 6 : 8);
-        layout->setSpacing(compact_ ? 12 : 16);
-    }
-
-    artwork_label_->setFixedSize(compact_ ? 38 : 44, compact_ ? 38 : 44);
-    left_container_->setMinimumWidth(compact_ ? 180 : 230);
-    left_container_->setMaximumWidth(compact_ ? 260 : 340);
-    if (right_container_) {
-        right_container_->setVisible(!compact_);
-    }
-    update_theme();
-}
-
-void PlayerBar::mousePressEvent(QMouseEvent *event) {
-    QWidget::mousePressEvent(event);
-    if (event->button() == Qt::LeftButton && event->pos().x() < 280) {
-        emit left_section_clicked();
-    }
-}
-
-void PlayerBar::update_theme() {
-    const auto &c = DesignTokens::current();
-    
-    shuffle_btn_->setIcon(IconProvider::getIcon("shuffle", shuffle_on_ ? c.accent : c.text_secondary, 20));
-    prev_btn_->setIcon(IconProvider::getIcon("skip_previous", c.text_primary, 22));
-    next_btn_->setIcon(IconProvider::getIcon("skip_next", c.text_primary, 22));
-    
-    QColor rep_color = repeat_mode_ > 0 ? c.accent : c.text_secondary;
-    repeat_btn_->setIcon(IconProvider::getIcon(repeat_mode_ == 2 ? "repeat_one" : "repeat", rep_color, 20));
-    
-    if (artwork_label_) {
-        artwork_label_->setStyleSheet(QString("background-color: %1; border-radius: %2px;")
-            .arg(c.bg_elevated.name()).arg(DesignTokens::radius().sm));
-    }
-    
-    QString icon_style = DesignTokens::iconButtonStyle();
-    shuffle_btn_->setStyleSheet(icon_style);
-    prev_btn_->setStyleSheet(icon_style);
-    play_btn_->setStyleSheet(icon_style);
-    next_btn_->setStyleSheet(icon_style);
-    repeat_btn_->setStyleSheet(icon_style);
-    
-    style()->unpolish(this);
-    style()->polish(this);
 }

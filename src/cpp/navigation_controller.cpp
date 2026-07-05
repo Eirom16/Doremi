@@ -1,7 +1,11 @@
 #include "navigation_controller.h"
 #include "main_window.h"
+#include "title_bar.h"
+#include "home_view.h"
 #include "nav_sidebar.h"
 #include "library_view.h"
+#include "search_view.h"
+#include "settings_view.h"
 #include "components/fade_stack.h"
 #include <QScrollBar>
 #include <QTimer>
@@ -39,6 +43,9 @@ void NavigationController::navigate_to_internal(const std::string &route, bool r
     if (window_->nav_sidebar()) {
         window_->nav_sidebar()->set_active_route(route);
     }
+    if (window_->title_bar()) {
+        window_->title_bar()->set_context(route);
+    }
 
     if (window_->stack_) {
         if (route == "home") {
@@ -53,7 +60,8 @@ void NavigationController::navigate_to_internal(const std::string &route, bool r
                 emit window_->library_view()->tab_changed(tab);
             }
         } else if (route == "settings") {
-            window_->stack_->setCurrentIndex(static_cast<int>(ViewIndex::Settings));
+            window_->settings_view_->exec();
+            return;
         } else if (route == "trending") {
             window_->stack_->setCurrentIndex(static_cast<int>(ViewIndex::Trending));
         } else if (route == "downloads") {
@@ -79,6 +87,8 @@ void NavigationController::navigate_to_internal(const std::string &route, bool r
         }
     }
     
+    window_->update_fab_visibility();
+
     current_route_ = route;
     if (window_->player_shell_) {
         window_->player_shell_->setVisible(route != "welcome");

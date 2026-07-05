@@ -299,7 +299,51 @@ mod tests {
     #[ignore = "requires valid YouTube Music credentials and internet access"]
     async fn test_real_library_albums() {
         let _ = env_logger::builder().is_test(true).try_init();
-        let results = crate::api::endpoints::library_albums().await;
-        println!("Real library albums result: {:?}", results);
+        let body = serde_json::json!({
+            "browseId": "FEmusic_liked_albums",
+            "context": {
+                "client": {
+                    "clientName": "WEB_REMIX",
+                    "clientVersion": "1.20230522.01.00",
+                    "hl": "es"
+                }
+            }
+        });
+        let results = crate::api::transport::post("browse", body).await;
+        if let Ok(json) = results {
+            println!("Real library albums RAW JSON: {}", serde_json::to_string_pretty(&json).unwrap_or_default());
+        }
+        let parsed = crate::api::endpoints::library_albums().await;
+        println!("Real library albums parsed: {:?}", parsed);
+    }
+
+    #[tokio::test]
+    #[ignore = "requires valid YouTube Music credentials and internet access"]
+    async fn test_real_mix_detail() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        let client = ApiClient::new();
+        let home = client.home_sections().await.unwrap();
+        
+        let mut mix_id = None;
+        for section in &home {
+            for item in &section.items {
+                if item.playlist_id.is_some() && item.title.to_lowercase().contains("mix") {
+                    mix_id = item.playlist_id.clone();
+                    println!("Found mix: {} with id {:?}", item.title, mix_id);
+                    break;
+                }
+            }
+            if mix_id.is_some() { break; }
+        }
+        
+        if let Some(id) = mix_id {
+            let detail = crate::api::endpoints::playlist_detail(&id).await;
+            println!("Mix detail result: {:?}", detail.is_ok());
+            if let Err(e) = detail {
+                println!("Error was: {}", e);
+            }
+        } else {
+            println!("No mix found in home feed");
+        }
     }
 }

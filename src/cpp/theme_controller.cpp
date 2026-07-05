@@ -21,8 +21,6 @@
 #include "welcome_view.h"
 #include "now_playing_view.h"
 #include "components/offline_banner.h"
-#include "components/track_row.h"
-#include "components/stat_card.h"
 #include <QPointer>
 #include <QStyle>
 

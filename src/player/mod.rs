@@ -338,6 +338,15 @@ impl PlayerService {
                                 if let Some(current_track) = q.current_mut() {
                                     if current_track.id == id {
                                         current_track.stream_url = resolved_url.clone();
+                                        // Extract duration from the YouTube stream URL
+                                        // if we don't already have it from metadata
+                                        if current_track.duration_ms == 0 {
+                                            let url_dur = crate::player::resolver::StreamResolver::parse_duration_ms(&resolved_url);
+                                            if url_dur > 0 {
+                                                log::info!("Extracted duration {}ms from stream URL for {}", url_dur, id);
+                                                current_track.duration_ms = url_dur;
+                                            }
+                                        }
                                         true
                                     } else {
                                         false
@@ -381,6 +390,13 @@ impl PlayerService {
     }
 
     pub fn toggle_play_pause(&self) {
+        let state = self.audio.state();
+        if state == PlayState::Stopped || state == PlayState::Loading {
+            if let Some(track) = self.current_track() {
+                self.play_track_info(track);
+                return;
+            }
+        }
         self.audio.toggle_play_pause();
     }
 

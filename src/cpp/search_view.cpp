@@ -1,549 +1,231 @@
-#include <QFrame>
 #include "search_view.h"
-#include "design_tokens.h"
-#include "icon_provider.h"
-#include "components/loading_state.h"
-#include "components/empty_state.h"
-#include <QStyle>
-
-
-static void clear_layout(QVBoxLayout *lay);
-
-void SearchView::update_theme() {
-    style()->unpolish(this);
-    style()->polish(this);
-    for (auto *btn : filter_btns_) {
-        btn->style()->unpolish(btn);
-        btn->style()->polish(btn);
-    }
-}
+#include <QQmlContext>
+#include <QVariantMap>
+#include <QVBoxLayout>
 
 SearchView::SearchView(QWidget *parent)
     : QWidget(parent)
 {
-    auto *root = new QVBoxLayout(this);
-    root->setContentsMargins(DesignTokens::pagePadding());
-    root->setSpacing(16);
+    auto *layout = new QVBoxLayout(this);
+    layout->setContentsMargins(0, 0, 0, 0);
 
-    header_ = new QLabel(tr_q("results"), this);
-    header_->setFont(DesignTokens::getFont("heading_lg"));
-    header_->setProperty("textRole", "heading");
-    root->addWidget(header_);
+    quick_widget_ = new QQuickWidget(this);
+    quick_widget_->setResizeMode(QQuickWidget::SizeRootObjectToView);
+    quick_widget_->setAttribute(Qt::WA_TranslucentBackground);
+    quick_widget_->setClearColor(Qt::transparent);
 
-    filters_ = new QHBoxLayout();
-    filters_->setSpacing(8);
-    const std::vector<std::pair<const char *, const char *>> filterDefinitions = {
-        {"all", "all"}, {"songs", "songs"}, {"videos", "videos"},
-        {"albums", "albums"}, {"artists", "artists"}, {"playlists", "playlists"},
-        {"shows", "podcasts"}
-    };
-    for (const auto &[key, filterValue] : filterDefinitions) {
-        QString name = tr_q(key);
-        auto *btn = new QPushButton(name, this);
-        btn->setCheckable(true);
-        btn->setFixedHeight(32);
-        btn->setCursor(Qt::PointingHandCursor);
-        btn->setFont(DesignTokens::getFont("body", 12));
-        btn->setFocusPolicy(Qt::StrongFocus);
-        btn->setAccessibleName(tr_q("filter_by").arg(name));
-        btn->setObjectName("filterBtn");
-        filters_->addWidget(btn);
-        filter_btns_.push_back(btn);
-        btn->setProperty("filterValue", filterValue);
-        connect(btn, &QPushButton::clicked, this, [this, btn, filterValue]() {
-            for (auto *other : filter_btns_) {
-                other->setChecked(other == btn);
-            }
-            emit search_requested(current_query_, filterValue);
-        });
-    }
-    filter_btns_.front()->setChecked(true);
-    filters_->addStretch(1);
-    root->addLayout(filters_);
+    quick_widget_->rootContext()->setContextProperty("SearchCtrl", this);
+    quick_widget_->setSource(QUrl("qrc:/qml/SearchView.qml"));
 
-    results_ = new QVBoxLayout();
-    results_->setSpacing(6);
-    results_->setContentsMargins(0, 4, 0, 4);
-
-    auto *placeholder = new QLabel(tr_q("type_to_search"), this);
-    placeholder->setFont(DesignTokens::getFont("body", 14));
-    placeholder->setProperty("textRole", "muted");
-    placeholder->setObjectName("stateMessage");
-    placeholder->setAlignment(Qt::AlignCenter);
-    results_->addWidget(placeholder);
-    results_->addStretch(1);
-
-    root->addLayout(results_, 1);
-    setProperty("bgRole", "transparent");
+    layout->addWidget(quick_widget_);
 }
 
 void SearchView::set_query(const std::string &query, const std::string &filter) {
-    current_query_ = query;
-    header_->setText(tr_q("search_results_for").arg(QString::fromStdString(query)));
-    for (auto *btn : filter_btns_) {
-        btn->setChecked(btn->property("filterValue").toString().toStdString() == filter);
-    }
-    clear_layout(results_);
-    showing_recent_ = false;
-    auto *loading = new LoadingState(LoadingState::ListRows, this);
-    loading->setRowCount(6);
-    loading->setRowHeight(56);
-    results_->addWidget(loading);
-}
-
-static void clear_layout(QVBoxLayout *lay) {
-    while (lay->count() > 0) {
-        auto *item = lay->takeAt(0);
-        if (item->widget()) {
-            item->widget()->deleteLater();
-        }
-        delete item;
-    }
-}
-
-void SearchView::show_results(const TopResult &top_result, bool has_top_result,
-                              const std::vector<Track> &songs,
-                              const std::vector<Track> &videos,
-                              const std::vector<Artist> &artists,
-                              const std::vector<Album> &albums,
-                              const std::vector<Playlist> &playlists,
-                              const std::vector<Show> &shows,
-                              const std::vector<Episode> &episodes) {
-    showing_recent_ = false;
-    clear_layout(results_);
-
-    bool has_any = has_top_result || !songs.empty() || !videos.empty() || !artists.empty() || !albums.empty() || !playlists.empty() || !shows.empty() || !episodes.empty();
-    if (!has_any) {
-        auto *empty = new EmptyState(this);
-        empty->setIcon("search");
-        empty->setTitle(tr_q("no_results"));
-        empty->setDescription(tr_q("search_no_results_desc"));
-        empty->applyPanelStyle("empty");
-        results_->addWidget(empty);
-        results_->addStretch(1);
-        return;
-    }
-
-    // Top result: surface the single most relevant hit prominently.
-    {
-        auto *sec_header = new QLabel(tr_q("top_result"), this);
-        sec_header->setFont(DesignTokens::getFont("micro", 11));
-        sec_header->setProperty("textRole", "accent");
-        sec_header->setObjectName("sectionHeader");
-
-        ClickableItem *top = nullptr;
-        if (has_top_result) {
-            // ... (same code)
-            std::string label = std::string(doremi_tr("top_result"));
-            if (top_result.item_type == "artist") label = std::string(doremi_tr("artist_singular"));
-            else if (top_result.item_type == "album") label = std::string(doremi_tr("album_singular"));
-            else if (top_result.item_type == "song") label = std::string(doremi_tr("song_singular"));
-            else if (top_result.item_type == "video") label = std::string(doremi_tr("video_singular"));
-            else if (top_result.item_type == "playlist") label = std::string(doremi_tr("playlist_singular"));
-            else if (top_result.item_type == "show") label = std::string(doremi_tr("podcast_singular"));
-
-            top = new ClickableItem(
-                static_cast<std::string>(top_result.title),
-                QString("%1 • %2").arg(QString::fromStdString(label)).arg(QString::fromStdString(static_cast<std::string>(top_result.subtitle))).toStdString(),
-                this
-            );
-            top->set_item_id(static_cast<std::string>(top_result.id));
-            top->set_item_type(static_cast<std::string>(top_result.item_type));
-            top->set_thumbnail(static_cast<std::string>(top_result.thumbnail));
-
-            if (top_result.item_type == "artist") {
-                connect(top, &ClickableItem::clicked, this, [this, id = static_cast<std::string>(top_result.id)]() {
-                    emit artist_requested(id);
-                });
-                connect(top, &ClickableItem::context_action, this, [this, id = static_cast<std::string>(top_result.id), title = static_cast<std::string>(top_result.title), thumb = static_cast<std::string>(top_result.thumbnail)](const std::string &action, const std::string &) {
-                    if (action == "add_favorite") {
-                        Artist a;
-                        a.id = id;
-                        a.name = title;
-                        a.thumbnail = thumb;
-                        on_add_favorite_artist(a);
-                    } else if (action == "remove_favorite") {
-                        on_remove_favorite_artist(id);
-                    }
-                });
-            } else if (top_result.item_type == "album") {
-                connect(top, &ClickableItem::clicked, this, [this, id = static_cast<std::string>(top_result.id)]() {
-                    emit album_requested(id);
-                });
-                connect(top, &ClickableItem::context_action, this, [this, id = static_cast<std::string>(top_result.id), title = static_cast<std::string>(top_result.title), artist = static_cast<std::string>(top_result.subtitle), thumb = static_cast<std::string>(top_result.thumbnail)](const std::string &action, const std::string &) {
-                    if (action == "add_favorite") {
-                        Album al;
-                        al.id = id;
-                        al.title = title;
-                        al.artist = artist;
-                        al.thumbnail = thumb;
-                        on_add_favorite_album(al);
-                    } else if (action == "remove_favorite") {
-                        on_remove_favorite_album(id);
-                    }
-                });
-            } else if (top_result.item_type == "playlist") {
-                connect(top, &ClickableItem::clicked, this, [this, id = static_cast<std::string>(top_result.id)]() {
-                    emit playlist_requested(id);
-                });
-            } else if (top_result.item_type == "show") {
-                connect(top, &ClickableItem::clicked, this, [this, id = static_cast<std::string>(top_result.id)]() {
-                    emit show_requested(id);
-                });
-            } else if (top_result.item_type == "song" || top_result.item_type == "video") {
-                Track t;
-                t.id = top_result.id;
-                t.title = top_result.title;
-                t.artist = top_result.subtitle;
-                t.thumbnail = top_result.thumbnail;
-                t.duration_ms = 0;
-                
-                connect(top, &ClickableItem::clicked, this, [this, t]() { emit play_requested(t); });
-                connect(top, &ClickableItem::context_action, this, [this, t](const std::string &action, const std::string &) {
-                    if (action == "add_favorite") emit add_favorite_requested(t);
-                    else if (action == "remove_favorite") on_remove_favorite(static_cast<std::string>(t.id));
-                    else if (action == "download") emit download_requested(t);
-                    else if (action == "queue_next") emit add_to_queue_next_requested(t);
-                    else if (action == "queue_end") emit add_to_queue_end_requested(t);
-                });
-            }
-        } else {
-            if (!artists.empty()) {
-                const auto &a = artists.front();
-                top = new ClickableItem(static_cast<std::string>(a.name), "Artista", this);
-                top->set_item_id(static_cast<std::string>(a.id));
-                top->set_item_type("artist");
-                top->set_thumbnail(static_cast<std::string>(a.thumbnail));
-                connect(top, &ClickableItem::clicked, this, [this, a]() {
-                    emit artist_requested(static_cast<std::string>(a.id));
-                });
-                connect(top, &ClickableItem::context_action, this, [this, a](const std::string &action, const std::string &) {
-                    if (action == "add_favorite") {
-                        on_add_favorite_artist(a);
-                    } else if (action == "remove_favorite") {
-                        on_remove_favorite_artist(static_cast<std::string>(a.id));
-                    }
-                });
-            } else if (!albums.empty()) {
-                const auto &al = albums.front();
-                top = new ClickableItem(static_cast<std::string>(al.title), static_cast<std::string>(al.artist), this);
-                top->set_item_id(static_cast<std::string>(al.id));
-                top->set_item_type("album");
-                top->set_thumbnail(static_cast<std::string>(al.thumbnail));
-                connect(top, &ClickableItem::clicked, this, [this, al]() {
-                    emit album_requested(static_cast<std::string>(al.id));
-                });
-                connect(top, &ClickableItem::context_action, this, [this, al](const std::string &action, const std::string &) {
-                    if (action == "add_favorite") {
-                        on_add_favorite_album(al);
-                    } else if (action == "remove_favorite") {
-                        on_remove_favorite_album(static_cast<std::string>(al.id));
-                    }
-                });
-            } else if (!songs.empty()) {
-                const auto &t = songs.front();
-                top = new ClickableItem(static_cast<std::string>(t.title), static_cast<std::string>(t.artist), this);
-                top->set_item_id(static_cast<std::string>(t.id));
-                top->set_item_type("song");
-                top->set_thumbnail(static_cast<std::string>(t.thumbnail));
-                connect(top, &ClickableItem::clicked, this, [this, t]() { emit play_requested(t); });
-                connect(top, &ClickableItem::context_action, this, [this, t](const std::string &action, const std::string &) {
-                    if (action == "add_favorite") emit add_favorite_requested(t);
-                    else if (action == "remove_favorite") on_remove_favorite(static_cast<std::string>(t.id));
-                    else if (action == "download") emit download_requested(t);
-                    else if (action == "queue_next") emit add_to_queue_next_requested(t);
-                    else if (action == "queue_end") emit add_to_queue_end_requested(t);
-                });
-            }
-        }
-        if (top) {
-            results_->addWidget(sec_header);
-            results_->addWidget(top);
-        } else {
-            sec_header->deleteLater();
-        }
-    }
-
-    if (!songs.empty()) {
-        auto *sec_header = new QLabel(tr_q("songs"), this);
-        sec_header->setFont(DesignTokens::getFont("micro", 11));
-        sec_header->setProperty("textRole", "accent");
-        sec_header->setObjectName("sectionHeader");
-        results_->addWidget(sec_header);
-        for (const auto &track : songs) {
-            auto *ci = new ClickableItem(static_cast<std::string>(track.title), static_cast<std::string>(track.artist), this);
-            ci->set_item_id(static_cast<std::string>(track.id));
-            ci->set_item_type("song");
-            ci->set_thumbnail(static_cast<std::string>(track.thumbnail));
-            results_->addWidget(ci);
-            
-            connect(ci, &ClickableItem::clicked, this, [this, track]() {
-                emit play_requested(track);
-            });
-            connect(ci, &ClickableItem::context_action, this, [this, track](const std::string &action, const std::string &) {
-                if (action == "add_favorite") {
-                    emit add_favorite_requested(track);
-                } else if (action == "remove_favorite") {
-                    on_remove_favorite(static_cast<std::string>(track.id));
-                } else if (action == "download") {
-                    emit download_requested(track);
-                } else if (action == "queue_next") {
-                    emit add_to_queue_next_requested(track);
-                } else if (action == "queue_end") {
-                    emit add_to_queue_end_requested(track);
-                }
-            });
-        }
-    }
-
-    if (!videos.empty()) {
-        auto *sec_header = new QLabel(tr_q("videos"), this);
-        sec_header->setFont(DesignTokens::getFont("micro", 11));
-        sec_header->setProperty("textRole", "accent");
-        sec_header->setObjectName("sectionHeader");
-        results_->addWidget(sec_header);
-        for (const auto &track : videos) {
-            auto *item = new ClickableItem(static_cast<std::string>(track.title),
-                                           static_cast<std::string>(track.artist), this);
-            item->set_item_id(static_cast<std::string>(track.id));
-            item->set_item_type("video");
-            item->set_thumbnail(static_cast<std::string>(track.thumbnail));
-            results_->addWidget(item);
-            connect(item, &ClickableItem::clicked, this, [this, track]() {
-                emit play_requested(track);
-            });
-            connect(item, &ClickableItem::context_action, this,
-                    [this, track](const std::string &action, const std::string &) {
-                if (action == "add_favorite") emit add_favorite_requested(track);
-                else if (action == "remove_favorite") on_remove_favorite(static_cast<std::string>(track.id));
-                else if (action == "download") emit download_requested(track);
-                else if (action == "queue_next") emit add_to_queue_next_requested(track);
-                else if (action == "queue_end") emit add_to_queue_end_requested(track);
-            });
-        }
-    }
-
-    if (!artists.empty()) {
-        auto *sec_header = new QLabel(tr_q("artists"), this);
-        sec_header->setFont(DesignTokens::getFont("micro", 11));
-        sec_header->setProperty("textRole", "accent");
-        sec_header->setObjectName("sectionHeader");
-        results_->addWidget(sec_header);
-        for (const auto &artist : artists) {
-            auto *ci = new ClickableItem(static_cast<std::string>(artist.name), tr_q("artist_singular").toStdString(), this);
-            ci->set_item_id(static_cast<std::string>(artist.id));
-            ci->set_item_type("artist");
-            ci->set_thumbnail(static_cast<std::string>(artist.thumbnail));
-            results_->addWidget(ci);
-            connect(ci, &ClickableItem::clicked, this, [this, artist]() {
-                emit artist_requested(static_cast<std::string>(artist.id));
-            });
-            connect(ci, &ClickableItem::context_action, this, [this, artist](const std::string &action, const std::string &) {
-                if (action == "add_favorite") {
-                    on_add_favorite_artist(artist);
-                } else if (action == "remove_favorite") {
-                    on_remove_favorite_artist(static_cast<std::string>(artist.id));
-                }
-            });
-        }
-    }
-
-    if (!albums.empty()) {
-        auto *sec_header = new QLabel(tr_q("albums"), this);
-        sec_header->setFont(DesignTokens::getFont("micro", 11));
-        sec_header->setProperty("textRole", "accent");
-        sec_header->setObjectName("sectionHeader");
-        results_->addWidget(sec_header);
-        for (const auto &album : albums) {
-            auto *ci = new ClickableItem(static_cast<std::string>(album.title), static_cast<std::string>(album.artist), this);
-            ci->set_item_id(static_cast<std::string>(album.id));
-            ci->set_item_type("album");
-            ci->set_thumbnail(static_cast<std::string>(album.thumbnail));
-            results_->addWidget(ci);
-            connect(ci, &ClickableItem::clicked, this, [this, album]() {
-                emit album_requested(static_cast<std::string>(album.id));
-            });
-            connect(ci, &ClickableItem::context_action, this, [this, album](const std::string &action, const std::string &) {
-                if (action == "add_favorite") {
-                    on_add_favorite_album(album);
-                } else if (action == "remove_favorite") {
-                    on_remove_favorite_album(static_cast<std::string>(album.id));
-                }
-            });
-        }
-    }
-
-    if (!playlists.empty()) {
-        auto *sec_header = new QLabel(tr_q("playlists"), this);
-        sec_header->setFont(DesignTokens::getFont("micro", 11));
-        sec_header->setProperty("textRole", "accent");
-        sec_header->setObjectName("sectionHeader");
-        results_->addWidget(sec_header);
-        for (const auto &playlist : playlists) {
-            auto *ci = new ClickableItem(static_cast<std::string>(playlist.name),
-                                         static_cast<std::string>(playlist.description), this);
-            ci->set_item_id(static_cast<std::string>(playlist.id));
-            ci->set_item_type("playlist");
-            ci->set_thumbnail(static_cast<std::string>(playlist.thumbnail));
-            results_->addWidget(ci);
-            connect(ci, &ClickableItem::clicked, this, [this, playlist]() {
-                emit playlist_requested(static_cast<std::string>(playlist.id));
-            });
-        }
-    }
-
-    if (!shows.empty()) {
-        auto *sec_header = new QLabel(tr_q("shows"), this);
-        sec_header->setFont(DesignTokens::getFont("micro", 11));
-        sec_header->setProperty("textRole", "accent");
-        sec_header->setObjectName("sectionHeader");
-        results_->addWidget(sec_header);
-        for (const auto &show : shows) {
-            auto *ci = new ClickableItem(
-                static_cast<std::string>(show.title),
-                static_cast<std::string>(show.author),
-                this);
-            ci->set_item_id(static_cast<std::string>(show.id));
-            ci->set_item_type("show");
-            ci->set_thumbnail(static_cast<std::string>(show.thumbnail));
-            results_->addWidget(ci);
-            connect(ci, &ClickableItem::clicked, this, [this, show]() {
-                emit show_requested(static_cast<std::string>(show.id));
-            });
-        }
-    }
-
-    if (!episodes.empty()) {
-        auto *sec_header = new QLabel("Episodios", this);
-        sec_header->setFont(DesignTokens::getFont("micro", 11));
-        sec_header->setProperty("textRole", "accent");
-        sec_header->setObjectName("sectionHeader");
-        results_->addWidget(sec_header);
-        for (const auto &ep : episodes) {
-            auto *ci = new ClickableItem(
-                static_cast<std::string>(ep.title),
-                static_cast<std::string>(ep.show),
-                this);
-            ci->set_item_id(static_cast<std::string>(ep.id));
-            ci->set_item_type("episode");
-            ci->set_thumbnail(static_cast<std::string>(ep.thumbnail));
-            results_->addWidget(ci);
-            connect(ci, &ClickableItem::clicked, this, [this, ep]() {
-                emit show_requested(static_cast<std::string>(ep.show_id));
-            });
-        }
-    }
-
-    results_->addStretch(1);
-}
-
-void SearchView::show_recent_searches(const std::vector<std::string> &queries) {
-    showing_recent_ = true;
-    clear_layout(results_);
-
-    if (queries.empty()) {
-        auto *empty = new QLabel(tr_q("no_recent_searches"), this);
-        empty->setFont(DesignTokens::getFont("body", 14));
-        empty->setProperty("textRole", "muted");
-        empty->setObjectName("stateMessage");
-        empty->setAlignment(Qt::AlignCenter);
-        results_->addWidget(empty);
-        results_->addStretch(1);
-        return;
-    }
-
-    auto *header_row = new QWidget(this);
-    auto *header_layout = new QHBoxLayout(header_row);
-    header_layout->setContentsMargins(12, 12, 12, 6);
-    header_layout->setSpacing(8);
-
-    auto *sec_header = new QLabel(tr_q("recent_searches"), header_row);
-    sec_header->setFont(DesignTokens::getFont("micro", 11));
-    sec_header->setProperty("textRole", "accent");
-    header_layout->addWidget(sec_header);
-    header_layout->addStretch();
-
-    auto *clear_all = new QPushButton(tr_q("clear_all"), header_row);
-    clear_all->setCursor(Qt::PointingHandCursor);
-    clear_all->setFont(DesignTokens::getFont("micro", 11));
-    clear_all->setFocusPolicy(Qt::StrongFocus);
-    clear_all->setAccessibleName(tr_q("clear_history"));
-    clear_all->setObjectName("clearAllBtn");
-    connect(clear_all, &QPushButton::clicked, this, [this]() {
-        emit search_history_clear_requested();
-    });
-    header_layout->addWidget(clear_all);
-    results_->addWidget(header_row);
-
-    for (const auto &q : queries) {
-        auto *row = new QWidget(this);
-        row->setFixedHeight(40);
-        auto *row_layout = new QHBoxLayout(row);
-        row_layout->setContentsMargins(0, 0, 0, 0);
-        row_layout->setSpacing(0);
-
-        auto *btn = new QPushButton(row);
-        btn->setFixedHeight(40);
-        btn->setCursor(Qt::PointingHandCursor);
-        btn->setFocusPolicy(Qt::StrongFocus);
-        btn->setAccessibleName(QString::fromStdString("Buscar " + q));
-        btn->setObjectName("historySearchBtn");
-
-        auto *btn_layout = new QHBoxLayout(btn);
-        btn_layout->setContentsMargins(12, 0, 12, 0);
-        btn_layout->setSpacing(8);
-
-        auto *history_icon = IconProvider::createIconLabel("history", 16, DesignTokens::current().text_secondary, true, btn);
-        auto *text_label = new QLabel(QString::fromStdString(q), btn);
-        text_label->setFont(DesignTokens::getFont("body_sm"));
-
-        btn_layout->addWidget(history_icon);
-        btn_layout->addWidget(text_label);
-        btn_layout->addStretch();
-        btn->setLayout(btn_layout);
-
-        connect(btn, &QPushButton::clicked, this, [this, q]() {
-            emit search_requested(q, "all");
-        });
-        row_layout->addWidget(btn, 1);
-
-        auto *del = new QPushButton("✕", row);
-        del->setFixedSize(28, 28);
-        del->setCursor(Qt::PointingHandCursor);
-        del->setFocusPolicy(Qt::StrongFocus);
-        del->setAccessibleName(QString::fromStdString("Eliminar " + q + " del historial"));
-        del->setObjectName("historyDeleteBtn");
-        connect(del, &QPushButton::clicked, this, [this, q]() {
-            emit search_history_delete_requested(q);
-        });
-        row_layout->addWidget(del);
-
-        results_->addWidget(row);
-    }
-    results_->addStretch(1);
+    current_query_ = QString::fromUtf8(query.data(), query.size());
+    active_filter_ = QString::fromStdString(filter);
+    
+    // Clear old results
+    has_top_result_ = false;
+    top_result_map_.clear();
+    songs_list_.clear();
+    videos_list_.clear();
+    artists_list_.clear();
+    albums_list_.clear();
+    playlists_list_.clear();
+    shows_list_.clear();
+    episodes_list_.clear();
+    
+    emit queryChanged();
+    emit filterChanged();
+    emit resultsChanged();
 }
 
 void SearchView::set_results(const TopResult &top_result, bool has_top_result,
-                             const std::vector<Track> &songs,
-                             const std::vector<Track> &videos,
-                             const std::vector<Artist> &artists,
-                             const std::vector<Album> &albums,
-                             const std::vector<Playlist> &playlists,
-                             const std::vector<Show> &shows,
-                             const std::vector<Episode> &episodes) {
-    show_results(top_result, has_top_result, songs, videos, artists, albums, playlists, shows, episodes);
+                 const std::vector<Track> &songs,
+                 const std::vector<Track> &videos,
+                 const std::vector<Artist> &artists,
+                 const std::vector<Album> &albums,
+                 const std::vector<Playlist> &playlists,
+                 const std::vector<Show> &shows,
+                 const std::vector<Episode> &episodes) {
+                     
+    has_top_result_ = has_top_result;
+    raw_top_result_ = top_result;
+    if (has_top_result) {
+        top_result_map_["title"] = QString::fromUtf8(top_result.title.data(), top_result.title.size());
+        top_result_map_["subtitle"] = QString::fromUtf8(top_result.subtitle.data(), top_result.subtitle.size());
+        top_result_map_["thumbnail"] = QString::fromUtf8(top_result.thumbnail.data(), top_result.thumbnail.size());
+        top_result_map_["type"] = QString::fromUtf8(top_result.item_type.data(), top_result.item_type.size());
+    } else {
+        top_result_map_.clear();
+    }
+    
+    raw_songs_ = songs;
+    songs_list_.clear();
+    for (const auto &track : songs) {
+        QVariantMap map;
+        map["id"] = QString::fromUtf8(track.id.data(), track.id.size());
+        map["title"] = QString::fromUtf8(track.title.data(), track.title.size());
+        map["artist"] = QString::fromUtf8(track.artist.data(), track.artist.size());
+        map["album"] = QString::fromUtf8(track.album.data(), track.album.size());
+        map["thumbnail"] = QString::fromUtf8(track.thumbnail.data(), track.thumbnail.size());
+        
+        int ts = track.duration_ms / 1000;
+        map["duration"] = QString("%1:%2").arg(ts / 60).arg(ts % 60, 2, 10, QChar('0'));
+        songs_list_.append(map);
+    }
+    
+    raw_videos_ = videos;
+    videos_list_.clear();
+    for (const auto &track : videos) {
+        QVariantMap map;
+        map["id"] = QString::fromUtf8(track.id.data(), track.id.size());
+        map["title"] = QString::fromUtf8(track.title.data(), track.title.size());
+        map["artist"] = QString::fromUtf8(track.artist.data(), track.artist.size());
+        map["album"] = QString::fromUtf8(track.album.data(), track.album.size());
+        map["thumbnail"] = QString::fromUtf8(track.thumbnail.data(), track.thumbnail.size());
+        
+        int ts = track.duration_ms / 1000;
+        map["duration"] = QString("%1:%2").arg(ts / 60).arg(ts % 60, 2, 10, QChar('0'));
+        videos_list_.append(map);
+    }
+    
+    artists_list_.clear();
+    for (const auto &a : artists) {
+        QVariantMap map;
+        map["id"] = QString::fromUtf8(a.id.data(), a.id.size());
+        map["name"] = QString::fromUtf8(a.name.data(), a.name.size());
+        map["thumbnail"] = QString::fromUtf8(a.thumbnail.data(), a.thumbnail.size());
+        artists_list_.append(map);
+    }
+    
+    albums_list_.clear();
+    for (const auto &a : albums) {
+        QVariantMap map;
+        map["id"] = QString::fromUtf8(a.id.data(), a.id.size());
+        map["title"] = QString::fromUtf8(a.title.data(), a.title.size());
+        map["artist"] = QString::fromUtf8(a.artist.data(), a.artist.size());
+        map["thumbnail"] = QString::fromUtf8(a.thumbnail.data(), a.thumbnail.size());
+        albums_list_.append(map);
+    }
+    
+    playlists_list_.clear();
+    for (const auto &p : playlists) {
+        QVariantMap map;
+        map["id"] = QString::fromUtf8(p.id.data(), p.id.size());
+        map["title"] = QString::fromUtf8(p.name.data(), p.name.size());
+        map["author"] = QString::fromUtf8(p.owner.data(), p.owner.size());
+        map["thumbnail"] = QString::fromUtf8(p.thumbnail.data(), p.thumbnail.size());
+        playlists_list_.append(map);
+    }
+    
+    shows_list_.clear();
+    for (const auto &s : shows) {
+        QVariantMap map;
+        map["id"] = QString::fromUtf8(s.id.data(), s.id.size());
+        map["title"] = QString::fromUtf8(s.title.data(), s.title.size());
+        map["author"] = QString::fromUtf8(s.author.data(), s.author.size());
+        map["thumbnail"] = QString::fromUtf8(s.thumbnail.data(), s.thumbnail.size());
+        shows_list_.append(map);
+    }
+    
+    episodes_list_.clear();
+    for (const auto &e : episodes) {
+        QVariantMap map;
+        map["id"] = QString::fromUtf8(e.id.data(), e.id.size());
+        map["title"] = QString::fromUtf8(e.title.data(), e.title.size());
+        map["description"] = QString::fromUtf8(e.description.data(), e.description.size());
+        int ts = e.duration_ms / 1000;
+        map["duration"] = QString("%1:%2").arg(ts / 60).arg(ts % 60, 2, 10, QChar('0'));
+        episodes_list_.append(map);
+    }
+    
+    showing_recent_ = false;
+    emit recentChanged();
+    emit resultsChanged();
 }
 
 void SearchView::set_recent_searches(const std::vector<std::string> &queries) {
-    if (current_query_.empty() || showing_recent_) {
-        show_recent_searches(queries);
+    recent_searches_list_.clear();
+    for (const auto &q : queries) {
+        recent_searches_list_.append(QString::fromStdString(q));
+    }
+    showing_recent_ = true;
+    emit recentChanged();
+}
+
+void SearchView::requestFilterChange(const QString &filter) {
+    if (active_filter_ != filter) {
+        active_filter_ = filter;
+        emit filterChanged();
+        emit search_requested(current_query_.toStdString(), filter.toStdString());
     }
 }
 
-void SearchView::set_active_filter(const std::string &filter) {
-    for (auto *btn : filter_btns_) {
-        btn->setChecked(btn->property("filterValue").toString().toStdString() == filter);
+void SearchView::requestSearch(const QString &query) {
+    emit search_requested(query.toStdString(), active_filter_.toStdString());
+}
+
+void SearchView::requestClearSearchHistory() {
+    emit search_history_clear_requested();
+}
+
+void SearchView::requestDeleteSearchHistory(const QString &query) {
+    emit search_history_delete_requested(query.toStdString());
+}
+
+Track SearchView::getTrackById(const QString &id) {
+    std::string stdId = id.toStdString();
+    for (const auto &t : raw_songs_) {
+        if (std::string(t.id) == stdId) return t;
+    }
+    for (const auto &t : raw_videos_) {
+        if (std::string(t.id) == stdId) return t;
+    }
+    if (has_top_result_) {
+        // Find track in top result? Not applicable since top result doesn't hold tracks.
+    }
+    return Track();
+}
+
+void SearchView::requestPlayTrack(const QString &trackId) {
+    Track t = getTrackById(trackId);
+    if (!std::string(t.id).empty()) {
+        emit play_requested(t);
     }
 }
 
+void SearchView::requestAlbum(const QString &browseId) {
+    emit album_requested(browseId.toStdString());
+}
 
+void SearchView::requestArtist(const QString &browseId) {
+    emit artist_requested(browseId.toStdString());
+}
+
+void SearchView::requestPlaylist(const QString &playlistId) {
+    emit playlist_requested(playlistId.toStdString());
+}
+
+void SearchView::requestShow(const QString &browseId) {
+    emit show_requested(browseId.toStdString());
+}
+
+void SearchView::requestTopResult() {
+    if (!has_top_result_) return;
+    std::string type = std::string(raw_top_result_.item_type);
+    std::string id = std::string(raw_top_result_.id);
+    
+    if (type == "artist") {
+        emit artist_requested(id);
+    } else if (type == "album") {
+        emit album_requested(id);
+    } else if (type == "playlist") {
+        emit playlist_requested(id);
+    } else if (type == "song" || type == "video") {
+        // Request play
+        Track dummy;
+        dummy.id = raw_top_result_.id;
+        emit play_requested(dummy);
+    }
+}

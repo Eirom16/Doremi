@@ -1,25 +1,13 @@
 #include "stats_view.h"
-#include "design_tokens.h"
-#include "icon_provider.h"
-#include "components/artwork_loader.h"
-#include <QHBoxLayout>
-#include <QGridLayout>
-#include <QEvent>
-#include <QMouseEvent>
-#include <QPainter>
-#include <QPainterPath>
-#include <QPushButton>
-#include <QButtonGroup>
-#include <QFile>
+#include <QQmlContext>
+#include <QVBoxLayout>
 #include <QFileDialog>
-#include <QStyle>
+#include <QMessageBox>
+#include <QFile>
+#include <QTextStream>
 #include <QJsonArray>
 #include <QJsonDocument>
-#include <QPointer>
 #include <QJsonObject>
-#include <QMessageBox>
-#include <QTextStream>
-#include <algorithm>
 #include "doremi/src/bridge.rs.h"
 
 namespace {
@@ -36,122 +24,21 @@ QString csvCell(QString value) {
 }
 }
 
-
 StatsView::StatsView(QWidget *parent)
     : QWidget(parent)
 {
-    setupLayout();
-}
+    auto *layout = new QVBoxLayout(this);
+    layout->setContentsMargins(0, 0, 0, 0);
 
-void StatsView::setupLayout() {
-    auto *main_vbox = new QVBoxLayout(this);
-    main_vbox->setContentsMargins(0, 0, 0, 0);
-    main_vbox->setSpacing(0);
+    quick_widget_ = new QQuickWidget(this);
+    quick_widget_->setResizeMode(QQuickWidget::SizeRootObjectToView);
+    quick_widget_->setAttribute(Qt::WA_TranslucentBackground);
+    quick_widget_->setClearColor(Qt::transparent);
 
-    main_layout_ = new QVBoxLayout();
-    main_layout_->setContentsMargins(DesignTokens::pagePadding());
-    main_layout_->setSpacing(24);
-    main_layout_->setAlignment(Qt::AlignTop);
+    quick_widget_->rootContext()->setContextProperty("StatsCtrl", this);
+    quick_widget_->setSource(QUrl("qrc:/qml/StatsView.qml"));
 
-    auto *header_layout = new QHBoxLayout();
-    header_layout->setSpacing(12);
-
-    auto *title = new QLabel(tr_q("listening_stats"), this);
-    title->setObjectName("statsTitle");
-    title->setFont(DesignTokens::getFont("heading_lg"));
-    title->setProperty("textRole", "heading");
-    header_layout->addWidget(title);
-    header_layout->addStretch();
-
-    auto *export_json = new QPushButton("JSON", this);
-    export_json->setObjectName("statsExportBtn");
-    export_json->setCursor(Qt::PointingHandCursor);
-    export_json->setToolTip(tr_q("export_stats_json"));
-    export_json->setObjectName("statsExportBtn");
-    connect(export_json, &QPushButton::clicked, this, &StatsView::exportStatsAsJson);
-    header_layout->addWidget(export_json);
-
-    auto *export_csv = new QPushButton("CSV", this);
-    export_csv->setObjectName("statsExportBtn");
-    export_csv->setCursor(Qt::PointingHandCursor);
-    export_csv->setToolTip(tr_q("export_stats_csv"));
-    export_csv->setObjectName("statsExportBtn");
-    connect(export_csv, &QPushButton::clicked, this, &StatsView::exportStatsAsCsv);
-    header_layout->addWidget(export_csv);
-
-    main_layout_->addLayout(header_layout);
-
-    auto *range_layout = new QHBoxLayout();
-    range_layout->setSpacing(8);
-    auto *range_group = new QButtonGroup(this);
-    struct RangeOption { QString label; int days; };
-    RangeOption ranges[] = {
-        {tr_q("days_7"), 7},
-        {tr_q("days_30"), 30},
-        {tr_q("year_1"), 365},
-        {tr_q("all_time"), -1}
-    };
-    for (auto &opt : ranges) {
-        auto *btn = new QPushButton(opt.label, this);
-        btn->setObjectName("statsRangeBtn");
-        btn->setCheckable(true);
-        btn->setFixedHeight(30);
-        btn->setCursor(Qt::PointingHandCursor);
-        range_group->addButton(btn, opt.days);
-        range_layout->addWidget(btn);
-    }
-    range_group->button(7)->setChecked(true);
-    connect(range_group, &QButtonGroup::idClicked, this, [](int days) {
-        on_stats_requested(days);
-    });
-    range_layout->addStretch();
-    main_layout_->addLayout(range_layout);
-
-    auto *cards_layout = new QHBoxLayout();
-    cards_layout->setSpacing(16);
-
-    card_time_ = new StatCard(tr_q("stat_time_played"), "schedule", this);
-    card_plays_ = new StatCard(tr_q("stat_total_plays"), "play_arrow", this);
-    card_artists_ = new StatCard(tr_q("stat_unique_artists"), "person", this);
-    cards_layout->addWidget(card_time_);
-    cards_layout->addWidget(card_plays_);
-    cards_layout->addWidget(card_artists_);
-    main_layout_->addLayout(cards_layout);
-
-    auto *chart_header = new QLabel(tr_q("stat_weekly_activity"), this);
-    chart_header->setObjectName("statsChartHeader");
-    chart_header->setFont(DesignTokens::getFont("heading_sm", 14));
-    chart_header->setProperty("textRole", "primary");
-    main_layout_->addWidget(chart_header);
-
-    auto *chart_panel = new QWidget(this);
-    chart_panel->setObjectName("chart_panel");
-    chart_panel->setProperty("boxRole", "card");
-    auto *chart_p_layout = new QVBoxLayout(chart_panel);
-    chart_p_layout->setContentsMargins(16, 16, 16, 16);
-
-    bar_chart_ = new BarChart(chart_panel);
-    chart_p_layout->addWidget(bar_chart_);
-    main_layout_->addWidget(chart_panel);
-
-    auto *top_header = new QLabel(tr_q("stat_top_tracks"), this);
-    top_header->setObjectName("statsTopHeader");
-    top_header->setFont(DesignTokens::getFont("heading_sm", 14));
-    top_header->setProperty("textRole", "primary");
-    main_layout_->addWidget(top_header);
-
-    top_tracks_widget_ = new QWidget(this);
-    top_tracks_widget_->setObjectName("top_tracks_widget");
-    top_tracks_widget_->setProperty("boxRole", "card");
-
-    top_tracks_layout_ = new QVBoxLayout(top_tracks_widget_);
-    top_tracks_layout_->setContentsMargins(8, 8, 8, 8);
-    top_tracks_layout_->setSpacing(4);
-
-    main_layout_->addWidget(top_tracks_widget_);
-
-    main_vbox->addLayout(main_layout_);
-    setLayout(main_vbox);
+    layout->addWidget(quick_widget_);
 }
 
 void StatsView::showEvent(QShowEvent *event) {
@@ -159,103 +46,95 @@ void StatsView::showEvent(QShowEvent *event) {
     on_stats_requested(7);
 }
 
-void StatsView::setStatsData(const StatsData &stats) {
-    current_stats_ = stats;
-    has_stats_ = true;
-
-    card_time_->setValueText(QString::fromStdString(static_cast<std::string>(stats.total_play_time)));
-    card_plays_->setValue(stats.total_plays);
-    card_artists_->setValue(stats.unique_artists);
-
-    QVector<int> act;
-    for (int v : stats.weekly_activity) act.push_back(v);
-    bar_chart_->setData(act);
-
-    std::vector<Track> tracks(stats.top_tracks.begin(), stats.top_tracks.end());
-    std::vector<int> plays(stats.top_tracks_plays.begin(), stats.top_tracks_plays.end());
-    buildTopTracks(tracks, plays);
+void StatsView::requestStats(int days) {
+    on_stats_requested(days);
 }
 
-void StatsView::buildTopTracks(const std::vector<Track> &tracks, const std::vector<int> &plays) {
-    QLayoutItem *item;
-    while ((item = top_tracks_layout_->takeAt(0)) != nullptr) {
-        if (item->widget()) {
-            item->widget()->deleteLater();
+void StatsView::setStatsData(const StatsData &stats) {
+    current_stats_ = stats;
+
+    QVariantMap sum;
+    sum["totalPlayTime"] = rs(stats.total_play_time);
+    sum["totalPlays"] = stats.total_plays;
+    sum["uniqueArtists"] = stats.unique_artists;
+    summary_ = sum;
+
+    QVariantList act;
+    for (int v : stats.weekly_activity) {
+        act.append(v);
+    }
+    daily_plays_ = act;
+
+    QVariantList top;
+    for (std::size_t i = 0; i < stats.top_tracks.size(); ++i) {
+        const auto &track = stats.top_tracks[i];
+        QVariantMap t;
+        t["id"] = rs(track.id);
+        t["title"] = rs(track.title);
+        t["artist"] = rs(track.artist);
+        t["album"] = rs(track.album);
+        t["thumbnail"] = rs(track.thumbnail);
+        t["durationMs"] = static_cast<qint64>(track.duration_ms);
+        t["plays"] = i < stats.top_tracks_plays.size() ? stats.top_tracks_plays[i] : 0;
+        top.append(t);
+    }
+    top_tracks_ = top;
+
+    emit statsChanged();
+}
+
+void StatsView::requestPlay(const QString &trackId) {
+    for (const auto &track : current_stats_.top_tracks) {
+        if (rs(track.id) == trackId) {
+            emit play_requested(track);
+            break;
         }
-        delete item;
-    }
-
-    if (tracks.empty()) {
-        auto *empty = new QLabel(tr_q("stat_not_enough_data"), top_tracks_widget_);
-        empty->setObjectName("statsEmptyLabel");
-        empty->setAlignment(Qt::AlignCenter);
-        empty->setFont(DesignTokens::getFont("caption", 12));
-        empty->setProperty("textRole", "muted");
-        top_tracks_layout_->addWidget(empty);
-        return;
-    }
-
-    int max_plays = plays.empty() ? 1 : plays[0];
-    int count = static_cast<int>(tracks.size());
-    for (int i = 0; i < count; ++i) {
-        int track_plays = static_cast<std::size_t>(i) < plays.size() ? plays[i] : 1;
-        auto *row = new TopTrackRow(i + 1, tracks[i], track_plays, max_plays, top_tracks_widget_);
-        connect(row, &TopTrackRow::clicked, this, &StatsView::play_requested);
-        top_tracks_layout_->addWidget(row);
     }
 }
 
 void StatsView::exportStatsAsJson() {
-    if (!has_stats_) {
+    if (current_stats_.top_tracks.empty() && current_stats_.total_plays == 0) {
         QMessageBox::information(this,
-            tr_q("no_data"),
-            tr_q("no_stats_to_export"));
+            "Sin Datos",
+            "No hay estadísticas para exportar en este periodo.");
         return;
     }
 
     QString path = QFileDialog::getSaveFileName(
         this,
-        tr_q("export_stats"),
+        "Exportar Estadísticas",
         "doremi-stats.json",
         "JSON (*.json)");
     if (path.isEmpty()) return;
     if (!path.endsWith(".json", Qt::CaseInsensitive)) path += ".json";
 
     if (writeStatsJson(path)) {
-        QMessageBox::information(this,
-            tr_q("export_completed"),
-            tr_q("export_success_msg"));
+        QMessageBox::information(this, "Exportado", "Las estadísticas se han exportado exitosamente.");
     } else {
-        QMessageBox::warning(this,
-            tr_q("export_error"),
-            tr_q("export_failed_msg"));
+        QMessageBox::warning(this, "Error", "Hubo un error al exportar el archivo.");
     }
 }
 
 void StatsView::exportStatsAsCsv() {
-    if (!has_stats_) {
+    if (current_stats_.top_tracks.empty() && current_stats_.total_plays == 0) {
         QMessageBox::information(this,
-            tr_q("no_data"),
-            tr_q("no_stats_to_export"));
+            "Sin Datos",
+            "No hay estadísticas para exportar en este periodo.");
         return;
     }
 
     QString path = QFileDialog::getSaveFileName(
         this,
-        tr_q("export_stats"),
+        "Exportar Estadísticas",
         "doremi-stats.csv",
         "CSV (*.csv)");
     if (path.isEmpty()) return;
     if (!path.endsWith(".csv", Qt::CaseInsensitive)) path += ".csv";
 
     if (writeStatsCsv(path)) {
-        QMessageBox::information(this,
-            tr_q("export_completed"),
-            tr_q("export_success_msg"));
+        QMessageBox::information(this, "Exportado", "Las estadísticas se han exportado exitosamente.");
     } else {
-        QMessageBox::warning(this,
-            tr_q("export_error"),
-            tr_q("export_failed_msg"));
+        QMessageBox::warning(this, "Error", "Hubo un error al exportar el archivo.");
     }
 }
 
@@ -333,12 +212,4 @@ bool StatsView::writeStatsCsv(const QString &path) const {
 
     out.flush();
     return file.error() == QFileDevice::NoError;
-}
-
-void StatsView::update_theme() {
-    if (card_time_) card_time_->update_theme();
-    if (card_plays_) card_plays_->update_theme();
-    if (card_artists_) card_artists_->update_theme();
-    style()->unpolish(this);
-    style()->polish(this);
 }

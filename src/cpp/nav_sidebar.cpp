@@ -1,191 +1,67 @@
-#include <QSpacerItem>
-#include <QHBoxLayout>
-#include <QLabel>
 #include "nav_sidebar.h"
-#include "design_tokens.h"
-#include "icon_provider.h"
+#include <QVBoxLayout>
+#include <QQmlContext>
 #include "doremi/src/bridge.rs.h"
 
-struct RouteInfo {
-    const char *route;
-    const char *translation_key;
-    const char *icon;
-};
-
-static const RouteInfo ROUTES[] = {
-    {"home", "home", "home"},
-    {"trending", "trending", "trending_up"},
-    {"library", "library", "library_music"},
-    {"history", "history", "history"},
-    {"downloads", "downloads", "download"},
-    {"stats", "stats", "bar_chart"},
-    {"settings", "settings", "settings"}
-};
-
-NavSidebar::NavSidebar(QWidget *parent)
-    : QWidget(parent)
-{
-    const auto &c = DesignTokens::current();
-    
+NavSidebar::NavSidebar(QWidget *parent) : QWidget(parent) {
     auto *layout = new QVBoxLayout(this);
-    layout->setContentsMargins(0, 16, 0, 16);
-    layout->setSpacing(4);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(0);
+    
+    // Default size is 220, compact is 72, managed by main_window.cpp
+    
+    quick_widget_ = new QQuickWidget(this);
+    quick_widget_->setResizeMode(QQuickWidget::SizeRootObjectToView);
+    quick_widget_->setAttribute(Qt::WA_TranslucentBackground);
+    quick_widget_->setClearColor(Qt::transparent);
 
-    for (const auto &routeInfo : ROUTES) {
-        auto *btn = new QPushButton(this);
-        btn->setCheckable(true);
-        btn->setFixedHeight(44);
-        btn->setCursor(Qt::PointingHandCursor);
-        btn->setFocusPolicy(Qt::StrongFocus);
-        
-        QString title = tr_q(routeInfo.translation_key);
-        DesignTokens::applyAccessible(
-            btn,
-            tr_q("go_to").arg(title),
-            tr_q("open_section").arg(title),
-            title);
-        
-        // Horizontal layout inside button to position icon and text nicely
-        auto *btn_layout = new QHBoxLayout(btn);
-        btn_layout->setContentsMargins(20, 0, 16, 0);
-        btn_layout->setSpacing(12);
-        
-        auto *icon_label = IconProvider::createIconLabel(routeInfo.icon, 20, c.text_secondary, true, btn);
-        icon_label->setObjectName("nav_icon");
-        auto *text_label = new QLabel(title, btn);
-        text_label->setObjectName("nav_text");
-        text_label->setFont(DesignTokens::getFont("body_sm"));
-        
-        btn_layout->addWidget(icon_label);
-        btn_layout->addWidget(text_label);
-        btn_layout->addStretch();
-        
-        btn->setLayout(btn_layout);
-        
-        btn->setProperty("buttonRole", "nav");
-        
-        layout->addWidget(btn);
-        buttons_.push_back({routeInfo.route, btn});
+    quick_widget_->rootContext()->setContextProperty("SidebarCtrl", this);
+    quick_widget_->setSource(QUrl("qrc:/qml/Sidebar.qml"));
 
-        connect(btn, &QPushButton::clicked, this, [this, routeInfo]() {
-            on_button_clicked(routeInfo.route);
-        });
+    layout->addWidget(quick_widget_);
+}
+
+void NavSidebar::resizeEvent(QResizeEvent *event) {
+    QWidget::resizeEvent(event);
+    if (quick_widget_) {
+        quick_widget_->resize(size());
     }
-
-    layout->addStretch(1);
-
-    // Profile button at the bottom
-    profile_btn_ = new QPushButton(this);
-    profile_btn_->setFixedHeight(44);
-    profile_btn_->setCursor(Qt::PointingHandCursor);
-    profile_btn_->setFocusPolicy(Qt::StrongFocus);
-    
-    profile_btn_->setProperty("buttonRole", "profile");
-    DesignTokens::applyAccessible(
-        profile_btn_,
-        "Cuenta de usuario",
-        "Abre la pantalla de inicio de sesion o el menu de cuenta.",
-        "Cuenta");
-    connect(profile_btn_, &QPushButton::clicked, this, &NavSidebar::on_profile_clicked);
-    layout->addWidget(profile_btn_);
-
-    setFixedWidth(210);
-    setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
-    
-    // Set sidebar base background
-    setAttribute(Qt::WA_StyledBackground, true);
-    // NavSidebar background handled by base.qss
-
-    // Initial auth UI state
-    update_profile(false, "", "");
 }
 
 void NavSidebar::set_active_route(const std::string &route) {
-    const auto &c = DesignTokens::current();
-    for (auto &nb : buttons_) {
-        bool active = (nb.route == route);
-        nb.btn->setChecked(active);
-        
-        auto labels = nb.btn->findChildren<QLabel*>();
-        for (auto *label : labels) {
-            if (label->objectName() == "nav_icon") {
-                IconProvider::setupIconLabel(label, label->text(), 20, active ? c.accent : c.text_secondary, true);
-            }
-        }
+    QString qRoute = QString::fromStdString(route);
+    if (active_route_ != qRoute) {
+        active_route_ = qRoute;
+        emit activeRouteChanged();
     }
 }
 
 void NavSidebar::set_compact(bool compact) {
-    if (compact_ == compact) {
-        return;
+    if (compact_ != compact) {
+        compact_ = compact;
+        emit isCompactChanged();
     }
-    compact_ = compact;
-    setFixedWidth(compact_ ? 76 : 210);
-
-    for (auto &nb : buttons_) {
-        if (auto *layout = qobject_cast<QHBoxLayout *>(nb.btn->layout())) {
-            layout->setContentsMargins(compact_ ? 22 : 20, 0, compact_ ? 0 : 16, 0);
-            layout->setSpacing(compact_ ? 0 : 12);
-        }
-        for (auto *label : nb.btn->findChildren<QLabel *>()) {
-            if (label->objectName() == "nav_text") {
-                label->setVisible(!compact_);
-            }
-        }
-    }
-
-    update_profile(authenticated_, user_name_, avatar_url_);
-}
-
-void NavSidebar::on_button_clicked(const std::string &route) {
-    set_active_route(route);
-    emit route_changed(route);
-}
-
-void NavSidebar::update_theme() {
-    for (auto &nb : buttons_) {
-        if (nb.btn->isChecked()) {
-            set_active_route(nb.route);
-            break;
-        }
-    }
-    update_profile(authenticated_, user_name_, avatar_url_);
 }
 
 void NavSidebar::update_profile(bool authenticated, const std::string &name, const std::string &avatar_url) {
-    authenticated_ = authenticated;
-    user_name_ = name;
-    avatar_url_ = avatar_url;
-
-    const auto &c = DesignTokens::current();
-    if (authenticated) {
-        profile_btn_->setText(compact_ ? "" : QString::fromStdString(" " + name));
-        profile_btn_->setIcon(IconProvider::getIcon("account_circle", c.accent, 20));
-        DesignTokens::applyAccessible(
-            profile_btn_,
-            tr_q("user_account_of").arg(QString::fromStdString(name)),
-            tr_q("open_account_menu"),
-            tr_q("account"));
-    } else {
-        profile_btn_->setText(compact_ ? "" : " " + tr_q("login"));
-        profile_btn_->setIcon(IconProvider::getIcon("login", c.text_secondary, 20));
-        DesignTokens::applyAccessible(
-            profile_btn_,
-            tr_q("login"),
-            tr_q("open_login_screen"),
-            tr_q("login"));
+    QString qName = QString::fromStdString(name);
+    QString qAvatar = QString::fromStdString(avatar_url);
+    
+    if (authenticated_ != authenticated) {
+        authenticated_ = authenticated;
+        emit isAuthenticatedChanged();
+    }
+    if (user_name_ != qName) {
+        user_name_ = qName;
+        emit userNameChanged();
+    }
+    if (avatar_url_ != qAvatar) {
+        avatar_url_ = qAvatar;
+        emit avatarUrlChanged();
     }
 }
 
-void NavSidebar::on_profile_clicked() {
-    if (authenticated_) {
-        QMenu menu(this);
-        QAction *logout_action = menu.addAction(tr_q("logout"));
-        connect(logout_action, &QAction::triggered, this, []() {
-            on_youtube_logout();
-        });
-        menu.exec(profile_btn_->mapToGlobal(QPoint(0, -menu.sizeHint().height())));
-    } else {
-        emit route_changed("welcome");
-    }
+void NavSidebar::logout() {
+    on_youtube_logout();
 }
+

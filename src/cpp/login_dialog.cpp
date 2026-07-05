@@ -5,50 +5,74 @@
 #include <QJsonObject>
 #include <QHBoxLayout>
 #include <QUrl>
+#include <QGraphicsDropShadowEffect>
+#include <QFrame>
 #include "doremi/src/bridge.rs.h"
 
 WebLoginDialog::WebLoginDialog(QWidget *parent)
     : QDialog(parent)
 {
     setWindowTitle(tr_q("login_title"));
+    setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint | Qt::NoDropShadowWindowHint);
+    setAttribute(Qt::WA_TranslucentBackground);
+    setModal(true);
     resize(1000, 700);
 
-    setProperty("bgRole", "surface");
-
     layout_ = new QVBoxLayout(this);
-    layout_->setContentsMargins(0, 0, 0, 0);
-    layout_->setSpacing(0);
+    layout_->setContentsMargins(16, 16, 16, 16); // Margins for shadow
+
+    auto *panel = new QFrame(this);
+    panel->setObjectName("loginPanel");
+    panel->setStyleSheet("QFrame#loginPanel { background-color: #18181a; border-radius: 12px; border: 1px solid #2a2a2a; }");
+    
+    auto *shadow = new QGraphicsDropShadowEffect(panel);
+    shadow->setBlurRadius(32);
+    shadow->setOffset(0, 8);
+    shadow->setColor(QColor(0, 0, 0, 128));
+    panel->setGraphicsEffect(shadow);
+
+    auto *panel_layout = new QVBoxLayout(panel);
+    panel_layout->setContentsMargins(0, 0, 0, 0);
+    panel_layout->setSpacing(0);
 
     // Header bar
-    auto *header = new QWidget(this);
-    header->setFixedHeight(32);
+    auto *header = new QWidget(panel);
+    header->setFixedHeight(48);
     header->setObjectName("loginHeader");
+    header->setStyleSheet("QWidget#loginHeader { background-color: #18181a; border-top-left-radius: 12px; border-top-right-radius: 12px; }");
 
     auto *header_layout = new QHBoxLayout(header);
     header_layout->setContentsMargins(12, 0, 8, 0);
 
     auto *hint = new QLabel(tr_q("login_hint"), header);
-    hint->setFont(DesignTokens::getFont("body", 11));
-    hint->setProperty("textRole", "muted");
+    hint->setFont(DesignTokens::getFont("body", 13));
+    hint->setStyleSheet("color: #b3b3b3;");
     hint_ = hint;
     header_layout->addWidget(hint);
     header_layout->addStretch();
 
-    btn_close_ = new QPushButton("✕", header);
-    btn_close_->setFixedSize(24, 24);
+    btn_close_ = new QPushButton("close", header);
+    btn_close_->setFont(QFont("Material Symbols Rounded", 20));
+    btn_close_->setFixedSize(32, 32);
     btn_close_->setCursor(Qt::PointingHandCursor);
+    btn_close_->setStyleSheet("QPushButton { color: #b3b3b3; background: transparent; border: none; border-radius: 16px; } QPushButton:hover { background: #33ffffff; }");
     btn_close_->setAutoDefault(false);
     btn_close_->setDefault(false);
     btn_close_->setFocusPolicy(Qt::NoFocus);
-    btn_close_->setObjectName("closeBtn");
 
     connect(btn_close_, &QPushButton::clicked, this, &QDialog::reject);
     header_layout->addWidget(btn_close_);
 
-    layout_->addWidget(header);
+    panel_layout->addWidget(header);
+
+    // Separator line
+    auto *sep = new QFrame(panel);
+    sep->setFixedHeight(1);
+    sep->setStyleSheet("background-color: #2a2a2a;");
+    panel_layout->addWidget(sep);
 
     // Web View Setup
-    view_ = new QWebEngineView(this);
+    view_ = new QWebEngineView(panel);
     profile_ = QWebEngineProfile::defaultProfile();
     cookie_store_ = profile_->cookieStore();
 
@@ -68,7 +92,9 @@ WebLoginDialog::WebLoginDialog(QWidget *parent)
     connect(view_, &QWebEngineView::loadFinished, this, &WebLoginDialog::on_load_finished);
     connect(view_, &QWebEngineView::urlChanged, this, &WebLoginDialog::on_url_changed);
 
-    layout_->addWidget(view_);
+    panel_layout->addWidget(view_);
+    
+    layout_->addWidget(panel);
 
     view_->load(QUrl("https://music.youtube.com"));
 

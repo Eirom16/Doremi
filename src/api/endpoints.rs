@@ -338,6 +338,10 @@ pub async fn playlist_detail(playlist_id: &str) -> Result<super::models::Playlis
     if playlist_id.is_empty() {
         return Err("Playlist ID cannot be empty".to_string());
     }
+    // Mix/Radio playlists (RD* IDs) use the 'next' endpoint, not 'browse'
+    if playlist_id.starts_with("RD") {
+        return mix_detail(playlist_id).await;
+    }
     let browse_id = if playlist_id.starts_with("VL") {
         playlist_id.to_string()
     } else {
@@ -352,7 +356,19 @@ pub async fn playlist_detail(playlist_id: &str) -> Result<super::models::Playlis
     let response = super::transport::post("browse", body).await?;
     let (detail, _, _, mut continuation) =
         super::parsers::parse_playlist_page(&response, &browse_id)?;
-    let mut detail = detail.ok_or_else(|| "Playlist initial response had no header".to_string())?;
+    let mut detail = detail.unwrap_or_else(|| super::models::PlaylistDetail {
+        playlist: super::models::Playlist {
+            id: browse_id.clone(),
+            title: "Playlist".to_string(),
+            description: None,
+            owner: Some("".to_string()),
+            thumbnail: "".to_string(),
+            track_count: None,
+        },
+        privacy: "PUBLIC".to_string(),
+        tracks: Vec::new(),
+        unavailable_count: 0,
+    });
     let mut seen_tokens = HashSet::new();
     let mut seen_tracks = detail
         .tracks
@@ -382,6 +398,31 @@ pub async fn playlist_detail(playlist_id: &str) -> Result<super::models::Playlis
     cache(&key, &detail, HOME_CACHE_TTL_SECS);
     Ok(detail)
 }
+
+/// Load a mix/radio playlist using the `next` endpoint.
+/// Mixes use `playlistPanelVideoRenderer` items, not the standard `browse` response.
+pub async fn mix_detail(playlist_id: &str) -> Result<super::models::PlaylistDetail, String> {
+    let playlist_id = playlist_id.trim();
+    if playlist_id.is_empty() {
+        return Err("Mix playlist ID cannot be empty".to_string());
+    }
+    let key = cache_key(&format!("mix:{playlist_id}"));
+    if let Some(detail) = cached(&key) {
+        return Ok(detail);
+    }
+    let mut body = context();
+    body["playlistId"] = serde_json::json!(playlist_id);
+    body["isAudioOnly"] = serde_json::json!(true);
+    body["params"] = serde_json::json!("wAEB");
+    let response = super::transport::post("next", body).await?;
+    let detail = super::parsers::parse_mix_playlist(&response, playlist_id)?;
+    if detail.tracks.is_empty() {
+        return Err("Mix returned no tracks".to_string());
+    }
+    cache(&key, &detail, RELATED_CACHE_TTL_SECS);
+    Ok(detail)
+}
+
 
 pub async fn related_tracks(video_id: &str) -> Result<Vec<super::models::Track>, String> {
     if video_id.trim().is_empty() {
@@ -751,6 +792,8 @@ pub async fn library_albums() -> Result<Vec<super::models::Album>, String> {
     let mut body = context();
     body["browseId"] = serde_json::json!("FEmusic_liked_albums");
     let response = super::transport::post("browse", body).await?;
+    std::fs::write("/home/eirom/Documents/Port/Doremi/albums.json", serde_json::to_string_pretty(&response).unwrap_or_default()).ok();
+    
     let mut page = super::parsers::parse_library_albums(&response)?;
     let mut albums = page.items;
     let mut seen_tokens = HashSet::new();

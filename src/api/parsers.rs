@@ -328,39 +328,42 @@ fn has_item_array(value: &Value) -> bool {
     value
         .get("items")
         .or_else(|| value.get("contents"))
+        .or_else(|| value.get("continuationItems"))
         .and_then(Value::as_array)
         .is_some()
 }
 
 fn find_library_contents(json: &Value) -> Option<&Value> {
     if let Some(grid) = json.get("gridContinuation") {
-        if has_item_array(grid) {
-            return Some(grid);
-        }
+        return Some(grid);
     }
     if let Some(shelf) = json.get("musicShelfContinuation") {
-        if has_item_array(shelf) {
-            return Some(shelf);
-        }
+        return Some(shelf);
     }
 
     // Support continuationContents wrapping
     if let Some(cont) = json.get("continuationContents") {
         if let Some(grid) = cont.get("gridContinuation") {
-            if has_item_array(grid) {
-                return Some(grid);
-            }
+            return Some(grid);
         }
         if let Some(shelf) = cont.get("musicShelfContinuation") {
-            if has_item_array(shelf) {
-                return Some(shelf);
-            }
+            return Some(shelf);
         }
         if let Some(shelf) = cont.get("musicPlaylistShelfContinuation") {
-            if has_item_array(shelf) {
-                return Some(shelf);
-            }
+            return Some(shelf);
         }
+        if let Some(shelf) = cont.get("sectionListContinuation") {
+            return Some(shelf);
+        }
+    }
+
+    if let Some(contents) = json
+        .pointer("/continuationContents/musicShelfContinuation")
+        .or_else(|| json.pointer("/continuationContents/sectionListContinuation"))
+        .or_else(|| json.pointer("/continuationContents/gridContinuation"))
+        .or_else(|| json.pointer("/onResponseReceivedActions/0/appendContinuationItemsAction"))
+    {
+        return Some(contents);
     }
 
     for col_type in &[
@@ -369,29 +372,34 @@ fn find_library_contents(json: &Value) -> Option<&Value> {
     ] {
         for tab_idx in 0..4 {
             let path = format!(
-                "/contents/{}/tabs/{}/tabRenderer/content/sectionListRenderer/contents/0",
+                "/contents/{}/tabs/{}/tabRenderer/content/sectionListRenderer/contents",
                 col_type, tab_idx
             );
-            if let Some(item) = json.pointer(&path) {
-                if let Some(grid) = item.get("gridRenderer") {
-                    if has_item_array(grid) {
-                        return Some(grid);
-                    }
-                }
-                if let Some(shelf) = item.get("musicShelfRenderer") {
-                    if has_item_array(shelf) {
-                        return Some(shelf);
-                    }
-                }
-                if let Some(contents) = item.pointer("/itemSectionRenderer/contents/0") {
-                    if let Some(grid) = contents.get("gridRenderer") {
+            if let Some(contents) = json.pointer(&path).and_then(Value::as_array) {
+                for item in contents {
+                    if let Some(grid) = item.get("gridRenderer") {
                         if has_item_array(grid) {
                             return Some(grid);
                         }
                     }
-                    if let Some(shelf) = contents.get("musicShelfRenderer") {
+                    if let Some(shelf) = item.get("musicShelfRenderer") {
                         if has_item_array(shelf) {
                             return Some(shelf);
+                        }
+                    }
+                    if let Some(item_contents) = item.pointer("/itemSectionRenderer/contents")
+                        .and_then(Value::as_array) {
+                        for sub_item in item_contents {
+                            if let Some(grid) = sub_item.get("gridRenderer") {
+                                if has_item_array(grid) {
+                                    return Some(grid);
+                                }
+                            }
+                            if let Some(shelf) = sub_item.get("musicShelfRenderer") {
+                                if has_item_array(shelf) {
+                                    return Some(shelf);
+                                }
+                            }
                         }
                     }
                 }
@@ -399,15 +407,17 @@ fn find_library_contents(json: &Value) -> Option<&Value> {
         }
     }
 
-    if let Some(item) = json.pointer("/contents/sectionListRenderer/contents/0") {
-        if let Some(grid) = item.get("gridRenderer") {
-            if has_item_array(grid) {
-                return Some(grid);
+    if let Some(contents) = json.pointer("/contents/sectionListRenderer/contents").and_then(Value::as_array) {
+        for item in contents {
+            if let Some(grid) = item.get("gridRenderer") {
+                if has_item_array(grid) {
+                    return Some(grid);
+                }
             }
-        }
-        if let Some(shelf) = item.get("musicShelfRenderer") {
-            if has_item_array(shelf) {
-                return Some(shelf);
+            if let Some(shelf) = item.get("musicShelfRenderer") {
+                if has_item_array(shelf) {
+                    return Some(shelf);
+                }
             }
         }
     }
@@ -435,18 +445,34 @@ fn collect_renderer_items<'a>(value: &'a Value, renderer_key: &str, items: &mut 
 
 fn shelf_items<'a>(json: &'a Value, endpoint: &str) -> Result<Vec<&'a Value>, String> {
     let shelf = find_library_contents(json).ok_or_else(|| {
+        let keys = json.get("continuationContents")
+            .and_then(|c| c.as_object())
+            .map(|obj| {
+                let inner_keys = obj.values().next()
+                    .and_then(|v| v.as_object())
+                    .map(|v_obj| v_obj.keys().map(|s| s.as_str()).collect::<Vec<_>>().join(", "))
+                    .unwrap_or_default();
+                format!("{} (inner keys: [{}])", obj.keys().map(|s| s.as_str()).collect::<Vec<_>>().join(", "), inner_keys)
+            })
+            .unwrap_or_default();
         schema_error(
             endpoint,
-            "gridRenderer, musicShelfRenderer, or nested item renderers",
+            &format!("gridRenderer, musicShelfRenderer, or nested item renderers. continuationContents keys: [{}]", keys),
             json,
         )
     })?;
+    
+    if shelf.get("items").is_none() && shelf.get("contents").is_none() && shelf.get("continuationItems").is_none() {
+        return Ok(Vec::new());
+    }
+
     shelf
         .get("items")
         .or_else(|| shelf.get("contents"))
+        .or_else(|| shelf.get("continuationItems"))
         .and_then(Value::as_array)
         .map(|items| items.iter().collect())
-        .ok_or_else(|| schema_error(endpoint, "items or contents", json))
+        .ok_or_else(|| schema_error(endpoint, "items, contents, or continuationItems", json))
 }
 
 fn parse_duration(s: &str) -> Option<i64> {
@@ -590,13 +616,19 @@ pub(crate) fn parse_library_playlists(json: &Value) -> Result<ParsedPage<Vec<Pla
     let mut fallback_renderers = Vec::new();
     let items = match shelf_items(json, "library/playlists") {
         Ok(items) => items,
-        Err(_) => {
+        Err(e) => {
             collect_renderer_items(json, "musicTwoRowItemRenderer", &mut fallback_renderers);
             collect_renderer_items(
                 json,
                 "musicResponsiveListItemRenderer",
                 &mut fallback_renderers,
             );
+            let mut message_renderers = Vec::new();
+            collect_renderer_items(json, "messageRenderer", &mut message_renderers);
+            
+            if fallback_renderers.is_empty() && message_renderers.is_empty() {
+                return Err(e);
+            }
             Vec::new()
         }
     };
@@ -634,9 +666,10 @@ pub(crate) fn parse_library_playlists(json: &Value) -> Result<ParsedPage<Vec<Pla
         }
     }
 
+    let empty = serde_json::json!({});
     Ok(ParsedPage {
         items: playlists,
-        continuation: continuation_token(json),
+        continuation: continuation_token(find_library_contents(json).unwrap_or(&empty)),
     })
 }
 
@@ -671,13 +704,19 @@ pub(crate) fn parse_library_albums(json: &Value) -> Result<ParsedPage<Vec<Album>
     let mut fallback_renderers = Vec::new();
     let items = match shelf_items(json, "library/albums") {
         Ok(items) => items,
-        Err(_) => {
+        Err(e) => {
             collect_renderer_items(json, "musicTwoRowItemRenderer", &mut fallback_renderers);
             collect_renderer_items(
                 json,
                 "musicResponsiveListItemRenderer",
                 &mut fallback_renderers,
             );
+            let mut message_renderers = Vec::new();
+            collect_renderer_items(json, "messageRenderer", &mut message_renderers);
+            
+            if fallback_renderers.is_empty() && message_renderers.is_empty() {
+                return Err(e);
+            }
             Vec::new()
         }
     };
@@ -698,20 +737,32 @@ pub(crate) fn parse_library_albums(json: &Value) -> Result<ParsedPage<Vec<Album>
         }
     }
 
+    let empty = serde_json::json!({});
     Ok(ParsedPage {
         items: albums,
-        continuation: continuation_token(json),
+        continuation: continuation_token(find_library_contents(json).unwrap_or(&empty)),
     })
 }
 
 pub(crate) fn parse_library_artists(json: &Value) -> Result<ParsedPage<Vec<Artist>>, String> {
-    let shelf = find_library_contents(json).ok_or_else(|| {
-        schema_error(
-            "library/artists",
-            "gridRenderer or musicShelfRenderer",
-            json,
-        )
-    })?;
+    let shelf = match find_library_contents(json) {
+        Some(shelf) => shelf,
+        None => {
+            let mut message_renderers = Vec::new();
+            collect_renderer_items(json, "messageRenderer", &mut message_renderers);
+            if !message_renderers.is_empty() {
+                return Ok(ParsedPage {
+                    items: Vec::new(),
+                    continuation: None,
+                });
+            }
+            return Err(schema_error(
+                "library/artists",
+                "gridRenderer or musicShelfRenderer",
+                json,
+            ));
+        }
+    };
     let items = shelf
         .get("items")
         .or_else(|| shelf.get("contents"))
@@ -731,7 +782,7 @@ pub(crate) fn parse_library_artists(json: &Value) -> Result<ParsedPage<Vec<Artis
 
     Ok(ParsedPage {
         items: artists,
-        continuation: continuation_token(json),
+        continuation: continuation_token(shelf),
     })
 }
 
@@ -1549,9 +1600,15 @@ pub(crate) fn parse_playlist_page(
     if let Some(items) = json
         .pointer("/continuationContents/musicPlaylistShelfContinuation/contents")
         .or_else(|| json.pointer("/continuationContents/musicShelfContinuation/contents"))
+        .or_else(|| json.pointer("/onResponseReceivedActions/0/appendContinuationItemsAction/continuationItems"))
         .and_then(Value::as_array)
     {
-        let (tracks, unavailable) = parse_playlist_tracks(items);
+        let (mut tracks, unavailable) = parse_playlist_tracks(items);
+        for track in &mut tracks {
+            if track.thumbnail.is_empty() {
+                track.thumbnail = thumbnail(json);
+            }
+        }
         return Ok((None, tracks, unavailable, continuation_token(json)));
     }
 
@@ -1633,7 +1690,12 @@ pub(crate) fn parse_playlist_page(
         .map(thumbnail)
         .filter(|value| !value.is_empty())
         .unwrap_or_else(|| thumbnail(shelf));
-    let (tracks, unavailable) = parse_playlist_tracks(items);
+    let (mut tracks, unavailable) = parse_playlist_tracks(items);
+    for track in &mut tracks {
+        if track.thumbnail.is_empty() {
+            track.thumbnail = thumbnail.clone();
+        }
+    }
     let detail = PlaylistDetail {
         playlist: Playlist {
             id: playlist_id.trim_start_matches("VL").to_string(),
@@ -1822,6 +1884,74 @@ pub fn parse_related(json: &Value, seed_video_id: &str) -> Result<Vec<Track>, St
 pub(crate) fn related_continuation(json: &Value) -> Option<String> {
     continuation_token(json)
 }
+
+/// Parse a mix/radio playlist from a `next` endpoint response.
+/// Mixes (RD* IDs) use `playlistPanelVideoRenderer` items inside the `next` response.
+pub(crate) fn parse_mix_playlist(json: &Value, playlist_id: &str) -> Result<PlaylistDetail, String> {
+    if !json.is_object() {
+        return Err(schema_error(
+            "next/mix",
+            "an object containing playlistPanelVideoRenderer entries",
+            json,
+        ));
+    }
+
+    // Extract mix title from the response
+    let title = json
+        .pointer("/contents/singleColumnMusicWatchNextResultsRenderer/tabbedRenderer/watchNextTabbedResultsRenderer/tabs/0/tabRenderer/content/musicQueueRenderer/header/musicQueueHeaderRenderer/title")
+        .or_else(|| json.pointer("/header/musicHeaderRenderer/title"))
+        .map(text)
+        .filter(|v| !v.is_empty())
+        .or_else(|| {
+            // Try finding the playlist title from the panel
+            fn find_playlist_title(value: &Value) -> Option<String> {
+                match value {
+                    Value::Object(map) => {
+                        if let Some(renderer) = map.get("playlistPanelRenderer") {
+                            return renderer.get("title")
+                                .and_then(Value::as_str)
+                                .map(str::to_string)
+                                .or_else(|| renderer.pointer("/title").map(text))
+                                .filter(|v| !v.is_empty());
+                        }
+                        map.values().find_map(find_playlist_title)
+                    }
+                    Value::Array(items) => items.iter().find_map(find_playlist_title),
+                    _ => None,
+                }
+            }
+            find_playlist_title(json)
+        })
+        .unwrap_or_else(|| "Mix".to_string());
+
+    // Extract thumbnail from the response
+    let mix_thumbnail = json
+        .pointer("/contents/singleColumnMusicWatchNextResultsRenderer/tabbedRenderer/watchNextTabbedResultsRenderer/tabs/0/tabRenderer/content/musicQueueRenderer/header/musicQueueHeaderRenderer/thumbnail")
+        .or_else(|| json.pointer("/background"))
+        .map(thumbnail)
+        .filter(|v| !v.is_empty())
+        .unwrap_or_default();
+
+    let mut tracks = Vec::new();
+    let mut seen = HashSet::new();
+    collect_related(json, &mut tracks, &mut seen);
+
+    let track_count = tracks.len() as i32;
+    Ok(PlaylistDetail {
+        playlist: Playlist {
+            id: playlist_id.to_string(),
+            title,
+            description: None,
+            owner: Some("YouTube Music".to_string()),
+            thumbnail: mix_thumbnail,
+            track_count: Some(track_count),
+        },
+        privacy: "PUBLIC".to_string(),
+        tracks,
+        unavailable_count: 0,
+    })
+}
+
 
 pub fn parse_like_status(json: &Value) -> Result<LikeStatus, String> {
     fn find(value: &Value) -> Option<&str> {

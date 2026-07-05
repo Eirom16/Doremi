@@ -2,16 +2,20 @@
 #define DOREMI_UPDATE_DIALOG_H
 
 #include <QDialog>
-#include <QVBoxLayout>
-#include <QHBoxLayout>
-#include <QLabel>
-#include <QTextEdit>
-#include <QProgressBar>
-#include <QFrame>
-#include "components/ripple_button.h"
+#include <QQuickWidget>
+#include <QString>
 
 class UpdateDialog : public QDialog {
     Q_OBJECT
+    Q_PROPERTY(QString version READ version NOTIFY versionChanged)
+    Q_PROPERTY(QString notes READ notes NOTIFY notesChanged)
+    Q_PROPERTY(bool isDownloading READ isDownloading NOTIFY isDownloadingChanged)
+    Q_PROPERTY(double downloadProgress READ downloadProgress NOTIFY downloadProgressChanged)
+    Q_PROPERTY(QString statusMessage READ statusMessage NOTIFY statusMessageChanged)
+    Q_PROPERTY(bool isInstallSuccess READ isInstallSuccess NOTIFY isInstallSuccessChanged)
+    Q_PROPERTY(bool isInstallFailed READ isInstallFailed NOTIFY isInstallFailedChanged)
+    Q_PROPERTY(bool isReadyToRestart READ isReadyToRestart NOTIFY isReadyToRestartChanged)
+
 public:
     explicit UpdateDialog(QWidget *parent = nullptr);
     ~UpdateDialog() override;
@@ -31,16 +35,37 @@ public:
     void set_download_failed(const QString &error);
     void set_install_finished(bool success);
 
-private slots:
-    void on_update_clicked();
-    void on_github_clicked();
+    QString version() const { return version_; }
+    QString notes() const { return notes_; }
+    bool isDownloading() const { return downloading_; }
+    double downloadProgress() const { return download_progress_; }
+    QString statusMessage() const { return status_message_; }
+    bool isInstallSuccess() const { return install_success_; }
+    bool isInstallFailed() const { return install_failed_; }
+    bool isReadyToRestart() const { return ready_to_restart_; }
+
+    Q_INVOKABLE void requestDownload();
+    Q_INVOKABLE void openGithub();
+    Q_INVOKABLE void requestRestart();
+    Q_INVOKABLE void requestClose() { reject(); }
+
+signals:
+    void versionChanged();
+    void notesChanged();
+    void isDownloadingChanged();
+    void downloadProgressChanged();
+    void statusMessageChanged();
+    void isInstallSuccessChanged();
+    void isInstallFailedChanged();
+    void isReadyToRestartChanged();
 
 private:
     void center_on_parent();
-    void build_ui();
     void restart_app();
 
     static UpdateDialog *active_instance_;
+
+    QQuickWidget *quick_widget_ = nullptr;
 
     QString version_;
     QString notes_;
@@ -49,21 +74,13 @@ private:
     QString asset_name_;
     qint64 asset_size_ = 0;
     QString package_path_;
+
     bool downloading_ = false;
-
-    QFrame *panel_ = nullptr;
-    QLabel *title_lbl_ = nullptr;
-    QLabel *version_lbl_ = nullptr;
-    QLabel *notes_label_ = nullptr;
-    QTextEdit *notes_box_ = nullptr;
-    
-    QWidget *progress_container_ = nullptr;
-    QProgressBar *progress_bar_ = nullptr;
-    QLabel *progress_label_ = nullptr;
-
-    RippleButton *github_btn_ = nullptr;
-    RippleButton *postpone_btn_ = nullptr;
-    RippleButton *update_btn_ = nullptr;
+    double download_progress_ = 0.0;
+    QString status_message_;
+    bool install_success_ = false;
+    bool install_failed_ = false;
+    bool ready_to_restart_ = false;
 };
 
 #endif // DOREMI_UPDATE_DIALOG_H
